@@ -1,5 +1,7 @@
 FROM golang:1.24-alpine
 
+RUN apk add --no-cache curl
+
 ENV GOCACHE=/gocache GOFLAGS=-buildvcs=false GOTOOLCHAIN=local
 
 # Pre-warm the build cache with the testing package so grading runs

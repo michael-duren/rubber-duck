@@ -10,10 +10,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/mduren/getcracked/internal/auth"
 	"github.com/mduren/getcracked/internal/grader"
+	"github.com/mduren/getcracked/internal/grader/cloudrungrader"
 	"github.com/mduren/getcracked/internal/grader/dockergrader"
 	"github.com/mduren/getcracked/internal/httpapi"
 	"github.com/mduren/getcracked/internal/ingest"
@@ -52,25 +55,33 @@ func databaseURL() string {
 
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("addr", envOr("GC_ADDR", ":8080"), "listen address")
+	// Cloud Run's contract is the PORT env var; GC_ADDR/-addr still win.
+	addr := fs.String("addr", envOr("GC_ADDR", ":"+envOr("PORT", "8080")), "listen address")
 	dbURL := fs.String("db", databaseURL(), "postgres connection URL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	if err := store.Migrate(*dbURL, false); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	st, err := store.Open(context.Background(), *dbURL)
+	st, err := store.Open(ctx, *dbURL)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 
-	pool := grader.NewPool(dockergrader.New(), st, logger, 2, 60*time.Second)
-	if err := pool.Recover(context.Background()); err != nil {
+	g, gradeTimeout, err := newGrader(ctx)
+	if err != nil {
+		return err
+	}
+	pool := grader.NewPool(g, st, logger, 2, gradeTimeout)
+	if err := pool.Recover(ctx); err != nil {
 		return fmt.Errorf("requeue pending submissions: %w", err)
 	}
 
@@ -83,8 +94,45 @@ func serve(args []string) error {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	logger.Info("listening", "addr", *addr)
-	return srv.ListenAndServe()
+	errc := make(chan error, 1)
+	go func() { errc <- srv.ListenAndServe() }()
+	logger.Info("listening", "addr", *addr, "grader", envOr("GC_GRADER", "docker"))
+
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	}
+}
+
+// newGrader picks the grading backend from GC_GRADER. Cloud Run Jobs need a
+// much larger budget than local docker: execution scheduling and container
+// cold start happen before the task's own 90s limit even begins.
+func newGrader(ctx context.Context) (grader.Grader, time.Duration, error) {
+	switch backend := envOr("GC_GRADER", "docker"); backend {
+	case "docker":
+		return dockergrader.New(), 60 * time.Second, nil
+	case "cloudrun":
+		cfg := cloudrungrader.Config{
+			Project: os.Getenv("GC_PROJECT"),
+			Region:  os.Getenv("GC_REGION"),
+			Bucket:  os.Getenv("GC_GRADING_BUCKET"),
+		}
+		if cfg.Project == "" || cfg.Region == "" || cfg.Bucket == "" {
+			return nil, 0, fmt.Errorf("GC_GRADER=cloudrun requires GC_PROJECT, GC_REGION, and GC_GRADING_BUCKET")
+		}
+		g, err := cloudrungrader.New(ctx, cfg)
+		if err != nil {
+			return nil, 0, err
+		}
+		return g, 180 * time.Second, nil
+	default:
+		return nil, 0, fmt.Errorf("unknown GC_GRADER %q (want docker or cloudrun)", backend)
+	}
 }
 
 func migrateCmd(args []string) error {

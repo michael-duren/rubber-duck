@@ -69,7 +69,8 @@ func (h *handlers) setSession(w http.ResponseWriter, r *http.Request, userID int
 		MaxAge:   int(sessionTTL.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
+		// Behind Cloud Run's proxy TLS terminates upstream, so r.TLS is nil.
+		Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 	})
 	return nil
 }
