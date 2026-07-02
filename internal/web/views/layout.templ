@@ -1,0 +1,66 @@
+package views
+
+import "github.com/mduren/getcracked/internal/domain"
+
+templ Layout(title string, user *domain.User) {
+	<!DOCTYPE html>
+	<html lang="en" class="dark">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · Get Cracked</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script>
+				if (localStorage.getItem("theme") === "light") {
+					document.documentElement.classList.remove("dark");
+				}
+			</script>
+		</head>
+		<body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+			<header class="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+				<nav class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+					<a href="/" class="font-mono text-lg font-bold tracking-tight">
+						<span class="text-emerald-600 dark:text-emerald-400">$</span> get-cracked
+					</a>
+					<div class="flex items-center gap-4 text-sm">
+						<button
+							type="button"
+							aria-label="Toggle theme"
+							class="rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+							onclick="document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')"
+						>
+							dark/light
+						</button>
+						if user != nil {
+							<a href="/profile" class="font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">{ user.Username }</a>
+							<form method="post" action="/logout">
+								<button type="submit" class="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">Log out</button>
+							</form>
+						} else {
+							<a href="/login" class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Log in</a>
+							<a href="/signup" class="rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500">Sign up</a>
+						}
+					</div>
+				</nav>
+			</header>
+			<main class="mx-auto max-w-6xl px-4 py-8">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+// tagChip renders one course tag as a terminal-style token.
+templ tagChip(tag string) {
+	<span class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">#{ tag }</span>
+}
+
+// langChip marks a programming-language variant.
+templ langChip(lang string) {
+	<span class="rounded border border-sky-300 px-1.5 py-0.5 font-mono text-xs text-sky-700 dark:border-sky-800 dark:text-sky-300">{ lang }</span>
+}
+
+// pointsBadge shows challenge/course points, the platform's XP currency.
+templ pointsBadge(points int) {
+	<span class="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400">{ points } pts</span>
+}

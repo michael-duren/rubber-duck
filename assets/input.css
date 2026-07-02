@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@source "../internal/web/views/**/*.templ";
+
+@custom-variant dark (&:where(.dark, .dark *));

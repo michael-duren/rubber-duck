@@ -1,0 +1,35 @@
+package views
+
+templ Signup(errMsg string) {
+	@Layout("Sign up", nil) {
+		@authForm("Sign up", "/signup", "Create your account", errMsg)
+	}
+}
+
+templ Login(errMsg string) {
+	@Layout("Log in", nil) {
+		@authForm("Log in", "/login", "Welcome back", errMsg)
+	}
+}
+
+templ authForm(action, path, heading, errMsg string) {
+	<div class="mx-auto mt-12 max-w-sm">
+		<h1 class="text-2xl font-bold">{ heading }</h1>
+		if errMsg != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		<form method="post" action={ templ.SafeURL(path) } class="mt-6 flex flex-col gap-4">
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Username
+				<input type="text" name="username" required minlength="3" maxlength="32" autocomplete="username"
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Password
+				<input type="password" name="password" required minlength="8" autocomplete="current-password"
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
+			</label>
+			<button type="submit" class="rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">{ action }</button>
+		</form>
+	</div>
+}

@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://getcracked:getcracked@postgres:5432/getcracked?sslmode=disable
+    volumes:
+      # M1 grading runs sibling containers via the host daemon. Not hardened;
+      # replaced behind the Grader interface in milestone 2.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: getcracked
+      POSTGRES_PASSWORD: getcracked
+      POSTGRES_DB: getcracked
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U getcracked"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
