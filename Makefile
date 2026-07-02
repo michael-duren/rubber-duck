@@ -45,5 +45,27 @@ check: generate css
 	go vet ./...
 	go test ./...
 
+# --- GCP deploy (see README "Deploying to GCP") ---
+REGION ?= us-central1
+PROJECT ?=
+AR = $(REGION)-docker.pkg.dev/$(PROJECT)/getcracked
+TAG ?= $(shell git rev-parse --short HEAD)
+
+push-images: runner-images
+	@test -n "$(PROJECT)" || (echo "set PROJECT=<gcp-project-id>" && exit 1)
+	docker build -t $(AR)/getcracked:$(TAG) .
+	docker tag gc-runner-go $(AR)/gc-runner-go:$(TAG)
+	docker tag gc-runner-python $(AR)/gc-runner-python:$(TAG)
+	docker push $(AR)/getcracked:$(TAG)
+	docker push $(AR)/gc-runner-go:$(TAG)
+	docker push $(AR)/gc-runner-python:$(TAG)
+	@echo "pushed tag $(TAG)"
+
+deploy: push-images
+	cd infra && tofu apply -var project_id=$(PROJECT) -var region=$(REGION) -var image_tag=$(TAG)
+
+infra-validate:
+	cd infra && tofu fmt -check && tofu validate
+
 clean:
 	rm -f getcracked internal/web/static/app.css

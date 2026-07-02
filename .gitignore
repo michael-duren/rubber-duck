@@ -2,3 +2,7 @@
 /getcracked
 internal/web/static/app.css
 .env
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/*.tfvars

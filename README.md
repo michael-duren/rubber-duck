@@ -161,7 +161,64 @@ Conventions:
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
   import from `solution` (e.g. `from solution import merge`).
 
-## Milestone 2 (not built yet)
+## Deploying to GCP
 
-Terraform for GCP: Cloud Run + Cloud SQL + Artifact Registry + Secret
-Manager, and a hardened grading sandbox to replace `dockergrader`.
+The `infra/` directory holds OpenTofu config for the full production stack:
+
+- **Cloud Run service** `gc-app` (public, scale 0–3) running the app image.
+- **Cloud SQL Postgres 17** (`db-f1-micro`), reached over the Cloud SQL unix
+  socket; the connection URL lives in **Secret Manager**.
+- **Cloud Run Jobs** `gc-grader-go` / `gc-grader-python` grade submissions.
+  Each submission stages its code into a GCS bucket, the app triggers a job
+  execution with signed GET/PUT URLs as env overrides, and the runner uploads
+  its result file (first line = test exit code). Cloud Run's gVisor sandbox
+  replaces the local docker-socket grader; the job's service account has
+  **zero IAM roles** — the signed URLs are its only capability.
+- **Artifact Registry** for the three images.
+
+### One-time setup
+
+```sh
+paru -S google-cloud-cli            # AUR; provides gcloud
+gcloud auth login
+gcloud auth application-default login   # credentials OpenTofu + local tools use
+gcloud projects create <project-id>
+gcloud billing projects link <project-id> --billing-account=<ACCOUNT_ID>
+gcloud config set project <project-id>
+gcloud auth configure-docker us-central1-docker.pkg.dev
+```
+
+### First deploy
+
+Images must exist before Cloud Run resources can reference them, so the
+first apply is two-phase:
+
+```sh
+cd infra && tofu init
+tofu apply -var project_id=<project-id> -target=google_artifact_registry_repository.images
+cd .. && make push-images PROJECT=<project-id>
+cd infra && tofu apply -var project_id=<project-id> -var image_tag=$(git rev-parse --short HEAD)
+```
+
+The `service_url` output is your site; the first visit runs migrations.
+
+### Seed a course
+
+`apikey create` needs database access; use cloud-sql-proxy locally:
+
+```sh
+paru -S cloud-sql-proxy    # or grab the release binary
+cloud-sql-proxy $(cd infra && tofu output -raw sql_connection_name) --port 5433 &
+DB="postgres://getcracked:$(cd infra && tofu output -raw db_password)@localhost:5433/getcracked?sslmode=disable"
+go run ./cmd/getcracked apikey create --name seed --db "$DB"
+GC_API_KEY=<printed key> go run ./cmd/getcracked seed --url <service_url> seed/intro-to-go.md
+```
+
+### Redeploy
+
+```sh
+make deploy PROJECT=<project-id>    # builds, pushes (tag = git SHA), tofu apply
+```
+
+Cloud Run only rolls a new revision when the image *string* changes, so
+deploys use a unique tag per commit rather than `latest`.
