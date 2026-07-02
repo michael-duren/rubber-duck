@@ -26,6 +26,14 @@ resource "google_storage_bucket_iam_member" "app_grading_bucket" {
   member = "serviceAccount:${google_service_account.app.email}"
 }
 
+# Waiting on a RunJob LRO needs run.operations.get, which lives at project
+# scope — job-scoped roles can't see operations.
+resource "google_project_iam_member" "app_run_viewer" {
+  project = var.project_id
+  role    = "roles/run.viewer"
+  member  = "serviceAccount:${google_service_account.app.email}"
+}
+
 # run.jobs.runWithOverrides (per-execution env) needs more than run.invoker;
 # run.developer scoped to each job is the established role that carries it.
 resource "google_cloud_run_v2_job_iam_member" "app_runs_jobs" {
