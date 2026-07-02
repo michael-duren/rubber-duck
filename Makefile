@@ -1,15 +1,22 @@
 TAILWIND_VERSION := v4.1.11
 TAILWIND := bin/tailwindcss
+SQL_PROXY_VERSION := v2.15.2
+SQL_PROXY := bin/cloud-sql-proxy
 
 .PHONY: tools generate css build serve db dev runner-images test test-integration seed check clean
 
-tools: $(TAILWIND)
+tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
 
 $(TAILWIND):
 	mkdir -p bin
 	curl -fsSL -o $(TAILWIND) https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-linux-x64
 	chmod +x $(TAILWIND)
+
+$(SQL_PROXY):
+	mkdir -p bin
+	curl -fsSL -o $(SQL_PROXY) https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/$(SQL_PROXY_VERSION)/cloud-sql-proxy.linux.amd64
+	chmod +x $(SQL_PROXY)
 
 generate:
 	templ generate

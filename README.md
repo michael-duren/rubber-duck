@@ -179,7 +179,8 @@ The `infra/` directory holds OpenTofu config for the full production stack:
 ### One-time setup
 
 ```sh
-paru -S google-cloud-cli            # AUR; provides gcloud
+# gcloud: official repos on Arch (google-cloud-cli); cloud-sql-proxy is
+# fetched into bin/ by `make tools` (it's AUR-only otherwise)
 gcloud auth login
 gcloud auth application-default login   # credentials OpenTofu + local tools use
 gcloud projects create <project-id>
@@ -207,8 +208,7 @@ The `service_url` output is your site; the first visit runs migrations.
 `apikey create` needs database access; use cloud-sql-proxy locally:
 
 ```sh
-paru -S cloud-sql-proxy    # or grab the release binary
-cloud-sql-proxy $(cd infra && tofu output -raw sql_connection_name) --port 5433 &
+bin/cloud-sql-proxy $(cd infra && tofu output -raw sql_connection_name) --port 5433 &
 DB="postgres://getcracked:$(cd infra && tofu output -raw db_password)@localhost:5433/getcracked?sslmode=disable"
 go run ./cmd/getcracked apikey create --name seed --db "$DB"
 GC_API_KEY=<printed key> go run ./cmd/getcracked seed --url <service_url> seed/intro-to-go.md
