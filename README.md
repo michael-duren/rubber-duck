@@ -163,6 +163,28 @@ Conventions:
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
   import from `solution` (e.g. `from solution import merge`).
 
+## Course content workflow
+
+`courses/` holds the canonical markdown for every published course variant
+— one file per course × language, named `<course-slug>-<language>.md` — so
+course content gets git history and PR review like any other change.
+(`seed/intro-to-go.md` is a separate, older fixture the ingest/store tests
+read directly; it's not part of the publish workflow and may drift from
+`courses/intro-to-concurrency-go.md`.)
+
+Agents (or humans) branch and PR markdown changes into `courses/`; publish
+after merge:
+
+```sh
+GC_API_KEY=<agent key> make publish                       # local server
+GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
+```
+
+`make publish` loops `getcracked seed --url $GC_URL <file>` over every
+`courses/*.md`, bumping each variant's version. Re-publishing **replaces**
+a variant's lessons/challenges and resets submissions for it — keep slugs
+stable (see "Course document format" above).
+
 ## Local testing with `gc`
 
 Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.

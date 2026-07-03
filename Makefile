@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build serve db dev runner-images test test-integration seed check clean
+.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish check clean
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -46,6 +46,17 @@ test-integration: db
 
 seed:
 	go run ./cmd/getcracked seed seed/intro-to-go.md
+
+# GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
+# target a local `make dev` server; override both for prod.
+GC_URL ?= http://localhost:8080
+
+publish:
+	@test -n "$$GC_API_KEY" || (echo "set GC_API_KEY=<key>" && exit 1)
+	@for f in courses/*.md; do \
+		echo "publishing $$f"; \
+		go run ./cmd/getcracked seed --url $(GC_URL) "$$f" || exit 1; \
+	done
 
 check: generate css
 	@git diff --exit-code -- '**/*_templ.go' || (echo "stale templ output: run make generate and commit" && exit 1)

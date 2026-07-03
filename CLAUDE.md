@@ -25,6 +25,10 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `make runner-images` — build gc-runner-go / gc-runner-python (needed for
   dockergrader e2e tests, which skip if images are missing)
 - `make seed` — publish seed/intro-to-go.md through the local agent API
+  (quickstart fixture only — see `make publish` for real course content)
+- `make publish` — loop `getcracked seed` over `courses/*.md` (the
+  canonical, PR-reviewed course content); `GC_API_KEY=... [GC_URL=...]
+  make publish`
 - `make deploy PROJECT=getcracked-touch-grass` — build, push (tag = git
   SHA), tofu apply. Prod: https://gc-app-aauuwonajq-uc.a.run.app
 - `go run ./cmd/getcracked apikey create --name <n> [--db <url>]` — mint
@@ -61,3 +65,5 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `internal/grader/grader.go` — the Grader seam; pool.go drains submissions
 - `internal/store/migrations/` — embedded, run on serve start
 - `infra/` — OpenTofu (use `tofu`, not terraform); `make infra-validate`
+- `courses/` — canonical course markdown, one file per course×language;
+  `make publish` loops it through the agent API
