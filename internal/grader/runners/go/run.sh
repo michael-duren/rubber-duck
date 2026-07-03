@@ -16,6 +16,7 @@ else
 	tar -xf -
 fi
 go mod init challenge > /dev/null 2>&1
+goimports -w solution.go
 if [ -z "$OUTPUT_URL" ]; then
 	exec go test ./...
 fi
