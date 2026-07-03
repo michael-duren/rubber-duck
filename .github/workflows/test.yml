@@ -1,0 +1,47 @@
+name: test
+
+# Reusable: called by ci.yml (every PR/push) and cd.yml (gate before deploy)
+# so there's one definition of "the code is good" for both.
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: getcracked
+          POSTGRES_PASSWORD: getcracked
+          POSTGRES_DB: getcracked
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U getcracked"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache: true
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install tooling (templ, tailwindcss)
+        run: make tools
+
+      - name: make check (vet, templ staleness, unit tests)
+        run: make check
+
+      - name: Integration tests (store package against Postgres)
+        run: go test ./...
+        env:
+          TEST_DATABASE_URL: postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable

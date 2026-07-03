@@ -1,0 +1,57 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    # Requires a "production" environment (Settings > Environments) with
+    # required reviewers configured. infra/network.tf landed on main
+    # already but was deliberately left un-applied pending human review
+    # (see issues/ops/03-job-egress-lockdown.md) — do NOT remove this gate
+    # or set `tofu apply` to auto-run without it, or the next merge to
+    # main will silently apply that untested change to prod.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - uses: opentofu/setup-opentofu@v1
+
+      - name: Build and push images
+        run: make push-images PROJECT="$PROJECT" REGION="$REGION"
+
+      # Not `make deploy`: that target's `tofu apply` is intentionally
+      # interactive for local use. CD substitutes the environment's
+      # required-reviewer approval for that human-in-the-loop check, so
+      # it applies non-interactively here instead.
+      - name: tofu apply
+        working-directory: infra
+        run: |
+          tofu init
+          tofu apply -auto-approve \
+            -var project_id="$PROJECT" \
+            -var region="$REGION" \
+            -var image_tag="$(git rev-parse --short HEAD)"
