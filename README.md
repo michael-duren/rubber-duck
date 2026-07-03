@@ -220,6 +220,62 @@ The `infra/` directory holds OpenTofu config for the full production stack:
   **zero IAM roles** — the signed URLs are its only capability.
 - **Artifact Registry** for the three images.
 
+### Architecture
+
+```
+                         ┌─────────────────────┐
+   users ───────────────▶│  Cloud Run Service   │  gc-app (public, scale 0-3)
+                         │      "gc-app"        │
+                         └──┬────┬────┬────┬────┘
+                            │    │    │    │
+              Unix socket   │    │    │    │ triggers job execution
+              (no network)  │    │    │    │ (signed URLs as env overrides)
+                            ▼    │    │    ▼
+                  ┌──────────┐   │    │   ┌────────────────────────┐
+                  │Cloud SQL │   │    │   │   Cloud Run Jobs        │
+                  │ Postgres │   │    │   │ gc-grader-go/python     │
+                  └──────────┘   │    │   └───────────┬─────────────┘
+                                 │    │               │
+                     read secret │    │ stage/fetch    │ fetch code via
+                     at startup  │    │ via signed URL │ signed GET,
+                                  ▼    ▼                │ push result via
+                  ┌──────────────┐  ┌──────────────┐    │ signed PUT
+                  │Secret Manager│  │  GCS bucket   │◀───┘
+                  │ DATABASE_URL │  │ (grading      │
+                  └──────────────┘  │  staging)     │
+                                     └──────────────┘
+```
+
+Artifact Registry (`getcracked` repo) holds all three images (`getcracked`,
+`gc-runner-go`, `gc-runner-python`); `gc-app` and both grader jobs pull from
+it, and CD pushes new tags there on every merge to `main`.
+
+**Trust boundary — two service accounts:**
+
+- `gc-app`'s SA holds real permissions: `cloudsql.client`, `run.viewer`
+  (project-scoped — polling a job execution's LRO needs `run.operations.get`,
+  which job-scoped roles can't see), `run.developer` scoped to each grader
+  job (`runWithOverrides` needs more than `run.invoker`),
+  `secretmanager.secretAccessor` on the DB URL secret, and
+  `iam.serviceAccountTokenCreator` on itself (keyless V4 URL signing).
+- `gc-grader`'s SA has **zero** IAM roles. It can only reach the two GCS
+  objects it's handed via signed URLs — a capability baked into the URL, not
+  an IAM grant — so even fully-compromised submission code running inside
+  the job can't do anything with that identity.
+
+**Grading flow:** the pool worker (`internal/grader/pool.go`) stages a
+submission's code + tests into the GCS bucket, generates a signed GET (for
+the job to read) and signed PUT (for its result), and starts a
+`gc-grader-{lang}` job execution with those URLs as env overrides. The job
+fetches, runs the tests, and uploads a result file (first line = exit code).
+`gc-app` polls the execution via `run.viewer` until it completes, reads the
+result back from GCS, and updates the submission.
+
+`infra/network.tf` adds a VPC + Serverless VPC Access connector + private
+DNS override + firewall so grader-job egress is locked to GCS only — see
+[`docs/infra.md`](docs/infra.md) for CI/CD setup and why that file isn't
+applied yet.
+
 ### One-time setup
 
 ```sh
