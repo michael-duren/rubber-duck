@@ -36,3 +36,12 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash)
 	return err
 }
+
+// DeleteOtherSessions logs out every session for a user except the one
+// making the current request (e.g. after a password change).
+func (s *Store) DeleteOtherSessions(ctx context.Context, userID int64, keepTokenHash []byte) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM sessions WHERE user_id = $1 AND token_hash != $2`,
+		userID, keepTokenHash)
+	return err
+}

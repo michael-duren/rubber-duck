@@ -26,6 +26,9 @@ type AuthStore interface {
 	UserByToken(ctx context.Context, tokenHash []byte) (domain.User, error)
 	ListUserTokens(ctx context.Context, userID int64) ([]domain.UserToken, error)
 	RevokeUserToken(ctx context.Context, userID, tokenID int64) error
+	PasswordHash(ctx context.Context, userID int64) (string, error)
+	UpdatePassword(ctx context.Context, userID int64, passwordHash string) error
+	DeleteOtherSessions(ctx context.Context, userID int64, keepTokenHash []byte) error
 }
 
 type ctxKey struct{}

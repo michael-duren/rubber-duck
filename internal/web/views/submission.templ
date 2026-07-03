@@ -48,7 +48,10 @@ templ SubmissionResult(sub domain.Submission) {
 
 templ Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.UserToken, newToken string) {
 	@Layout("Profile", user) {
-		<h1 class="text-3xl font-bold">{ user.Username }</h1>
+		<div class="flex items-center justify-between gap-3">
+			<h1 class="text-3xl font-bold">{ user.Username }</h1>
+			<a href="/settings" class="text-sm text-slate-500 hover:underline dark:text-slate-400">Change password</a>
+		</div>
 		if len(scores) == 0 {
 			<p class="mt-6 text-slate-500 dark:text-slate-400">
 				No challenges attempted yet.

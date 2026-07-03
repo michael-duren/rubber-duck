@@ -125,6 +125,35 @@ func (f *fakeStore) RevokeUserToken(_ context.Context, userID, tokenID int64) er
 	return nil
 }
 
+func (f *fakeStore) PasswordHash(_ context.Context, userID int64) (string, error) {
+	for _, u := range f.users {
+		if u.id == userID {
+			return u.hash, nil
+		}
+	}
+	return "", domain.ErrNotFound
+}
+
+func (f *fakeStore) UpdatePassword(_ context.Context, userID int64, passwordHash string) error {
+	for name, u := range f.users {
+		if u.id == userID {
+			u.hash = passwordHash
+			f.users[name] = u
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
+func (f *fakeStore) DeleteOtherSessions(_ context.Context, userID int64, keepTokenHash []byte) error {
+	for hash, uid := range f.sessions {
+		if uid == userID && hash != string(keepTokenHash) {
+			delete(f.sessions, hash)
+		}
+	}
+	return nil
+}
+
 // CourseReader stubs: auth tests don't exercise course pages beyond the
 // (empty) catalog rendered at "/".
 func (f *fakeStore) ListCourses(context.Context) ([]domain.CourseSummary, error) { return nil, nil }

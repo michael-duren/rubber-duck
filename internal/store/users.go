@@ -37,3 +37,19 @@ func (s *Store) UserByUsername(ctx context.Context, username string) (domain.Use
 	}
 	return u, hash, err
 }
+
+// PasswordHash returns a user's current password hash, for verifying the
+// "current password" field on a change-password form.
+func (s *Store) PasswordHash(ctx context.Context, userID int64) (string, error) {
+	var hash string
+	err := s.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrNotFound
+	}
+	return hash, err
+}
+
+func (s *Store) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, userID)
+	return err
+}
