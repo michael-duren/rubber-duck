@@ -121,3 +121,42 @@ func TestAPIKeys(t *testing.T) {
 		t.Errorf("invalid key = %v, %v; want false", ok, err)
 	}
 }
+
+func TestUserTokens(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	token, hash := auth.NewUserToken()
+	id, err := s.CreateUserToken(ctx, u.ID, "laptop", hash)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	got, err := s.UserByToken(ctx, auth.HashToken(token))
+	if err != nil || got.ID != u.ID {
+		t.Errorf("UserByToken = %+v, %v; want user %d", got, err, u.ID)
+	}
+	if _, err := s.UserByToken(ctx, auth.HashToken("gc_u_wrong")); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("wrong token err = %v, want ErrNotFound", err)
+	}
+
+	tokens, err := s.ListUserTokens(ctx, u.ID)
+	if err != nil || len(tokens) != 1 || tokens[0].Name != "laptop" || tokens[0].RevokedAt != nil {
+		t.Errorf("ListUserTokens = %+v, %v", tokens, err)
+	}
+
+	if err := s.RevokeUserToken(ctx, u.ID, id); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	if _, err := s.UserByToken(ctx, auth.HashToken(token)); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("revoked token err = %v, want ErrNotFound", err)
+	}
+	if err := s.RevokeUserToken(ctx, u.ID, id); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("double revoke err = %v, want ErrNotFound", err)
+	}
+}

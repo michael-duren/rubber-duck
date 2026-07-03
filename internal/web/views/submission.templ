@@ -46,7 +46,7 @@ templ SubmissionResult(sub domain.Submission) {
 	}
 }
 
-templ Profile(user *domain.User, scores []domain.CourseScore) {
+templ Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.UserToken, newToken string) {
 	@Layout("Profile", user) {
 		<h1 class="text-3xl font-bold">{ user.Username }</h1>
 		if len(scores) == 0 {
@@ -72,7 +72,48 @@ templ Profile(user *domain.User, scores []domain.CourseScore) {
 				}
 			</div>
 		}
+		@tokenSection(tokens, newToken)
 	}
+}
+
+templ tokenSection(tokens []domain.UserToken, newToken string) {
+	<section class="mt-12">
+		<h2 class="text-xl font-bold">CLI tokens</h2>
+		<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Authenticate the <code>gc</code> CLI without a browser session.</p>
+		if newToken != "" {
+			<div class="mt-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-800 dark:bg-emerald-950">
+				<p class="font-medium text-emerald-800 dark:text-emerald-300">Copy this token now — it won't be shown again.</p>
+				<code class="mt-1 block break-all font-mono text-emerald-900 dark:text-emerald-200">{ newToken }</code>
+			</div>
+		}
+		if len(tokens) > 0 {
+			<div class="mt-4 flex flex-col gap-2">
+				for _, t := range tokens {
+					<div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+						<span>
+							{ t.Name }
+							if t.RevokedAt != nil {
+								<span class="ml-2 text-slate-400 dark:text-slate-500">revoked</span>
+							}
+						</span>
+						if t.RevokedAt == nil {
+							<form method="post" action={ templ.SafeURL(fmt.Sprintf("/profile/tokens/%d/revoke", t.ID)) }>
+								<button type="submit" class="text-red-600 hover:underline dark:text-red-400">Revoke</button>
+							</form>
+						}
+					</div>
+				}
+			</div>
+		}
+		<form method="post" action="/profile/tokens" class="mt-4 flex items-end gap-2">
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Name
+				<input type="text" name="name" required maxlength="64" placeholder="my laptop"
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
+			</label>
+			<button type="submit" class="rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Create CLI token</button>
+		</form>
+	</section>
 }
 
 func percent(earned, possible int) int {

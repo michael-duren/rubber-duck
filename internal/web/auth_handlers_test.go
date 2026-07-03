@@ -17,7 +17,9 @@ import (
 // fakeStore is an in-memory AuthStore.
 type fakeStore struct {
 	users    map[string]fakeUser // by username
-	sessions map[string]int64    // token hash -> user id
+	sessions map[string]int64    // session token hash -> user id
+	tokens   map[int64]fakeToken // CLI token id -> token
+	nextTok  int64
 }
 
 type fakeUser struct {
@@ -25,8 +27,18 @@ type fakeUser struct {
 	hash string
 }
 
+type fakeToken struct {
+	userID  int64
+	name    string
+	hash    string
+	revoked bool
+}
+
 func newFakeStore() *fakeStore {
-	return &fakeStore{users: map[string]fakeUser{}, sessions: map[string]int64{}}
+	return &fakeStore{
+		users: map[string]fakeUser{}, sessions: map[string]int64{},
+		tokens: map[int64]fakeToken{},
+	}
 }
 
 func (f *fakeStore) CreateUser(_ context.Context, username, passwordHash string) (domain.User, error) {
@@ -66,6 +78,46 @@ func (f *fakeStore) UserBySession(_ context.Context, tokenHash []byte) (domain.U
 
 func (f *fakeStore) DeleteSession(_ context.Context, tokenHash []byte) error {
 	delete(f.sessions, string(tokenHash))
+	return nil
+}
+
+func (f *fakeStore) CreateUserToken(_ context.Context, userID int64, name string, tokenHash []byte) (int64, error) {
+	f.nextTok++
+	f.tokens[f.nextTok] = fakeToken{userID: userID, name: name, hash: string(tokenHash)}
+	return f.nextTok, nil
+}
+
+func (f *fakeStore) UserByToken(_ context.Context, tokenHash []byte) (domain.User, error) {
+	for _, t := range f.tokens {
+		if t.hash == string(tokenHash) && !t.revoked {
+			for name, u := range f.users {
+				if u.id == t.userID {
+					return domain.User{ID: u.id, Username: name}, nil
+				}
+			}
+			return domain.User{ID: t.userID}, nil
+		}
+	}
+	return domain.User{}, domain.ErrNotFound
+}
+
+func (f *fakeStore) ListUserTokens(_ context.Context, userID int64) ([]domain.UserToken, error) {
+	var out []domain.UserToken
+	for id, t := range f.tokens {
+		if t.userID == userID {
+			out = append(out, domain.UserToken{ID: id, Name: t.name})
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) RevokeUserToken(_ context.Context, userID, tokenID int64) error {
+	t, ok := f.tokens[tokenID]
+	if !ok || t.userID != userID || t.revoked {
+		return domain.ErrNotFound
+	}
+	t.revoked = true
+	f.tokens[tokenID] = t
 	return nil
 }
 

@@ -85,11 +85,5 @@ func (h *handlers) loadSubmission(w http.ResponseWriter, r *http.Request) (domai
 }
 
 func (h *handlers) profile(w http.ResponseWriter, r *http.Request) {
-	user := currentUser(r)
-	scores, err := h.submissions.UserCourseScores(r.Context(), user.ID)
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-	h.render(w, r, views.Profile(user, scores))
+	h.renderProfile(w, r, "")
 }

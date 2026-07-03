@@ -29,6 +29,11 @@ func NewAPIKey() (key string, hash []byte) {
 	return newToken("gc_")
 }
 
+// NewUserToken returns a user CLI token ("gc_u_" prefix) and its storage hash.
+func NewUserToken() (token string, hash []byte) {
+	return newToken("gc_u_")
+}
+
 func newToken(prefix string) (string, []byte) {
 	b := make([]byte, 20)
 	rand.Read(b) // never fails; see crypto/rand docs

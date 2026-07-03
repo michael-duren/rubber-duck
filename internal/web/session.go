@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mduren/getcracked/internal/auth"
@@ -21,6 +22,10 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, tokenHash []byte, userID int64, expiresAt time.Time) error
 	UserBySession(ctx context.Context, tokenHash []byte) (domain.User, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
+	CreateUserToken(ctx context.Context, userID int64, name string, tokenHash []byte) (int64, error)
+	UserByToken(ctx context.Context, tokenHash []byte) (domain.User, error)
+	ListUserTokens(ctx context.Context, userID int64) ([]domain.UserToken, error)
+	RevokeUserToken(ctx context.Context, userID, tokenID int64) error
 }
 
 type ctxKey struct{}
@@ -31,14 +36,23 @@ func currentUser(r *http.Request) *domain.User {
 	return u
 }
 
-// withUser resolves the session cookie (if any) and attaches the user to the
-// request context. It never rejects: pages decide themselves what anonymous
+// bearerToken extracts a CLI token from an Authorization: Bearer header.
+func bearerToken(r *http.Request) (string, bool) {
+	return strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+}
+
+// withUser resolves the caller's identity — a CLI bearer token takes
+// priority over the session cookie — and attaches the user to the request
+// context. It never rejects: pages decide themselves what anonymous
 // visitors may see.
 func (h *handlers) withUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if c, err := r.Cookie(sessionCookie); err == nil {
-			u, err := h.store.UserBySession(r.Context(), auth.HashToken(c.Value))
-			if err == nil {
+		if token, ok := bearerToken(r); ok {
+			if u, err := h.store.UserByToken(r.Context(), auth.HashToken(token)); err == nil {
+				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, &u))
+			}
+		} else if c, err := r.Cookie(sessionCookie); err == nil {
+			if u, err := h.store.UserBySession(r.Context(), auth.HashToken(c.Value)); err == nil {
 				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, &u))
 			}
 		}
@@ -46,10 +60,15 @@ func (h *handlers) withUser(next http.Handler) http.Handler {
 	})
 }
 
-// requireUser redirects anonymous visitors to /login.
+// requireUser rejects anonymous requests: 401 for a bearer-token caller
+// (a CLI, not a browser to redirect), otherwise a redirect to /login.
 func (h *handlers) requireUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if currentUser(r) == nil {
+			if _, ok := bearerToken(r); ok {
+				http.Error(w, "invalid or revoked token", http.StatusUnauthorized)
+				return
+			}
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
