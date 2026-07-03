@@ -19,6 +19,14 @@
 resource "google_compute_network" "vpc" {
   name                    = "gc-vpc"
   auto_create_subnetworks = false
+
+  # Everything else in this file references vpc.id, so this is the only
+  # explicit API dependency network.tf needs — but it matters on a project
+  # where compute.googleapis.com is enabled in the same apply (apis.tf):
+  # enablement can return before it's actually propagated, and without
+  # this Terraform has no reason to wait (confirmed: first apply hit
+  # "Compute Engine API has not been used in this project before").
+  depends_on = [google_project_service.apis["compute.googleapis.com"]]
 }
 
 resource "google_compute_subnetwork" "connector" {

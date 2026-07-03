@@ -60,9 +60,24 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 # Terraform manages IAM bindings and service accounts (internal/iam.tf), so
 # roles/editor alone isn't enough — it excludes IAM/security-sensitive
-# permissions by design.
-for role in roles/editor roles/resourcemanager.projectIamAdmin roles/iam.serviceAccountAdmin; do
+# permissions by design. It also doesn't cover Artifact Registry pushes
+# (confirmed: `docker push` fails with `artifactregistry.repositories
+# .uploadArtifacts denied` under editor alone) — hence the explicit
+# artifactregistry.writer grant below.
+for role in roles/editor roles/resourcemanager.projectIamAdmin roles/iam.serviceAccountAdmin roles/artifactregistry.writer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:gh-deployer@${PROJECT_ID}.iam.gserviceaccount.com" --role="$role"
 done
 ```
+
+
+
+Then in the GitHub repo settings:
+
+- **Settings > Environments**: create `production`, add yourself (or the
+  team) as a required reviewer.
+- **Settings > Secrets and variables > Actions > Variables**: set
+  `GCP_PROJECT_ID=getcracked-touch-grass`,
+  `GCP_WORKLOAD_IDENTITY_PROVIDER=projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/github-actions`,
+  `GCP_DEPLOYER_SA=gh-deployer@getcracked-touch-grass.iam.gserviceaccount.com`.
+  No secrets needed — WIF is keyless.
