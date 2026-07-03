@@ -8,8 +8,9 @@ import (
 	"github.com/mduren/getcracked/internal/ingest"
 )
 
-// seedChallenges publishes the seed course and returns its challenge IDs.
-func seedChallenges(t *testing.T, s *Store) []int64 {
+// seedChallenges publishes the seed course and returns its variant ID and
+// challenge IDs.
+func seedChallenges(t *testing.T, s *Store) (variantID int64, challengeIDs []int64) {
 	t.Helper()
 	src, err := os.ReadFile("../../seed/intro-to-go.md")
 	if err != nil {
@@ -36,13 +37,13 @@ func seedChallenges(t *testing.T, s *Store) []int64 {
 			ids = append(ids, c.ID)
 		}
 	}
-	return append(ids, v.Final.ID)
+	return v.ID, append(ids, v.Final.ID)
 }
 
 func TestSubmissionRateLimited(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	ids := seedChallenges(t, s)
+	_, ids := seedChallenges(t, s)
 	if len(ids) < 3 {
 		t.Fatalf("need at least 3 challenges, got %d", len(ids))
 	}
@@ -101,5 +102,50 @@ func TestSubmissionRateLimited(t *testing.T) {
 	limited, err = s.SubmissionRateLimited(ctx, u.ID, third)
 	if err != nil || limited {
 		t.Errorf("after grading: limited = %v, %v; want false", limited, err)
+	}
+}
+
+func TestCompletedChallenges(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	variantID, ids := seedChallenges(t, s)
+	first, second := ids[0], ids[1]
+
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	completed, err := s.CompletedChallenges(ctx, u.ID, variantID)
+	if err != nil || len(completed) != 0 {
+		t.Fatalf("fresh user: completed = %v, %v; want empty", completed, err)
+	}
+
+	sub1, err := s.CreateSubmission(ctx, u.ID, first, "package x")
+	if err != nil {
+		t.Fatalf("create submission 1: %v", err)
+	}
+	sub2, err := s.CreateSubmission(ctx, u.ID, second, "package x")
+	if err != nil {
+		t.Fatalf("create submission 2: %v", err)
+	}
+	// A failed submission (even with partial credit) doesn't mark the
+	// challenge complete — only a passing one does.
+	if err := s.CompleteSubmission(ctx, sub1, "failed", "3/4", 8, nil, nil); err != nil {
+		t.Fatalf("complete 1: %v", err)
+	}
+	if err := s.CompleteSubmission(ctx, sub2, "passed", "ok", 15, nil, nil); err != nil {
+		t.Fatalf("complete 2: %v", err)
+	}
+
+	completed, err = s.CompletedChallenges(ctx, u.ID, variantID)
+	if err != nil {
+		t.Fatalf("completed: %v", err)
+	}
+	if completed[first] {
+		t.Errorf("challenge with only a failed submission marked complete")
+	}
+	if !completed[second] {
+		t.Errorf("challenge with a passing submission not marked complete")
 	}
 }

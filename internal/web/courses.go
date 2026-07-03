@@ -58,7 +58,21 @@ func (h *handlers) coursePage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	h.render(w, r, views.Course(currentUser(r), course, variants))
+
+	scores := map[string]domain.CourseScore{} // by language, this course only
+	if user := currentUser(r); user != nil {
+		all, err := h.submissions.UserCourseScores(r.Context(), user.ID)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		for _, s := range all {
+			if s.CourseSlug == course.Slug {
+				scores[s.Language] = s
+			}
+		}
+	}
+	h.render(w, r, views.Course(currentUser(r), course, variants, scores))
 }
 
 func (h *handlers) variantPage(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +85,25 @@ func (h *handlers) variantPage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	h.render(w, r, views.Variant(currentUser(r), course, variant))
+	completed, err := h.completedChallenges(w, r, variant.ID)
+	if err != nil {
+		return
+	}
+	h.render(w, r, views.Variant(currentUser(r), course, variant, completed))
+}
+
+// completedChallenges is nil for anonymous visitors (no progress to mark).
+func (h *handlers) completedChallenges(w http.ResponseWriter, r *http.Request, variantID int64) (map[int64]bool, error) {
+	user := currentUser(r)
+	if user == nil {
+		return nil, nil
+	}
+	completed, err := h.submissions.CompletedChallenges(r.Context(), user.ID, variantID)
+	if err != nil {
+		h.serverError(w, r, err)
+		return nil, err
+	}
+	return completed, nil
 }
 
 func (h *handlers) lessonPage(w http.ResponseWriter, r *http.Request) {

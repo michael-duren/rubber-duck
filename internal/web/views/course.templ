@@ -7,7 +7,7 @@ import (
 	"github.com/mduren/getcracked/internal/domain"
 )
 
-templ Course(user *domain.User, course domain.Course, variants []domain.VariantSummary) {
+templ Course(user *domain.User, course domain.Course, variants []domain.VariantSummary, scores map[string]domain.CourseScore) {
 	@Layout(course.Title, user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
 			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / { course.Slug }
@@ -34,6 +34,9 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 								</span>
 							</span>
 							<span class="flex items-center gap-3">
+								if s, ok := scores[v.Language]; ok {
+									<span class="font-mono text-sm font-semibold text-amber-700 dark:text-amber-400">{ fmt.Sprintf("%d / %d pts", s.Earned, s.Possible) }</span>
+								}
 								@pointsBadge(v.TotalPoints)
 								<span class="font-medium text-emerald-600 group-hover:translate-x-0.5 dark:text-emerald-400">Start →</span>
 							</span>

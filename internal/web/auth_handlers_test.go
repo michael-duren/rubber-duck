@@ -196,6 +196,16 @@ func (f *fakeStore) SubmissionRateLimited(_ context.Context, userID, challengeID
 	return f.rateLimit(userID, challengeID), nil
 }
 
+func (f *fakeStore) CompletedChallenges(_ context.Context, userID, variantID int64) (map[int64]bool, error) {
+	completed := map[int64]bool{}
+	for _, sub := range f.submissions {
+		if sub.UserID == userID && sub.Status == "passed" {
+			completed[sub.ChallengeID] = true
+		}
+	}
+	return completed, nil
+}
+
 type noopEnqueuer struct{}
 
 func (noopEnqueuer) Enqueue(int64) {}

@@ -113,6 +113,31 @@ func (s *Store) SubmissionForUser(ctx context.Context, id, userID int64) (domain
 	return sub, err
 }
 
+// CompletedChallenges returns the set of challenge IDs in one variant that
+// the user has a passing submission for, for lesson-completion marks.
+func (s *Store) CompletedChallenges(ctx context.Context, userID, variantID int64) (map[int64]bool, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT sub.challenge_id
+		FROM submissions sub
+		JOIN challenges ch ON ch.id = sub.challenge_id
+		WHERE sub.user_id = $1 AND ch.variant_id = $2 AND sub.status = 'passed'`,
+		userID, variantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	completed := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		completed[id] = true
+	}
+	return completed, rows.Err()
+}
+
 // UserCourseScores sums the user's best score per challenge into one row
 // per course variant they have attempted.
 func (s *Store) UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error) {
