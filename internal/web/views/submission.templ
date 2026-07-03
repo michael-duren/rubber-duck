@@ -101,6 +101,7 @@ templ tokenSection(tokens []domain.UserToken, newToken string) {
 						</span>
 						if t.RevokedAt == nil {
 							<form method="post" action={ templ.SafeURL(fmt.Sprintf("/profile/tokens/%d/revoke", t.ID)) }>
+								@csrfField()
 								<button type="submit" class="text-red-600 hover:underline dark:text-red-400">Revoke</button>
 							</form>
 						}
@@ -109,6 +110,7 @@ templ tokenSection(tokens []domain.UserToken, newToken string) {
 			</div>
 		}
 		<form method="post" action="/profile/tokens" class="mt-4 flex items-end gap-2">
+			@csrfField()
 			<label class="flex flex-col gap-1 text-sm font-medium">
 				Name
 				<input type="text" name="name" required maxlength="64" placeholder="my laptop"

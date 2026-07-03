@@ -61,6 +61,7 @@ templ ChallengeCard(user *domain.User, c domain.Challenge) {
 		</div>
 		if user != nil {
 			<form method="post" action={ templ.SafeURL(fmt.Sprintf("/challenges/%d/submissions", c.ID)) } class="mt-4">
+				@csrfField()
 				<label class="text-sm font-medium" for={ fmt.Sprintf("code-%d", c.ID) }>Your solution</label>
 				<textarea
 					id={ fmt.Sprintf("code-%d", c.ID) }

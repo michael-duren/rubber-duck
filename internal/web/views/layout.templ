@@ -34,6 +34,7 @@ templ Layout(title string, user *domain.User) {
 						if user != nil {
 							<a href="/profile" class="font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">{ user.Username }</a>
 							<form method="post" action="/logout">
+								@csrfField()
 								<button type="submit" class="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">Log out</button>
 							</form>
 						} else {
@@ -48,6 +49,13 @@ templ Layout(title string, user *domain.User) {
 			</main>
 		</body>
 	</html>
+}
+
+// csrfField is a hidden input every state-changing form must include; the
+// token comes from the request context (see WithCSRFToken), not a
+// function parameter, so adding it to a form never touches the handler.
+templ csrfField() {
+	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 }
 
 // tagChip renders one course tag as a terminal-style token.

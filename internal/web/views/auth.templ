@@ -19,6 +19,7 @@ templ authForm(action, path, heading, errMsg string) {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
 		}
 		<form method="post" action={ templ.SafeURL(path) } class="mt-6 flex flex-col gap-4">
+			@csrfField()
 			<label class="flex flex-col gap-1 text-sm font-medium">
 				Username
 				<input type="text" name="username" required minlength="3" maxlength="32" autocomplete="username"

@@ -83,7 +83,15 @@ func Settings(errMsg, okMsg string) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<form method=\"post\" action=\"/settings\" class=\"mt-6 flex flex-col gap-4\"><label class=\"flex flex-col gap-1 text-sm font-medium\">Current password <input type=\"password\" name=\"current_password\" required autocomplete=\"current-password\" class=\"rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <label class=\"flex flex-col gap-1 text-sm font-medium\">New password <input type=\"password\" name=\"new_password\" required minlength=\"8\" autocomplete=\"new-password\" class=\"rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Change password</button></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<form method=\"post\" action=\"/settings\" class=\"mt-6 flex flex-col gap-4\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = csrfField().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<label class=\"flex flex-col gap-1 text-sm font-medium\">Current password <input type=\"password\" name=\"current_password\" required autocomplete=\"current-password\" class=\"rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <label class=\"flex flex-col gap-1 text-sm font-medium\">New password <input type=\"password\" name=\"new_password\" required minlength=\"8\" autocomplete=\"new-password\" class=\"rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Change password</button></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

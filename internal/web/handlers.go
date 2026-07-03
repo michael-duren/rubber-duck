@@ -46,7 +46,7 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("GET /login", h.loginPage)
 	pages.HandleFunc("POST /login", h.login)
 	pages.HandleFunc("POST /logout", h.logout)
-	mux.Handle("/", h.withUser(pages))
+	mux.Handle("/", h.withCSRF(h.withUser(pages)))
 }
 
 func (h *handlers) render(w http.ResponseWriter, r *http.Request, c templ.Component) {

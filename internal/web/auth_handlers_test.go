@@ -200,15 +200,46 @@ func testMux(t *testing.T) (*http.ServeMux, *fakeStore) {
 	return mux, fs
 }
 
+// fetchCSRFCookie makes a throwaway GET to obtain a fresh double-submit
+// CSRF cookie; its value is valid for any single subsequent request that
+// presents both the cookie and a matching csrf_token form field.
+func fetchCSRFCookie(mux *http.ServeMux) *http.Cookie {
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == csrfCookie {
+			return c
+		}
+	}
+	return nil
+}
+
 func postForm(mux *http.ServeMux, path string, form url.Values, cookie *http.Cookie) *httptest.ResponseRecorder {
+	csrf := fetchCSRFCookie(mux)
+	if csrf != nil {
+		form = cloneValues(form)
+		form.Set("csrf_token", csrf.Value)
+	}
 	req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
+	if csrf != nil {
+		req.AddCookie(csrf)
+	}
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	return rec
+}
+
+func cloneValues(v url.Values) url.Values {
+	out := make(url.Values, len(v)+1)
+	for k, vs := range v {
+		out[k] = append([]string(nil), vs...)
+	}
+	return out
 }
 
 func TestSignup(t *testing.T) {
