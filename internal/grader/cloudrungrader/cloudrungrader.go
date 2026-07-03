@@ -19,6 +19,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -44,11 +45,12 @@ type Config struct {
 }
 
 type Grader struct {
-	jobs  jobRunner
-	store objectStore
+	jobs   jobRunner
+	store  objectStore
+	logger *slog.Logger
 }
 
-func New(ctx context.Context, cfg Config) (*Grader, error) {
+func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Grader, error) {
 	jc, err := run.NewJobsClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("run client: %w", err)
@@ -58,12 +60,14 @@ func New(ctx context.Context, cfg Config) (*Grader, error) {
 		return nil, fmt.Errorf("storage client: %w", err)
 	}
 	return &Grader{
-		jobs:  &runJobs{client: jc, project: cfg.Project, region: cfg.Region},
-		store: &gcsStore{bucket: sc.Bucket(cfg.Bucket)},
+		jobs:   &runJobs{client: jc, project: cfg.Project, region: cfg.Region},
+		store:  &gcsStore{bucket: sc.Bucket(cfg.Bucket)},
+		logger: logger,
 	}, nil
 }
 
 func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, error) {
+	start := time.Now()
 	jobName, ok := jobNames[job.Language]
 	files, ok2 := grader.LanguageFiles[job.Language]
 	if !ok || !ok2 {
@@ -94,6 +98,7 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 		_ = g.store.Delete(cleanupCtx, inKey)
 		_ = g.store.Delete(cleanupCtx, outKey)
 	}()
+	g.logf(id, "upload", start)
 
 	inURL, err := g.store.SignedGetURL(inKey, urlExpiry)
 	if err != nil {
@@ -104,10 +109,12 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 		return grader.Result{}, fmt.Errorf("sign output url: %w", err)
 	}
 
+	jobStart := time.Now()
 	err = g.jobs.Run(ctx, jobName, map[string]string{
 		"INPUT_URL":  inURL,
 		"OUTPUT_URL": outURL,
 	})
+	g.logf(id, "job_run", jobStart)
 	if ctx.Err() != nil {
 		return grader.Result{Status: grader.StatusError, Output: "[time limit exceeded]"}, nil
 	}
@@ -115,10 +122,12 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 		return grader.Result{}, err
 	}
 
+	fetchStart := time.Now()
 	body, err := g.store.Get(ctx, outKey)
 	if err != nil {
 		return grader.Result{}, fmt.Errorf("read result: %w", err)
 	}
+	g.logf(id, "result_fetch", fetchStart)
 	exitCode, output, err := parseResult(body)
 	if err != nil {
 		return grader.Result{}, err
@@ -130,7 +139,18 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 	}
 	truncated := grader.TruncateOutput(output)
 	passed, total := grader.ParseTestCounts(job.Language, output)
+	if g.logger != nil {
+		g.logger.Info("grade complete", "execution", id, "language", job.Language,
+			"status", status, "total_ms", time.Since(start).Milliseconds())
+	}
 	return grader.Result{Status: status, Output: truncated, TestsPassed: passed, TestsTotal: total}, nil
+}
+
+func (g *Grader) logf(execID, stage string, since time.Time) {
+	if g.logger == nil {
+		return
+	}
+	g.logger.Info("grade stage", "execution", execID, "stage", stage, "ms", time.Since(since).Milliseconds())
 }
 
 // parseResult splits the runner's result file: first line is the test exit

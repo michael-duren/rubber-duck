@@ -76,7 +76,7 @@ func serve(args []string) error {
 	}
 	defer st.Close()
 
-	g, gradeTimeout, err := newGrader(ctx)
+	g, gradeTimeout, err := newGrader(ctx, logger)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func serve(args []string) error {
 // newGrader picks the grading backend from GC_GRADER. Cloud Run Jobs need a
 // much larger budget than local docker: execution scheduling and container
 // cold start happen before the task's own 90s limit even begins.
-func newGrader(ctx context.Context) (grader.Grader, time.Duration, error) {
+func newGrader(ctx context.Context, logger *slog.Logger) (grader.Grader, time.Duration, error) {
 	switch backend := envOr("GC_GRADER", "docker"); backend {
 	case "docker":
 		return dockergrader.New(), 60 * time.Second, nil
@@ -125,7 +125,7 @@ func newGrader(ctx context.Context) (grader.Grader, time.Duration, error) {
 		if cfg.Project == "" || cfg.Region == "" || cfg.Bucket == "" {
 			return nil, 0, fmt.Errorf("GC_GRADER=cloudrun requires GC_PROJECT, GC_REGION, and GC_GRADING_BUCKET")
 		}
-		g, err := cloudrungrader.New(ctx, cfg)
+		g, err := cloudrungrader.New(ctx, cfg, logger)
 		if err != nil {
 			return nil, 0, err
 		}

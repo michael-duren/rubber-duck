@@ -57,6 +57,14 @@ resource "google_cloud_run_v2_service" "app" {
           cpu    = "1"
           memory = "512Mi"
         }
+        # Grading submissions wait on a background goroutine (the pool
+        # worker polling a Cloud Run Job) that isn't tied to any one HTTP
+        # request. With the default cpu_idle=true, Cloud Run throttles CPU
+        # to near-zero between requests, so that goroutine barely runs and
+        # a submission can sit at "running" for minutes even after its job
+        # execution finished — always-allocate CPU so grading keeps making
+        # progress in the background.
+        cpu_idle = false
       }
     }
   }
