@@ -18,16 +18,33 @@ type fakeStore struct {
 	versions map[string]int // "slug/lang" -> version
 	courses  map[string]domain.Course
 	sources  map[string]string
+	variants map[string]domain.Variant
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{versions: map[string]int{}, courses: map[string]domain.Course{}, sources: map[string]string{}}
+	return &fakeStore{
+		versions: map[string]int{}, courses: map[string]domain.Course{},
+		sources: map[string]string{}, variants: map[string]domain.Variant{},
+	}
 }
 
 func (f *fakeStore) key(slug, lang string) string { return slug + "/" + lang }
 
+func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.Course, domain.Variant, error) {
+	c, ok := f.courses[slug]
+	if !ok {
+		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
+	}
+	v, ok := f.variants[f.key(slug, lang)]
+	if !ok {
+		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
+	}
+	return c, v, nil
+}
+
 func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant) (int, error) {
 	k := f.key(c.Slug, v.Language)
+	f.variants[k] = v
 	f.versions[k]++
 	f.courses[c.Slug] = c
 	f.sources[k] = v.SourceMD
@@ -218,5 +235,49 @@ func TestRoundTripAndDelete(t *testing.T) {
 	}
 	if rec := doJSON(mux, "DELETE", "/api/v1/courses/intro-to-concurrency", nil); rec.Code != http.StatusNoContent {
 		t.Errorf("delete course = %d", rec.Code)
+	}
+}
+
+func TestListChallengesPublic(t *testing.T) {
+	mux, _ := testAPI(t)
+	doc := seedDoc(t)
+	doJSON(mux, "PUT", "/api/v1/courses/intro-to-concurrency/variants/go", map[string]string{"markdown": doc})
+
+	req := httptest.NewRequest("GET", "/api/v1/courses/intro-to-concurrency/variants/go/challenges", nil)
+	rec := httptest.NewRecorder() // no Authorization header
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body %s", rec.Code, rec.Body)
+	}
+
+	var resp struct {
+		Challenges []struct {
+			LessonSlug  string `json:"lesson_slug"`
+			Slug        string `json:"slug"`
+			Title       string `json:"title"`
+			Points      int    `json:"points"`
+			StarterCode string `json:"starter_code"`
+			TestCode    string `json:"test_code"`
+		} `json:"challenges"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Challenges) != 3 {
+		t.Fatalf("challenges = %d, want 3: %+v", len(resp.Challenges), resp.Challenges)
+	}
+	for _, c := range resp.Challenges {
+		if c.Slug == "" || c.StarterCode == "" || c.TestCode == "" {
+			t.Errorf("challenge missing fields: %+v", c)
+		}
+	}
+	last := resp.Challenges[len(resp.Challenges)-1]
+	if last.LessonSlug != "" || last.Slug != "final" {
+		t.Errorf("final challenge = %+v, want lesson_slug empty and slug final", last)
+	}
+
+	rec2 := doJSON(mux, "GET", "/api/v1/courses/nope/variants/go/challenges", nil)
+	if rec2.Code != http.StatusNotFound {
+		t.Errorf("unknown variant status = %d, want 404", rec2.Code)
 	}
 }

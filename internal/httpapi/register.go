@@ -14,6 +14,7 @@ type CourseStore interface {
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
 	VariantSource(ctx context.Context, slug, language string) (string, error)
+	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
 	DeleteCourse(ctx context.Context, slug string) error
 	DeleteVariant(ctx context.Context, slug, language string) error
 	ListTags(ctx context.Context) ([]string, error)
@@ -38,6 +39,10 @@ func Register(mux *http.ServeMux, logger *slog.Logger, keys KeyStore, store Cour
 	api.HandleFunc("GET /api/v1/tags", h.listTags)
 
 	mux.Handle("/api/v1/", requireKey(keys, api))
+
+	// Public: challenge prompts and tests aren't secret on a learning
+	// platform, and local test runs need them without a bearer key.
+	mux.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}/challenges", h.listChallenges)
 }
 
 func (h *handlers) serverError(w http.ResponseWriter, r *http.Request, err error) {

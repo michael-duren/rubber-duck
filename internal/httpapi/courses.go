@@ -142,6 +142,38 @@ func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"markdown": src})
 }
 
+type challengeJSON struct {
+	LessonSlug  string `json:"lesson_slug"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Points      int    `json:"points"`
+	StarterCode string `json:"starter_code"`
+	TestCode    string `json:"test_code"`
+}
+
+// listChallenges is the public (unauthenticated) endpoint local test runs
+// use to fetch starter and test code: challenge tests aren't secret here.
+func (h *handlers) listChallenges(w http.ResponseWriter, r *http.Request) {
+	_, variant, err := h.store.VariantDetail(r.Context(), r.PathValue("slug"), r.PathValue("language"))
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "no such course variant", nil)
+		return
+	}
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+
+	items := make([]challengeJSON, 0, variant.ChallengeCount())
+	for _, l := range variant.Lessons {
+		for _, c := range l.Challenges {
+			items = append(items, challengeJSON{l.Slug, c.Slug, c.Title, c.Points, c.StarterCode, c.TestCode})
+		}
+	}
+	items = append(items, challengeJSON{"", variant.Final.Slug, variant.Final.Title, variant.Final.Points, variant.Final.StarterCode, variant.Final.TestCode})
+	writeJSON(w, http.StatusOK, map[string]any{"challenges": items})
+}
+
 func (h *handlers) deleteCourse(w http.ResponseWriter, r *http.Request) {
 	h.deleted(w, r, h.store.DeleteCourse(r.Context(), r.PathValue("slug")))
 }
