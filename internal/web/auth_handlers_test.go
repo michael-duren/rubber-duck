@@ -24,6 +24,7 @@ type fakeStore struct {
 	variantSlug string
 	submissions map[int64]domain.Submission
 	nextSub     int64
+	rateLimit   func(userID, challengeID int64) bool // nil = never limited
 }
 
 type fakeUser struct {
@@ -186,6 +187,13 @@ func (f *fakeStore) SubmissionForUser(_ context.Context, id, userID int64) (doma
 
 func (f *fakeStore) UserCourseScores(context.Context, int64) ([]domain.CourseScore, error) {
 	return nil, nil
+}
+
+func (f *fakeStore) SubmissionRateLimited(_ context.Context, userID, challengeID int64) (bool, error) {
+	if f.rateLimit == nil {
+		return false, nil
+	}
+	return f.rateLimit(userID, challengeID), nil
 }
 
 type noopEnqueuer struct{}

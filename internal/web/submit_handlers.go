@@ -17,7 +17,10 @@ type SubmissionStore interface {
 	CreateSubmission(ctx context.Context, userID, challengeID int64, code string) (int64, error)
 	SubmissionForUser(ctx context.Context, id, userID int64) (domain.Submission, error)
 	UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error)
+	SubmissionRateLimited(ctx context.Context, userID, challengeID int64) (bool, error)
 }
+
+const rateLimitMessage = "Too many submissions — wait a few seconds, or let your in-flight submissions finish (max 3 at a time)."
 
 // Enqueuer hands a stored submission to the grading pool.
 type Enqueuer interface {
@@ -36,6 +39,15 @@ func (h *handlers) submit(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	if strings.TrimSpace(code) == "" || len(code) > maxSubmissionBytes {
 		http.Error(w, "solution must be non-empty and under 128 KiB", http.StatusBadRequest)
+		return
+	}
+	limited, err := h.submissions.SubmissionRateLimited(r.Context(), user.ID, challengeID)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	if limited {
+		http.Error(w, rateLimitMessage, http.StatusTooManyRequests)
 		return
 	}
 
@@ -112,6 +124,15 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	if strings.TrimSpace(code) == "" || len(code) > maxSubmissionBytes {
 		http.Error(w, "solution must be non-empty and under 128 KiB", http.StatusBadRequest)
+		return
+	}
+	limited, err := h.submissions.SubmissionRateLimited(r.Context(), user.ID, challengeID)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	if limited {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": rateLimitMessage})
 		return
 	}
 

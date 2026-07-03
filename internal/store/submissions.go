@@ -9,6 +9,31 @@ import (
 	"github.com/mduren/getcracked/internal/domain"
 )
 
+// maxInFlightSubmissions caps a user's concurrent pending/running
+// submissions; submitCooldownSeconds blocks re-submitting the same
+// challenge too quickly. Each submission spins a real Cloud Run Job
+// execution, so both exist to stop a burst (or script) from queueing
+// unbounded job runs.
+const (
+	maxInFlightSubmissions = 3
+	submitCooldownSeconds  = 10
+)
+
+// SubmissionRateLimited reports whether a new submission from this user
+// (for this challenge) should be rejected: too many in-flight submissions,
+// or one for the same challenge too recently.
+func (s *Store) SubmissionRateLimited(ctx context.Context, userID, challengeID int64) (bool, error) {
+	var limited bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			count(*) FILTER (WHERE status IN ('pending', 'running')) >= $3
+			OR coalesce(bool_or(challenge_id = $2 AND created_at > now() - make_interval(secs => $4)), false)
+		FROM submissions WHERE user_id = $1`,
+		userID, challengeID, maxInFlightSubmissions, submitCooldownSeconds,
+	).Scan(&limited)
+	return limited, err
+}
+
 func (s *Store) CreateSubmission(ctx context.Context, userID, challengeID int64, code string) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx,
