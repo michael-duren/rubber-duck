@@ -3,6 +3,7 @@ package grader
 import (
 	"context"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/mduren/getcracked/internal/domain"
@@ -12,7 +13,7 @@ import (
 type SubmissionStore interface {
 	SubmissionJob(ctx context.Context, id int64) (domain.SubmissionJob, error)
 	MarkSubmissionRunning(ctx context.Context, id int64) error
-	CompleteSubmission(ctx context.Context, id int64, status, output string, score int) error
+	CompleteSubmission(ctx context.Context, id int64, status, output string, score int, testsPassed, testsTotal *int) error
 	PendingSubmissionIDs(ctx context.Context) ([]int64, error)
 }
 
@@ -90,15 +91,25 @@ func (p *Pool) grade(id int64) {
 		p.logger.Error("grade", "id", id, "err", err)
 		res = Result{Status: StatusError, Output: "grader unavailable; try again later"}
 	}
-	score := 0
-	if res.Status == StatusPassed {
-		score = job.Points
-	}
+	score := scoreFor(job.Points, res)
 
 	// Persist with a fresh context: the job context may have timed out.
 	saveCtx, saveCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer saveCancel()
-	if err := p.store.CompleteSubmission(saveCtx, id, res.Status, res.Output, score); err != nil {
+	if err := p.store.CompleteSubmission(saveCtx, id, res.Status, res.Output, score, res.TestsPassed, res.TestsTotal); err != nil {
 		p.logger.Error("save result", "id", id, "err", err)
 	}
+}
+
+// scoreFor is proportional to tests passed when they could be parsed out of
+// the runner's output (full points only on an all-pass run), falling back
+// to all-or-nothing on the exit status when they couldn't.
+func scoreFor(points int, res Result) int {
+	if res.TestsTotal != nil && *res.TestsTotal > 0 {
+		return int(math.Round(float64(points) * float64(*res.TestsPassed) / float64(*res.TestsTotal)))
+	}
+	if res.Status == StatusPassed {
+		return points
+	}
+	return 0
 }

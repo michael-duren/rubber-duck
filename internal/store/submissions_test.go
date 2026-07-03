@@ -94,7 +94,7 @@ func TestSubmissionRateLimited(t *testing.T) {
 	// Grading (no longer pending/running) frees up the in-flight slot;
 	// `third` was never submitted to, so no cooldown masks the effect.
 	for _, id := range []int64{sub1, sub2, sub3} {
-		if err := s.CompleteSubmission(ctx, id, "passed", "ok", 10); err != nil {
+		if err := s.CompleteSubmission(ctx, id, "passed", "ok", 10, nil, nil); err != nil {
 			t.Fatalf("complete %d: %v", id, err)
 		}
 	}

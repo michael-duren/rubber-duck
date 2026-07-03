@@ -18,10 +18,10 @@ fi
 go mod init challenge > /dev/null 2>&1
 goimports -w solution.go
 if [ -z "$OUTPUT_URL" ]; then
-	exec go test ./...
+	exec go test -v ./...
 fi
 set +e
-go test ./... > /tmp/out.txt 2>&1
+go test -v ./... > /tmp/out.txt 2>&1
 code=$?
 set -e
 { echo "$code"; cat /tmp/out.txt; } > /tmp/result.txt

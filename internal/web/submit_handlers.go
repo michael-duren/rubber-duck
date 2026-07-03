@@ -170,9 +170,11 @@ func (h *handlers) submissionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": sub.Status,
-		"score":  sub.Score,
-		"output": sub.Output,
+		"status":       sub.Status,
+		"score":        sub.Score,
+		"output":       sub.Output,
+		"tests_passed": sub.TestsPassed,
+		"tests_total":  sub.TestsTotal,
 	})
 }
 

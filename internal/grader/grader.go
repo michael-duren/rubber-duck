@@ -18,6 +18,12 @@ type Job struct {
 type Result struct {
 	Status string // passed | failed | error
 	Output string // truncated combined test output
+
+	// TestsPassed/TestsTotal are nil when per-test counts couldn't be
+	// parsed from Output (e.g. a panic or timeout cut it short); callers
+	// fall back to all-or-nothing scoring on Status in that case.
+	TestsPassed *int
+	TestsTotal  *int
 }
 
 const (

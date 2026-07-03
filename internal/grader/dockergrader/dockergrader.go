@@ -72,14 +72,15 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 	defer func() { _ = exec.Command("docker", "rm", "-f", name).Run() }()
 	output := grader.TruncateOutput(out.String())
 
+	passed, total := grader.ParseTestCounts(job.Language, output)
 	switch {
 	case err == nil:
-		return grader.Result{Status: grader.StatusPassed, Output: output}, nil
+		return grader.Result{Status: grader.StatusPassed, Output: output, TestsPassed: passed, TestsTotal: total}, nil
 	case ctx.Err() != nil:
 		return grader.Result{Status: grader.StatusError, Output: output + "\n[time limit exceeded]"}, nil
 	default:
 		if _, ok := errors.AsType[*exec.ExitError](err); ok {
-			return grader.Result{Status: grader.StatusFailed, Output: output}, nil
+			return grader.Result{Status: grader.StatusFailed, Output: output, TestsPassed: passed, TestsTotal: total}, nil
 		}
 		// docker missing, image missing, daemon down: infra failure.
 		return grader.Result{}, fmt.Errorf("run grader container: %w", err)

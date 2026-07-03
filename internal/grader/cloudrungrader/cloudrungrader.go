@@ -128,7 +128,9 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 	if exitCode != 0 {
 		status = grader.StatusFailed
 	}
-	return grader.Result{Status: status, Output: grader.TruncateOutput(output)}, nil
+	truncated := grader.TruncateOutput(output)
+	passed, total := grader.ParseTestCounts(job.Language, output)
+	return grader.Result{Status: status, Output: truncated, TestsPassed: passed, TestsTotal: total}, nil
 }
 
 // parseResult splits the runner's result file: first line is the test exit

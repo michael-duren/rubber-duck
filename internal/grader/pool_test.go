@@ -47,7 +47,7 @@ func (m *memStore) SubmissionJob(_ context.Context, id int64) (domain.Submission
 
 func (m *memStore) MarkSubmissionRunning(context.Context, int64) error { return nil }
 
-func (m *memStore) CompleteSubmission(_ context.Context, id int64, status, _ string, score int) error {
+func (m *memStore) CompleteSubmission(_ context.Context, id int64, status, _ string, score int, _, _ *int) error {
 	m.mu.Lock()
 	m.done[id] = struct {
 		status string
@@ -71,6 +71,10 @@ func TestPoolScoring(t *testing.T) {
 		{"pass earns points", Result{Status: StatusPassed}, nil, StatusPassed, 10},
 		{"fail earns nothing", Result{Status: StatusFailed}, nil, StatusFailed, 0},
 		{"grader error recorded", Result{}, context.DeadlineExceeded, StatusError, 0},
+		{"parsed partial pass earns proportional credit",
+			Result{Status: StatusFailed, TestsPassed: intp(3), TestsTotal: intp(4)}, nil, StatusFailed, 8}, // round(10*3/4)=8
+		{"parsed all-pass earns full points even via TestsTotal",
+			Result{Status: StatusPassed, TestsPassed: intp(4), TestsTotal: intp(4)}, nil, StatusPassed, 10},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

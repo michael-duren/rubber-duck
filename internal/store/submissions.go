@@ -66,12 +66,12 @@ func (s *Store) MarkSubmissionRunning(ctx context.Context, id int64) error {
 	return err
 }
 
-func (s *Store) CompleteSubmission(ctx context.Context, id int64, status, output string, score int) error {
+func (s *Store) CompleteSubmission(ctx context.Context, id int64, status, output string, score int, testsPassed, testsTotal *int) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE submissions
-		SET status = $2, output = $3, score = $4, graded_at = now()
+		SET status = $2, output = $3, score = $4, tests_passed = $5, tests_total = $6, graded_at = now()
 		WHERE id = $1`,
-		id, status, output, score)
+		id, status, output, score, testsPassed, testsTotal)
 	return err
 }
 
@@ -98,13 +98,15 @@ func (s *Store) SubmissionForUser(ctx context.Context, id, userID int64) (domain
 	var sub domain.Submission
 	err := s.pool.QueryRow(ctx, `
 		SELECT sub.id, sub.user_id, sub.challenge_id, ch.title, sub.code,
-		       sub.status, sub.score, coalesce(sub.output, ''), sub.created_at
+		       sub.status, sub.score, coalesce(sub.output, ''), sub.created_at,
+		       sub.tests_passed, sub.tests_total
 		FROM submissions sub
 		JOIN challenges ch ON ch.id = sub.challenge_id
 		WHERE sub.id = $1 AND sub.user_id = $2`,
 		id, userID,
 	).Scan(&sub.ID, &sub.UserID, &sub.ChallengeID, &sub.ChallengeTitle, &sub.Code,
-		&sub.Status, &sub.Score, &sub.Output, &sub.CreatedAt)
+		&sub.Status, &sub.Score, &sub.Output, &sub.CreatedAt,
+		&sub.TestsPassed, &sub.TestsTotal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Submission{}, domain.ErrNotFound
 	}
