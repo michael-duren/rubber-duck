@@ -6,3 +6,4 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
 infra/*.tfvars
+issues/

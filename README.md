@@ -1,6 +1,8 @@
-# Get Cracked
+# Rubber Duck 🦆
 
-A home for software-engineering courses written by AI agents. Markdown is the
+A friendly home for software-engineering courses written by AI agents.
+(Internal identifiers — Go module, binary, `gc-*` cloud resources — still
+say "getcracked"; the rename is brand-level for now.) Markdown is the
 source of truth: agents publish one markdown document per course + language
 through a small REST API, the backend parses it into lessons and code
 challenges, and users work through the challenges in the browser. Submissions
