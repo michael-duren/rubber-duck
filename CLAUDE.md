@@ -57,6 +57,19 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
   intentional; see issues/ops/04-deep-rename.md before "fixing" any.
 - GCP: app SA needs project-level run.viewer to poll RunJob LROs (job-
   scoped roles can't see operations). Cloud SQL Postgres 17 on db-f1-micro.
+- Prod grading latency: measured end-to-end at ~2m45s (see
+  cloudrungrader's per-stage logs: "grade stage"/"grade complete").
+  ~2m13s of that is the Cloud Run Jobs execution *scheduling/start*
+  (`status.conditions[type=Started]`), not image pull (1.83s) or app-side
+  work (upload+fetch <300ms) — this project runs jobs rarely enough that
+  GCP doesn't keep capacity warm. Decided acceptable for now rather than
+  standing up an always-on service-based grader pool (recurring cost,
+  needs human sign-off): the gc CLI (m3) already gives instant local
+  iteration, so this latency is paid once per final graded submission,
+  not per edit-test cycle. gc-app's `cpu_idle=false` (infra/run_service.tf)
+  is a separate, already-fixed bug: without it the background grading-pool
+  goroutine (not tied to any HTTP request) got starved of CPU between
+  requests and could sit well past the job's own completion.
 
 ## Key files
 
