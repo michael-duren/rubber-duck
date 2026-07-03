@@ -461,7 +461,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<section class=\"mt-12\"><h2 class=\"text-xl font-bold\">CLI tokens</h2><p class=\"mt-1 text-sm text-slate-500 dark:text-slate-400\">Authenticate the <code>gc</code> CLI without a browser session.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<section class=\"mt-12\"><h2 class=\"text-xl font-bold\">CLI tokens</h2><p class=\"mt-1 text-sm text-slate-500 dark:text-slate-400\">Authenticate the <code>duck</code> CLI without a browser session.</p><pre class=\"mt-3 overflow-x-auto rounded-md bg-slate-900 px-3 py-2 text-sm text-slate-100\"><code>go install ./cmd/duck duck pull &lt;course&gt;/&lt;language&gt;   # scaffold challenges into a local dir duck test &lt;challenge-slug&gt;      # run tests locally, no submission duck submit &lt;challenge-slug&gt;    # submit for a graded score (needs a token below)</code></pre><p class=\"mt-2 text-sm text-slate-500 dark:text-slate-400\">Set <code>DUCK_TOKEN</code> or save the token to <code>~/.config/duck/token</code>.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -473,7 +473,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(newToken)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 102, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 110, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -497,7 +497,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 110, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 118, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -525,7 +525,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 					var templ_7745c5c3_Var23 templ.SafeURL
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/profile/tokens/%d/revoke", t.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 116, Col: 97}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 124, Col: 97}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 					if templ_7745c5c3_Err != nil {

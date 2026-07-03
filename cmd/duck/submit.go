@@ -16,7 +16,7 @@ import (
 
 func submitCmd(args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: gc submit <challenge-slug>")
+		return fmt.Errorf("usage: duck submit <challenge-slug>")
 	}
 	slug := args[0]
 
@@ -35,7 +35,7 @@ func submitCmd(args []string) error {
 	codePath := filepath.Join(root, slug, files.Code)
 	code, err := os.ReadFile(codePath)
 	if err != nil {
-		return fmt.Errorf("read solution (did you `gc pull` and pick a real slug?): %w", err)
+		return fmt.Errorf("read solution (did you `duck pull` and pick a real slug?): %w", err)
 	}
 
 	token, err := loadToken()

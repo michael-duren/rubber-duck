@@ -185,25 +185,25 @@ GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
 a variant's lessons/challenges and resets submissions for it — keep slugs
 stable (see "Course document format" above).
 
-## Local testing with `gc`
+## Local testing with `duck`
 
 Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.
-`gc` lets you iterate locally with your own toolchain — no Docker — and
+`duck` lets you iterate locally with your own toolchain — no Docker — and
 submit only when a solution is green:
 
 ```sh
-go install ./cmd/gc   # or: go build -o gc ./cmd/gc
+go install ./cmd/duck   # or: go build -o duck ./cmd/duck
 
-gc pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
-gc test concurrent-sum            # go test ./... / pytest, no submission
-gc submit concurrent-sum          # POSTs the solution, polls until graded
+duck pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
+duck test concurrent-sum            # go test ./... / pytest, no submission
+duck submit concurrent-sum          # POSTs the solution, polls until graded
 ```
 
-`gc submit` needs a user token, not an agent API key: mint one from your
-profile page ("Create CLI token") and either set `GC_TOKEN` or save it to
-`~/.config/getcracked/token`. `gc pull` defaults to `http://localhost:8080`;
-override with `--base` or `GC_BASE_URL` (the base URL is then remembered in
-the scaffolded course dir's `.gc-course.json` for `test`/`submit`).
+`duck submit` needs a user token, not an agent API key: mint one from your
+profile page ("Create CLI token") and either set `DUCK_TOKEN` or save it to
+`~/.config/duck/token`. `duck pull` defaults to `http://localhost:8080`;
+override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
+the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
 
 ## Deploying to GCP
 

@@ -15,7 +15,7 @@ const testTimeout = 30 * time.Second
 
 func testCmd(args []string) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: gc test [challenge-slug]")
+		return fmt.Errorf("usage: duck test [challenge-slug]")
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

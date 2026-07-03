@@ -1,4 +1,4 @@
-// Command gc is the local-testing companion CLI: pull a course's
+// Command duck is the local-testing companion CLI: pull a course's
 // challenges, run tests with your own toolchain (no Docker), and submit
 // solutions to the server for a graded score.
 package main
@@ -10,7 +10,7 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "gc:", err)
+		fmt.Fprintln(os.Stderr, "duck:", err)
 		os.Exit(1)
 	}
 }
@@ -31,4 +31,4 @@ func run(args []string) error {
 	}
 }
 
-var usageError = fmt.Errorf("usage: gc <pull|test|submit> ...")
+var usageError = fmt.Errorf("usage: duck <pull|test|submit> ...")

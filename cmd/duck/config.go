@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-const courseMetaFile = ".gc-course.json"
+const courseMetaFile = ".duck-course.json"
 
-// courseMeta is written by `gc pull` at the root of the scaffolded course
-// directory so `gc test`/`gc submit` can find the server and course/language
+// courseMeta is written by `duck pull` at the root of the scaffolded course
+// directory so `duck test`/`duck submit` can find the server and course/language
 // without the user repeating them.
 type courseMeta struct {
 	BaseURL  string `json:"base_url"`
@@ -27,7 +27,7 @@ func writeCourseMeta(dir string, m courseMeta) error {
 	return os.WriteFile(filepath.Join(dir, courseMetaFile), b, 0o644)
 }
 
-// findCourseRoot walks up from start looking for a directory `gc pull`
+// findCourseRoot walks up from start looking for a directory `duck pull`
 // scaffolded, so commands can be run from anywhere inside the course tree.
 func findCourseRoot(start string) (root string, meta courseMeta, err error) {
 	dir := start
@@ -42,7 +42,7 @@ func findCourseRoot(start string) (root string, meta courseMeta, err error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", courseMeta{}, fmt.Errorf("not inside a course pulled with `gc pull` (no %s found)", courseMetaFile)
+			return "", courseMeta{}, fmt.Errorf("not inside a course pulled with `duck pull` (no %s found)", courseMetaFile)
 		}
 		dir = parent
 	}
@@ -55,19 +55,19 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// loadToken resolves the user's CLI token: GC_TOKEN env var first, then
-// ~/.config/getcracked/token.
+// loadToken resolves the user's CLI token: DUCK_TOKEN env var first, then
+// ~/.config/duck/token.
 func loadToken() (string, error) {
-	if t := os.Getenv("GC_TOKEN"); t != "" {
+	if t := os.Getenv("DUCK_TOKEN"); t != "" {
 		return t, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("no GC_TOKEN set and can't find home dir: %w", err)
+		return "", fmt.Errorf("no DUCK_TOKEN set and can't find home dir: %w", err)
 	}
-	b, err := os.ReadFile(filepath.Join(home, ".config", "getcracked", "token"))
+	b, err := os.ReadFile(filepath.Join(home, ".config", "duck", "token"))
 	if err != nil {
-		return "", fmt.Errorf("no GC_TOKEN set and no token file (%s): mint one on the profile page and set GC_TOKEN, or save it to ~/.config/getcracked/token", filepath.Join(home, ".config", "getcracked", "token"))
+		return "", fmt.Errorf("no DUCK_TOKEN set and no token file (%s): mint one on the profile page and set DUCK_TOKEN, or save it to ~/.config/duck/token", filepath.Join(home, ".config", "duck", "token"))
 	}
 	return strings.TrimSpace(string(b)), nil
 }

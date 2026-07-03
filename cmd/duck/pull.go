@@ -24,17 +24,17 @@ type challengeJSON struct {
 
 func pullCmd(args []string) error {
 	fs := flag.NewFlagSet("pull", flag.ContinueOnError)
-	base := fs.String("base", envOr("GC_BASE_URL", "http://localhost:8080"), "server base URL")
+	base := fs.String("base", envOr("DUCK_BASE_URL", "http://localhost:8080"), "server base URL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: gc pull <course>/<language>")
+		return fmt.Errorf("usage: duck pull <course>/<language>")
 	}
 	course, language, ok := strings.Cut(rest[0], "/")
 	if !ok || course == "" || language == "" {
-		return fmt.Errorf("usage: gc pull <course>/<language>")
+		return fmt.Errorf("usage: duck pull <course>/<language>")
 	}
 	files, ok := grader.LanguageFiles[language]
 	if !ok {

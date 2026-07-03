@@ -104,7 +104,7 @@ func (h *handlers) profile(w http.ResponseWriter, r *http.Request) {
 
 // submitBySlug is the CLI-facing counterpart to submit: challenges are
 // addressed by slug (stable across re-publishes) rather than the internal
-// numeric ID a browser form embeds, so `gc submit` never needs to know it.
+// numeric ID a browser form embeds, so `duck submit` never needs to know it.
 func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	_, variant, err := h.courses.VariantDetail(r.Context(), r.PathValue("slug"), r.PathValue("lang"))
@@ -164,7 +164,7 @@ func findChallengeID(v domain.Variant, slug string) (int64, bool) {
 }
 
 // submissionStatus is the polled JSON counterpart to submissionFragment,
-// for `gc submit` to poll without parsing HTML.
+// for `duck submit` to poll without parsing HTML.
 func (h *handlers) submissionStatus(w http.ResponseWriter, r *http.Request) {
 	sub, ok := h.loadSubmission(w, r)
 	if !ok {
