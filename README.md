@@ -163,6 +163,26 @@ Conventions:
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
   import from `solution` (e.g. `from solution import merge`).
 
+## Local testing with `gc`
+
+Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.
+`gc` lets you iterate locally with your own toolchain — no Docker — and
+submit only when a solution is green:
+
+```sh
+go install ./cmd/gc   # or: go build -o gc ./cmd/gc
+
+gc pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
+gc test concurrent-sum            # go test ./... / pytest, no submission
+gc submit concurrent-sum          # POSTs the solution, polls until graded
+```
+
+`gc submit` needs a user token, not an agent API key: mint one from your
+profile page ("Create CLI token") and either set `GC_TOKEN` or save it to
+`~/.config/getcracked/token`. `gc pull` defaults to `http://localhost:8080`;
+override with `--base` or `GC_BASE_URL` (the base URL is then remembered in
+the scaffolded course dir's `.gc-course.json` for `test`/`submit`).
+
 ## Deploying to GCP
 
 The `infra/` directory holds OpenTofu config for the full production stack:

@@ -16,10 +16,14 @@ import (
 
 // fakeStore is an in-memory AuthStore.
 type fakeStore struct {
-	users    map[string]fakeUser // by username
-	sessions map[string]int64    // session token hash -> user id
-	tokens   map[int64]fakeToken // CLI token id -> token
-	nextTok  int64
+	users       map[string]fakeUser // by username
+	sessions    map[string]int64    // session token hash -> user id
+	tokens      map[int64]fakeToken // CLI token id -> token
+	nextTok     int64
+	variant     *domain.Variant // set by tests that need VariantDetail to resolve
+	variantSlug string
+	submissions map[int64]domain.Submission
+	nextSub     int64
 }
 
 type fakeUser struct {
@@ -37,7 +41,7 @@ type fakeToken struct {
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		users: map[string]fakeUser{}, sessions: map[string]int64{},
-		tokens: map[int64]fakeToken{},
+		tokens: map[int64]fakeToken{}, submissions: map[int64]domain.Submission{},
 	}
 }
 
@@ -129,17 +133,26 @@ func (f *fakeStore) CourseBySlug(context.Context, string) (domain.Course, []doma
 	return domain.Course{}, nil, domain.ErrNotFound
 }
 
-func (f *fakeStore) VariantDetail(context.Context, string, string) (domain.Course, domain.Variant, error) {
-	return domain.Course{}, domain.Variant{}, domain.ErrNotFound
+func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.Course, domain.Variant, error) {
+	if f.variant == nil || slug != f.variantSlug || lang != f.variant.Language {
+		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
+	}
+	return domain.Course{Slug: slug}, *f.variant, nil
 }
 
 // SubmissionStore stubs.
-func (f *fakeStore) CreateSubmission(context.Context, int64, int64, string) (int64, error) {
-	return 1, nil
+func (f *fakeStore) CreateSubmission(_ context.Context, userID, challengeID int64, code string) (int64, error) {
+	f.nextSub++
+	f.submissions[f.nextSub] = domain.Submission{ID: f.nextSub, UserID: userID, ChallengeID: challengeID, Code: code, Status: "passed", Score: 10}
+	return f.nextSub, nil
 }
 
-func (f *fakeStore) SubmissionForUser(context.Context, int64, int64) (domain.Submission, error) {
-	return domain.Submission{}, domain.ErrNotFound
+func (f *fakeStore) SubmissionForUser(_ context.Context, id, userID int64) (domain.Submission, error) {
+	sub, ok := f.submissions[id]
+	if !ok || sub.UserID != userID {
+		return domain.Submission{}, domain.ErrNotFound
+	}
+	return sub, nil
 }
 
 func (f *fakeStore) UserCourseScores(context.Context, int64) ([]domain.CourseScore, error) {

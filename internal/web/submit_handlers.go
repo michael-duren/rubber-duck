@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -86,4 +87,76 @@ func (h *handlers) loadSubmission(w http.ResponseWriter, r *http.Request) (domai
 
 func (h *handlers) profile(w http.ResponseWriter, r *http.Request) {
 	h.renderProfile(w, r, "")
+}
+
+// submitBySlug is the CLI-facing counterpart to submit: challenges are
+// addressed by slug (stable across re-publishes) rather than the internal
+// numeric ID a browser form embeds, so `gc submit` never needs to know it.
+func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	_, variant, err := h.courses.VariantDetail(r.Context(), r.PathValue("slug"), r.PathValue("lang"))
+	if errors.Is(err, domain.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	challengeID, ok := findChallengeID(variant, r.PathValue("challenge"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	code := r.FormValue("code")
+	if strings.TrimSpace(code) == "" || len(code) > maxSubmissionBytes {
+		http.Error(w, "solution must be non-empty and under 128 KiB", http.StatusBadRequest)
+		return
+	}
+
+	id, err := h.submissions.CreateSubmission(r.Context(), user.ID, challengeID, code)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	h.enqueuer.Enqueue(id)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":  id,
+		"url": "/submissions/" + strconv.FormatInt(id, 10),
+	})
+}
+
+func findChallengeID(v domain.Variant, slug string) (int64, bool) {
+	for _, l := range v.Lessons {
+		for _, c := range l.Challenges {
+			if c.Slug == slug {
+				return c.ID, true
+			}
+		}
+	}
+	if v.Final.Slug == slug {
+		return v.Final.ID, true
+	}
+	return 0, false
+}
+
+// submissionStatus is the polled JSON counterpart to submissionFragment,
+// for `gc submit` to poll without parsing HTML.
+func (h *handlers) submissionStatus(w http.ResponseWriter, r *http.Request) {
+	sub, ok := h.loadSubmission(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": sub.Status,
+		"score":  sub.Score,
+		"output": sub.Output,
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }
