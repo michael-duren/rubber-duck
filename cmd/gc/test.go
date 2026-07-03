@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
+
+// testTimeout bounds a single challenge's test run so a deadlocking
+// solution (e.g. ranging over a nil channel) can't hang the CLI forever.
+const testTimeout = 30 * time.Second
 
 func testCmd(args []string) error {
 	if len(args) > 1 {
@@ -45,20 +51,27 @@ func testCmd(args []string) error {
 			return fmt.Errorf("no such challenge dir %s", dir)
 		}
 
+		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+
 		var cmd *exec.Cmd
 		switch meta.Language {
 		case "go":
-			cmd = exec.Command("go", "test", "./...")
+			cmd = exec.CommandContext(ctx, "go", "test", "-timeout=25s", "./...")
 		case "python":
-			cmd = exec.Command("python3", "-m", "pytest", "-q")
+			cmd = exec.CommandContext(ctx, "python3", "-m", "pytest", "-q")
 		default:
+			cancel()
 			return fmt.Errorf("unsupported language %q", meta.Language)
 		}
 		cmd.Dir = dir
 		out, runErr := cmd.CombinedOutput()
+		cancel()
 
 		status := "PASS"
-		if runErr != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			status = "TIMEOUT"
+			failed = true
+		} else if runErr != nil {
 			status = "FAIL"
 			failed = true
 		}
