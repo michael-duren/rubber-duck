@@ -18,5 +18,11 @@ RUN go install golang.org/x/tools/cmd/goimports@v0.28.0 \
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
+# The warmed cache must stay writable by the runtime user: once the image
+# is >24h old, `go test` rewrites /gocache/trim.txt and a permission error
+# there makes go exit non-zero — grading a correct solution as failed.
+# Safe because each grading run's container filesystem is discarded.
+RUN chown -R nobody /gocache
+
 USER nobody
 ENTRYPOINT ["/run.sh"]

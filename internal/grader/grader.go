@@ -46,6 +46,7 @@ var LanguageFiles = map[string]struct {
 }{
 	"go":     {"solution.go", "solution_test.go"},
 	"python": {"solution.py", "test_solution.py"},
+	"c":      {"solution.c", "test_solution.c"},
 }
 
 // Tarball packs files into the tar stream runners consume.

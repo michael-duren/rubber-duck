@@ -37,6 +37,7 @@ dev: db generate css
 runner-images:
 	docker build -t gc-runner-go internal/grader/runners/go
 	docker build -t gc-runner-python internal/grader/runners/python
+	docker build -t gc-runner-c internal/grader/runners/c
 
 test:
 	go test ./...
@@ -46,6 +47,8 @@ test-integration: db
 
 seed:
 	go run ./cmd/getcracked seed seed/intro-to-go.md
+	go run ./cmd/getcracked seed courses/embedded-pico-c.md
+	go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
 
 # GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
 # target a local `make dev` server; override both for prod.
@@ -74,9 +77,11 @@ push-images: runner-images
 	docker build -t $(AR)/getcracked:$(TAG) .
 	docker tag gc-runner-go $(AR)/gc-runner-go:$(TAG)
 	docker tag gc-runner-python $(AR)/gc-runner-python:$(TAG)
+	docker tag gc-runner-c $(AR)/gc-runner-c:$(TAG)
 	docker push $(AR)/getcracked:$(TAG)
 	docker push $(AR)/gc-runner-go:$(TAG)
 	docker push $(AR)/gc-runner-python:$(TAG)
+	docker push $(AR)/gc-runner-c:$(TAG)
 	@echo "pushed tag $(TAG)"
 
 deploy: push-images
