@@ -13,6 +13,11 @@ func ParseTestCounts(language, output string) (passed, total *int) {
 	switch language {
 	case "go":
 		return parseGoTestCounts(output)
+	// C tests print one `--- PASS: name` / `--- FAIL: name` line per test
+	// case (the documented course contract, mirroring `go test -v`), so the
+	// go parser applies as-is.
+	case "c":
+		return parseGoTestCounts(output)
 	case "python":
 		return parsePytestCounts(output)
 	default:

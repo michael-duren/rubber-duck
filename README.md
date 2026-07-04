@@ -20,7 +20,7 @@ Requirements: Go 1.26+, Docker (with the compose plugin), `templ`.
 
 ```sh
 make tools            # fetch tailwind standalone binary, install templ
-make runner-images    # build gc-runner-go and gc-runner-python
+make runner-images    # build gc-runner-go, gc-runner-python, gc-runner-c
 make dev              # postgres via compose + live-reloading server on :8080
 make seed             # publish seed/intro-to-go.md through the agent API
 ```
@@ -115,7 +115,7 @@ the same `course:` slug and a different `language:`. See
 ---
 course: intro-to-concurrency        # required, stable course slug
 title: Introduction to Concurrency  # required
-language: go                        # required: go | python
+language: go                        # required: go | python | c
 description: One-paragraph pitch.   # required
 duration_hours: 6                   # optional
 tags: [backend, concurrency]        # optional
@@ -162,6 +162,13 @@ Conventions:
 - Tests must be self-contained and stdlib-only. Go tests run with
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
   import from `solution` (e.g. `from solution import merge`).
+- C tests are a plain C program: the test file has `main()`, declares
+  prototypes for the solution functions it exercises, and is compiled
+  together with the solution (`cc solution.c test_solution.c`). It must exit
+  non-zero if any test fails, and should print one `--- PASS: name` /
+  `--- FAIL: name` line per test case (the `go test -v` format) so the
+  grader can score partial credit; run every test rather than aborting on
+  the first failure.
 
 ## Course content workflow
 
@@ -195,7 +202,7 @@ submit only when a solution is green:
 go install ./cmd/duck   # or: go build -o duck ./cmd/duck
 
 duck pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
-duck test concurrent-sum            # go test ./... / pytest, no submission
+duck test concurrent-sum            # go test ./... / pytest / cc, no submission
 duck submit concurrent-sum          # POSTs the solution, polls until graded
 ```
 
@@ -212,13 +219,14 @@ The `infra/` directory holds OpenTofu config for the full production stack:
 - **Cloud Run service** `gc-app` (public, scale 0–3) running the app image.
 - **Cloud SQL Postgres 17** (`db-f1-micro`), reached over the Cloud SQL unix
   socket; the connection URL lives in **Secret Manager**.
-- **Cloud Run Jobs** `gc-grader-go` / `gc-grader-python` grade submissions.
+- **Cloud Run Jobs** `gc-grader-go` / `gc-grader-python` / `gc-grader-c`
+  grade submissions.
   Each submission stages its code into a GCS bucket, the app triggers a job
   execution with signed GET/PUT URLs as env overrides, and the runner uploads
   its result file (first line = test exit code). Cloud Run's gVisor sandbox
   replaces the local docker-socket grader; the job's service account has
   **zero IAM roles** — the signed URLs are its only capability.
-- **Artifact Registry** for the three images.
+- **Artifact Registry** for the app and runner images.
 
 ### Architecture
 
@@ -233,7 +241,7 @@ The `infra/` directory holds OpenTofu config for the full production stack:
                             ▼    │    │    ▼
                   ┌──────────┐   │    │   ┌────────────────────────┐
                   │Cloud SQL │   │    │   │   Cloud Run Jobs        │
-                  │ Postgres │   │    │   │ gc-grader-go/python     │
+                  │ Postgres │   │    │   │ gc-grader-go/python/c   │
                   └──────────┘   │    │   └───────────┬─────────────┘
                                  │    │               │
                      read secret │    │ stage/fetch    │ fetch code via
@@ -246,9 +254,10 @@ The `infra/` directory holds OpenTofu config for the full production stack:
                                      └──────────────┘
 ```
 
-Artifact Registry (`getcracked` repo) holds all three images (`getcracked`,
-`gc-runner-go`, `gc-runner-python`); `gc-app` and both grader jobs pull from
-it, and CD pushes new tags there on every merge to `main`.
+Artifact Registry (`getcracked` repo) holds the app image (`getcracked`)
+and one runner image per language (`gc-runner-go`, `gc-runner-python`,
+`gc-runner-c`); `gc-app` and the grader jobs pull from it, and CD pushes
+new tags there on every merge to `main`.
 
 **Trust boundary — two service accounts:**
 
