@@ -25,6 +25,7 @@ import (
 var images = map[string]string{
 	"go":     "gc-runner-go",
 	"python": "gc-runner-python",
+	"c":      "gc-runner-c",
 }
 
 type Grader struct{}

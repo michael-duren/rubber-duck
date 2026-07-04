@@ -1,5 +1,5 @@
 locals {
-  grader_languages = ["go", "python"]
+  grader_languages = ["go", "python", "c"]
 }
 
 resource "google_cloud_run_v2_job" "graders" {
