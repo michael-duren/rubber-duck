@@ -150,7 +150,8 @@ func TestWaitAllEmpty(t *testing.T) {
 	}
 }
 
-func TestWaitAllWaitsForAll(t *testing.T) {
+func testWaitAllRound(t *testing.T, hold time.Duration) {
+	t.Helper()
 	const n = 8
 	var finished atomic.Int64
 	release := make(chan struct{})
@@ -166,18 +167,26 @@ func TestWaitAllWaitsForAll(t *testing.T) {
 	case <-done:
 		close(release)
 		t.Fatal("WaitAll returned while spawned functions were still running")
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(hold):
 	}
 
 	close(release)
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("WaitAll did not return after all spawned functions finished")
+	case <-time.After(time.Second):
+		t.Fatal("WaitAll did not return promptly after all spawned functions finished")
 	}
 	if got := finished.Load(); got != n {
 		t.Fatalf("finished = %d, want %d", got, n)
 	}
+}
+
+func TestWaitAllWaitsForAll(t *testing.T) {
+	// Two rounds with different hold times: WaitAll must stay blocked
+	// for the whole hold, then return within 1s of the release. No
+	// fixed delay can satisfy both rounds — only real tracking can.
+	testWaitAllRound(t, 250*time.Millisecond)
+	testWaitAllRound(t, 1500*time.Millisecond)
 }
 
 func TestSpawnFromSpawned(t *testing.T) {
@@ -557,7 +566,8 @@ func TestResolveThenGet(t *testing.T) {
 	}
 }
 
-func TestGetBlocksUntilResolveAndWakesEveryone(t *testing.T) {
+func testGetBlocksRound(t *testing.T, hold time.Duration) {
+	t.Helper()
 	f, resolve := NewFuture[string]()
 	type result struct {
 		v   string
@@ -574,7 +584,7 @@ func TestGetBlocksUntilResolveAndWakesEveryone(t *testing.T) {
 	select {
 	case <-results:
 		t.Fatal("Get returned before the future was resolved")
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(hold):
 	}
 
 	resolve("ready")
@@ -587,10 +597,18 @@ func TestGetBlocksUntilResolveAndWakesEveryone(t *testing.T) {
 			if r.v != "ready" {
 				t.Fatalf("Get() = %q, want %q", r.v, "ready")
 			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("a Get caller was not woken by resolve")
+		case <-time.After(time.Second):
+			t.Fatal("a Get caller was not woken promptly by resolve")
 		}
 	}
+}
+
+func TestGetBlocksUntilResolveAndWakesEveryone(t *testing.T) {
+	// Two rounds with different holds: Get must stay blocked for the
+	// whole hold yet wake within 1s of resolve. A Get faked with a
+	// fixed sleep cannot satisfy both rounds — only a real broadcast can.
+	testGetBlocksRound(t, 250*time.Millisecond)
+	testGetBlocksRound(t, 1500*time.Millisecond)
 }
 
 func TestGetHonorsContext(t *testing.T) {
@@ -636,14 +654,19 @@ mutex-protected **global run queue**. Every M loops forever in `schedule()`:
 ```go
 // The scheduler, squinted at:
 for {
-	g := runqget(pp)           // local ring — the common, lock-free case
-	if g == nil && schedtick%61 == 0 {
-		g = globrunqget()      // every 61st tick, check global (anti-starvation)
+	var gp *g
+	// Every 61st tick, check the global queue *before* the local
+	// ring, so a busy P can't starve the global queue forever.
+	if schedtick%61 == 0 {
+		gp = globrunqget()
 	}
-	if g == nil {
-		g = findRunnable()     // global queue, netpoll, then steal from other Ps
+	if gp == nil {
+		gp = runqget(pp)    // local ring — the common, lock-free case
 	}
-	execute(g)                 // gogo(&g.sched) — does not return until g stops
+	if gp == nil {
+		gp = findRunnable() // global queue, netpoll, then steal from other Ps
+	}
+	execute(gp)                // gogo(&gp.sched) — does not return until gp stops
 }
 ```
 
@@ -667,8 +690,9 @@ runtime already knows how to park and resume goroutines — through channels.
 So we represent each *task* as a real goroutine that is **almost always
 parked**, and enforce this invariant:
 
-> At every instant, at most one goroutine — either the scheduler or exactly
-> one task — is runnable. Everyone else is parked on a channel receive.
+> At most one goroutine — either the scheduler or exactly one task — is
+> ever *doing observable work*. Everyone else is parked on a channel
+> receive, or has already done its part and is on its way to park.
 
 Give each task an unbuffered `resume` channel, and the scheduler one `park`
 channel shared by all tasks:
@@ -679,13 +703,17 @@ channel shared by all tasks:
 - Task yields: `park <- struct{}{}` … then immediately blocks on
   `<-t.resume`. Mirror image: scheduler wakes, task parks.
 
-Each unbuffered send is a synchronous rendezvous: the value transfer and the
-"you run now, I stop" are one atomic scheduling event (remember the direct
-stack-to-stack copy from last lesson). A yield is therefore *two* handoffs:
+Each unbuffered send is a synchronous rendezvous: the receiver wakes with
+the value (remember the direct stack-to-stack copy from last lesson), and
+the sender's very next statement is its own blocking receive. Strictly
+speaking both sides are runnable for that instant — but the handing-off
+side does nothing observable between waking its partner and parking, and
+that is all the invariant needs. A yield is therefore *two* handoffs:
 task → scheduler (decide who's next) → next task. That's a real context
-switch, built from parts you already understand — and because only one
-goroutine is ever runnable, execution is fully deterministic even though
-`GOMAXPROCS` might be 32. Concurrency without parallelism, on purpose.
+switch, built from parts you already understand — and because at most one
+goroutine is ever doing observable work, execution is fully deterministic
+even though `GOMAXPROCS` might be 32. Concurrency without parallelism, on
+purpose.
 
 A finished task is just a task whose function returned: signal the scheduler
 one last time and never wait for `resume` again.
@@ -1046,6 +1074,31 @@ func TestExactlyNWorkers(t *testing.T) {
 	}
 	if h := highWater.Load(); h != workers {
 		t.Fatalf("concurrency high-water mark = %d, want exactly %d", h, workers)
+	}
+}
+
+func TestBlockedTaskDoesNotStallOthers(t *testing.T) {
+	// tasks[0] blocks until the *last* task has run. Real workers keep
+	// pulling from the queue past the blocked task; an implementation
+	// that runs tasks in fixed batches of `workers` deadlocks here.
+	const n = 12
+	gate := make(chan struct{})
+	var ran atomic.Int64
+	tasks := make([]func(), n)
+	tasks[0] = func() {
+		<-gate
+		ran.Add(1)
+	}
+	for i := 1; i < n-1; i++ {
+		tasks[i] = func() { ran.Add(1) }
+	}
+	tasks[n-1] = func() {
+		ran.Add(1)
+		close(gate)
+	}
+	runOnWithTimeout(t, 2, tasks)
+	if got := ran.Load(); got != n {
+		t.Fatalf("ran %d tasks, want %d", got, n)
 	}
 }
 

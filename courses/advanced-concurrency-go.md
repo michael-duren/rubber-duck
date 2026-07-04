@@ -27,7 +27,7 @@ channel, closed exactly once:
 
 ```go
 ctx, cancel := context.WithTimeout(parent, 2*time.Second)
-defer cancel() // always: releases the timer and any child goroutines
+defer cancel() // always: stops the timer and detaches from the parent
 
 select {
 case res := <-work:
@@ -48,8 +48,9 @@ one actually selects on `ctx.Done()` while blocking.
 Two rules keep this honest. First, `ctx` is always the first parameter,
 never stored in a struct — it belongs to a call chain, not an object.
 Second, if you create a context, you `defer cancel()` even on success:
-an un-canceled context pins its parent's resources and leaks the
-goroutines watching it.
+until it is canceled (or its deadline fires), a child stays registered
+with its parent, keeping its timer and bookkeeping alive longer than
+needed — and anything blocked on its `Done` channel waits with it.
 
 The pattern you will implement below — race several attempts, keep the
 first success, cancel the rest — is the canonical use of a *locally
@@ -209,6 +210,24 @@ func TestParentCancellation(t *testing.T) {
 		t.Fatalf("returned %v after cancel; must return promptly", elapsed)
 	}
 }
+
+func TestDoesNotWaitForStubbornLoser(t *testing.T) {
+	fns := []func(context.Context) (string, error){
+		func(ctx context.Context) (string, error) { return "fast", nil },
+		func(ctx context.Context) (string, error) {
+			time.Sleep(2 * time.Second) // deliberately ignores ctx
+			return "", errors.New("late")
+		},
+	}
+	start := time.Now()
+	got, err := runFirstResult(t, context.Background(), fns)
+	if err != nil || got != "fast" {
+		t.Fatalf("FirstResult = (%q, %v), want (%q, nil)", got, err, "fast")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("returned after %v; must not wait for a loser that ignores its context", elapsed)
+	}
+}
 ```
 
 # Lesson: sync Beyond Mutex {#sync-beyond-mutex}
@@ -264,6 +283,8 @@ func OnceValue[T any](f func() T) func() T
 
 without using `sync.Once`, `sync.OnceValue`, or `sync.OnceValues` —
 build the exactly-once machinery yourself with a mutex and/or atomics.
+(The tests grade behavior, so delegating to the stdlib would pass the
+grader — and defeat the entire point of the exercise.)
 
 Requirements:
 
@@ -458,7 +479,9 @@ Invariants the tests enforce behaviorally, under heavy contention:
   slot is held must panic (a limiter that silently grows its capacity
   is corrupted).
 
-Use a `CompareAndSwap` loop for both transitions.
+Use a `CompareAndSwap` loop for both transitions. (The tests exercise
+behavior under contention; they cannot prove you avoided a mutex.
+Lock-freedom is the exercise here, not something the grader asserts.)
 
 ### Starter
 
@@ -782,6 +805,7 @@ func TestLimitRespectedAndUsed(t *testing.T) {
 func TestFirstErrorCancels(t *testing.T) {
 	boom := errors.New("boom")
 	var live atomic.Int64 // calls that began with a still-live context
+	var started, finished atomic.Int64
 	f := func(ctx context.Context, v int) (int, error) {
 		if ctx.Err() == nil {
 			live.Add(1)
@@ -789,8 +813,13 @@ func TestFirstErrorCancels(t *testing.T) {
 		if v == 0 {
 			return 0, boom
 		}
+		started.Add(1)
+		defer finished.Add(1)
 		select {
 		case <-ctx.Done():
+			// Linger on purpose: ParallelMap must still wait for this
+			// call to finish before it returns.
+			time.Sleep(50 * time.Millisecond)
 			return 0, ctx.Err()
 		case <-time.After(20 * time.Millisecond):
 			return v, nil
@@ -802,6 +831,9 @@ func TestFirstErrorCancels(t *testing.T) {
 	}
 	start := time.Now()
 	_, err := runParallelMap(t, context.Background(), in, 4, f)
+	if s, fin := started.Load(), finished.Load(); s != fin {
+		t.Fatalf("ParallelMap returned with %d of %d in-flight calls still running; return only after every call has finished", s-fin, s)
+	}
 	if err == nil {
 		t.Fatal("want the first error back, got nil")
 	}
@@ -997,18 +1029,25 @@ func TestTasksRunConcurrently(t *testing.T) {
 func TestFirstErrorWins(t *testing.T) {
 	errFirst := errors.New("first")
 	errLate := errors.New("late")
+	var finished atomic.Int64
 	err := runGroup(t, func() error {
 		var g Group
 		g.Go(func() error {
+			defer finished.Add(1)
 			time.Sleep(150 * time.Millisecond)
 			return errLate
 		})
 		g.Go(func() error {
+			defer finished.Add(1)
 			time.Sleep(10 * time.Millisecond)
 			return errFirst
 		})
-		g.Go(func() error { return nil })
-		return g.Wait()
+		g.Go(func() error { defer finished.Add(1); return nil })
+		err := g.Wait()
+		if n := finished.Load(); n != 3 {
+			t.Errorf("Wait returned with only %d of 3 tasks finished; Wait must block until every task is done, not just until the first error", n)
+		}
+		return err
 	})
 	if !errors.Is(err, errFirst) {
 		t.Fatalf("Wait = %v, want the first error to occur (%v)", err, errFirst)
@@ -1137,6 +1176,7 @@ type crawlStats struct {
 	visits map[string]int
 	cur    atomic.Int64
 	peak   atomic.Int64
+	done   atomic.Int64 // fetches that have fully completed
 }
 
 func fetcher(g graph, st *crawlStats, delay time.Duration) func(string) []string {
@@ -1153,6 +1193,7 @@ func fetcher(g graph, st *crawlStats, delay time.Duration) func(string) []string
 		st.mu.Unlock()
 		time.Sleep(delay)
 		st.cur.Add(-1)
+		st.done.Add(1)
 		return g[url]
 	}
 }
@@ -1193,8 +1234,11 @@ func reachable(g graph, start string) []string {
 func checkCrawl(t *testing.T, g graph, start string, workers int, delay time.Duration) *crawlStats {
 	t.Helper()
 	st := &crawlStats{visits: map[string]int{}}
-	got := runCrawl(t, start, fetcher(g, st, delay), workers)
 	want := reachable(g, start)
+	got := runCrawl(t, start, fetcher(g, st, delay), workers)
+	if d := st.done.Load(); int(d) != len(want) {
+		t.Errorf("Crawl returned with %d of %d fetches finished; return only after all fetching is done", d, len(want))
+	}
 
 	sort.Strings(got)
 	for i := 1; i < len(got); i++ {
