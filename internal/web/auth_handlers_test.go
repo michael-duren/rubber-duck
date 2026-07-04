@@ -206,6 +206,28 @@ func (f *fakeStore) CompletedChallenges(_ context.Context, userID, variantID int
 	return completed, nil
 }
 
+func (f *fakeStore) LatestSubmissionCodesByVariant(_ context.Context, userID, variantID int64) (map[int64]string, error) {
+	result := make(map[int64]string)
+	for _, sub := range f.submissions {
+		if sub.UserID == userID && sub.Code != "" {
+			if _, exists := result[sub.ChallengeID]; !exists {
+				result[sub.ChallengeID] = sub.Code
+			}
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) SubmissionsForChallenge(_ context.Context, userID, challengeID int64) ([]domain.Submission, error) {
+	var result []domain.Submission
+	for _, sub := range f.submissions {
+		if sub.UserID == userID && sub.ChallengeID == challengeID {
+			result = append(result, sub)
+		}
+	}
+	return result, nil
+}
+
 type noopEnqueuer struct{}
 
 func (noopEnqueuer) Enqueue(int64) {}
