@@ -59,6 +59,9 @@ func testCmd(args []string) error {
 			cmd = exec.CommandContext(ctx, "go", "test", "-timeout=25s", "./...")
 		case "python":
 			cmd = exec.CommandContext(ctx, "python3", "-m", "pytest", "-q")
+		case "c":
+			cmd = exec.CommandContext(ctx, "sh", "-c",
+				"cc -std=c17 -Wall -o test_bin solution.c test_solution.c && ./test_bin")
 		default:
 			cancel()
 			return fmt.Errorf("unsupported language %q", meta.Language)

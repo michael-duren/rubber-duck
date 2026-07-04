@@ -73,6 +73,21 @@ goroutine 5 [running]:
 			wantPassed: nil, wantTotal: nil,
 		},
 		{
+			name:     "c mixed pass/fail",
+			language: "c",
+			output: `--- PASS: test_sum_basic
+--- PASS: test_sum_empty
+--- FAIL: test_sum_negative
+`,
+			wantPassed: intp(2), wantTotal: intp(3),
+		},
+		{
+			name:       "c compile error is unparseable",
+			language:   "c",
+			output:     "solution.c:3:1: error: expected ';' before '}' token\n",
+			wantPassed: nil, wantTotal: nil,
+		},
+		{
 			name:       "unknown language",
 			language:   "cobol",
 			output:     "5 passed in 0.02s\n",
