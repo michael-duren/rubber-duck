@@ -170,3 +170,60 @@ func (s *Store) UserCourseScores(ctx context.Context, userID int64) ([]domain.Co
 	}
 	return out, rows.Err()
 }
+
+// LatestSubmissionCodesByVariant returns the most recent submission code for
+// each challenge in the variant that the user has attempted.
+func (s *Store) LatestSubmissionCodesByVariant(ctx context.Context, userID, variantID int64) (map[int64]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (sub.challenge_id) sub.challenge_id, sub.code
+		FROM submissions sub
+		JOIN challenges ch ON ch.id = sub.challenge_id
+		WHERE sub.user_id = $1 AND ch.variant_id = $2
+		ORDER BY sub.challenge_id, sub.created_at DESC`,
+		userID, variantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]string)
+	for rows.Next() {
+		var challengeID int64
+		var code string
+		if err := rows.Scan(&challengeID, &code); err != nil {
+			return nil, err
+		}
+		result[challengeID] = code
+	}
+	return result, rows.Err()
+}
+
+// SubmissionsForChallenge returns all submissions for a challenge by a user,
+// ordered newest-first.
+func (s *Store) SubmissionsForChallenge(ctx context.Context, userID, challengeID int64) ([]domain.Submission, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT sub.id, sub.user_id, sub.challenge_id, ch.title, sub.code,
+		       sub.status, sub.score, coalesce(sub.output, ''), sub.created_at,
+		       sub.tests_passed, sub.tests_total
+		FROM submissions sub
+		JOIN challenges ch ON ch.id = sub.challenge_id
+		WHERE sub.user_id = $1 AND sub.challenge_id = $2
+		ORDER BY sub.created_at DESC`,
+		userID, challengeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.Submission
+	for rows.Next() {
+		var sub domain.Submission
+		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ChallengeID, &sub.ChallengeTitle, &sub.Code,
+			&sub.Status, &sub.Score, &sub.Output, &sub.CreatedAt,
+			&sub.TestsPassed, &sub.TestsTotal); err != nil {
+			return nil, err
+		}
+		result = append(result, sub)
+	}
+	return result, rows.Err()
+}

@@ -19,6 +19,8 @@ type SubmissionStore interface {
 	UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error)
 	SubmissionRateLimited(ctx context.Context, userID, challengeID int64) (bool, error)
 	CompletedChallenges(ctx context.Context, userID, variantID int64) (map[int64]bool, error)
+	LatestSubmissionCodesByVariant(ctx context.Context, userID, variantID int64) (map[int64]string, error)
+	SubmissionsForChallenge(ctx context.Context, userID, challengeID int64) ([]domain.Submission, error)
 }
 
 const rateLimitMessage = "Too many submissions — you can submit each challenge up to 5 times per day, or let your in-flight submissions finish (max 3 at a time)."

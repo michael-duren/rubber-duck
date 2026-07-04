@@ -123,7 +123,31 @@ func (h *handlers) lessonPage(w http.ResponseWriter, r *http.Request) {
 			if i+1 < len(variant.Lessons) {
 				next = &variant.Lessons[i+1]
 			}
-			h.render(w, r, views.Lesson(currentUser(r), course, variant, l, next))
+
+			// Fetch latest submission codes and submission history for logged-in users
+			latestCodeByChallenge := make(map[int64]string)
+			submissionsByChallenge := make(map[int64][]domain.Submission)
+			user := currentUser(r)
+			if user != nil {
+				codes, err := h.submissions.LatestSubmissionCodesByVariant(r.Context(), user.ID, variant.ID)
+				if err != nil {
+					h.serverError(w, r, err)
+					return
+				}
+				latestCodeByChallenge = codes
+
+				// Fetch submission history for each challenge
+				for _, c := range l.Challenges {
+					subs, err := h.submissions.SubmissionsForChallenge(r.Context(), user.ID, c.ID)
+					if err != nil {
+						h.serverError(w, r, err)
+						return
+					}
+					submissionsByChallenge[c.ID] = subs
+				}
+			}
+
+			h.render(w, r, views.Lesson(currentUser(r), course, variant, l, next, latestCodeByChallenge, submissionsByChallenge))
 			return
 		}
 	}
@@ -140,5 +164,26 @@ func (h *handlers) finalPage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	h.render(w, r, views.Final(currentUser(r), course, variant))
+
+	// Fetch latest submission code and submission history for logged-in users
+	latestCode := ""
+	var submissions []domain.Submission
+	user := currentUser(r)
+	if user != nil {
+		codes, err := h.submissions.LatestSubmissionCodesByVariant(r.Context(), user.ID, variant.ID)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		latestCode = codes[variant.Final.ID]
+
+		subs, err := h.submissions.SubmissionsForChallenge(r.Context(), user.ID, variant.Final.ID)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		submissions = subs
+	}
+
+	h.render(w, r, views.Final(currentUser(r), course, variant, latestCode, submissions))
 }
