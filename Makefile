@@ -47,6 +47,8 @@ test-integration: db
 
 seed:
 	go run ./cmd/getcracked seed seed/intro-to-go.md
+	go run ./cmd/getcracked seed courses/embedded-pico-c.md
+	go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
 
 # GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
 # target a local `make dev` server; override both for prod.
