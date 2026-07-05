@@ -287,15 +287,11 @@ func CLI(user *domain.User, baseURL string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h3 class=\"mt-6 font-semibold\">With Go (from source)</h3><p class=\"mt-2 text-slate-700 dark:text-slate-300\">With Go 1.26+ installed, clone the repository and <span class=\"font-mono\">go install</span> the command (the binary lands in <span class=\"font-mono\">$(go env GOPATH)/bin</span> — make sure that's on your <span class=\"font-mono\">PATH</span>):</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h3 class=\"mt-6 font-semibold\">With Go</h3><p class=\"mt-2 text-slate-700 dark:text-slate-300\">With Go 1.26+ installed (the binary lands in <span class=\"font-mono\">$(go env GOPATH)/bin</span> — make sure that's on your <span class=\"font-mono\">PATH</span>):</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = shell(
-				"git clone "+repoURL+".git",
-				"cd rubber-duck",
-				"go install ./cmd/duck",
-			).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = shell("go install github.com/michael-duren/rubber-duck/cmd/duck@latest").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -437,7 +433,7 @@ func docHeading(title string) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 163, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 158, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -480,7 +476,7 @@ func shell(lines ...string) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(lines, "\n"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 168, Col: 169}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 163, Col: 169}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -522,7 +518,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(cmd)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 173, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 168, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -535,7 +531,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 174, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 169, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
