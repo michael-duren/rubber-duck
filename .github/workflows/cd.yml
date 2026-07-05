@@ -70,3 +70,41 @@ jobs:
         env:
           GC_API_KEY: ${{ secrets.GC_API_KEY }}
         run: make publish GC_URL="$(tofu -chdir=infra output -raw service_url)"
+
+  # Publish the duck CLI as prebuilt binaries on a GitHub Release. Runs
+  # after deploy (not just test) so the binaries under releases/latest
+  # always match the server version actually running in prod — the web
+  # UI's /cli page links here.
+  release-cli:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      - name: Cross-compile duck
+        run: |
+          echo "DUCK_TAG=duck-v0.1.${{ github.run_number }}" >> "$GITHUB_ENV"
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            goos="${target%/*}" goarch="${target#*/}"
+            ext=""; [ "$goos" = windows ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -trimpath \
+              -ldflags "-s -w -X main.version=duck-v0.1.${{ github.run_number }}" \
+              -o "dist/duck-$goos-$goarch$ext" ./cmd/duck
+          done
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$DUCK_TAG" dist/* \
+            --latest \
+            --title "$DUCK_TAG" \
+            --notes "duck CLI built from ${GITHUB_SHA::7}. Install: download the binary for your platform, chmod +x, put it on your PATH. See /cli on the site for full instructions."
