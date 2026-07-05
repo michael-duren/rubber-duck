@@ -22,8 +22,8 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `make check` — vet + stale-templ-generate check + all tests (the gate
   before any commit)
 - `make test-integration` — store tests against compose Postgres
-- `make runner-images` — build gc-runner-go / gc-runner-python (needed for
-  dockergrader e2e tests, which skip if images are missing)
+- `make runner-images` — build gc-runner-go / gc-runner-python / gc-runner-c
+  (needed for dockergrader e2e tests, which skip if images are missing)
 - `make seed` — publish seed/intro-to-go.md through the local agent API
   (quickstart fixture only — see `make publish` for real course content)
 - `make publish` — loop `getcracked seed` over `courses/*.md` (the

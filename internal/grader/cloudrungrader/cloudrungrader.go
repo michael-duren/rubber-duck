@@ -36,6 +36,7 @@ const urlExpiry = 15 * time.Minute
 var jobNames = map[string]string{
 	"go":     "gc-grader-go",
 	"python": "gc-grader-python",
+	"c":      "gc-grader-c",
 }
 
 type Config struct {

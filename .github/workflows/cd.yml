@@ -55,3 +55,18 @@ jobs:
             -var project_id="$PROJECT" \
             -var region="$REGION" \
             -var image_tag="$(git rev-parse --short HEAD)"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      # After (not before) the deploy, so courses are validated by the
+      # ingest parser version they'll be served by. Re-publishing a
+      # course variant cascades (lessons/challenges/submissions are
+      # replaced) — that's the documented agent contract; slugs stay
+      # stable in courses/*.md. GC_API_KEY is a repo secret minted with
+      # `getcracked apikey create` against the prod DB.
+      - name: Sync courses to prod
+        env:
+          GC_API_KEY: ${{ secrets.GC_API_KEY }}
+        run: make publish GC_URL="$(tofu -chdir=infra output -raw service_url)"
