@@ -1,4 +1,4 @@
-module github.com/mduren/getcracked
+module github.com/michael-duren/rubber-duck
 
 go 1.26.4
 

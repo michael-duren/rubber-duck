@@ -202,7 +202,7 @@ Prebuilt binaries (linux/darwin/windows, amd64/arm64) are published to
 [GitHub Releases](https://github.com/michael-duren/rubber-duck/releases/latest)
 by CD's `release-cli` job on every deploy; `duck version` reports the release
 tag. Note `go install <module>/cmd/duck@latest` does **not** work from the
-remote: the module path (`github.com/mduren/getcracked`) predates the repo
+remote: the module path (`github.com/michael-duren/rubber-duck`) predates the repo
 rename (see the deep-rename issue), so install from a clone:
 
 ```sh

@@ -3,8 +3,8 @@ package ingest
 import (
 	"fmt"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/markdown"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/markdown"
 )
 
 // ToDomain renders HTML for every section and assembles the domain course

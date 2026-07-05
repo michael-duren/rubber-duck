@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/auth"
 )
 
 func TestSubmissionRateLimitReturns429(t *testing.T) {

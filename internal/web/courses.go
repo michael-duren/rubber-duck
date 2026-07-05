@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/web/views"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 // CourseReader is the slice of the store the course pages need.

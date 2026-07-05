@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mduren/getcracked/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
 func submitCmd(args []string) error {
