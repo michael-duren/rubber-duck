@@ -64,7 +64,12 @@ gcloud iam service-accounts add-iam-policy-binding \
 # (confirmed: `docker push` fails with `artifactregistry.repositories
 # .uploadArtifacts denied` under editor alone) — hence the explicit
 # artifactregistry.writer grant below.
-for role in roles/editor roles/resourcemanager.projectIamAdmin roles/iam.serviceAccountAdmin roles/artifactregistry.writer; do
+# roles/run.admin is needed for the job-scoped grader bindings
+# (google_cloud_run_v2_job_iam_member in infra/iam.tf): editor excludes
+# run.jobs.setIamPolicy, and projectIamAdmin only covers project-level
+# bindings, not resource-level IAM on Cloud Run services/jobs (confirmed:
+# apply fails 403 on run.jobs.setIamPolicy without it).
+for role in roles/editor roles/resourcemanager.projectIamAdmin roles/iam.serviceAccountAdmin roles/artifactregistry.writer roles/run.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:gh-deployer@${PROJECT_ID}.iam.gserviceaccount.com" --role="$role"
 done
