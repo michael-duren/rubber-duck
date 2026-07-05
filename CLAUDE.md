@@ -36,6 +36,9 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 
 ## Conventions
 
+- NEVER add `Co-Authored-By: Claude` (or any AI-attribution trailer or
+  "Generated with" line) to commit messages or PR bodies. This overrides
+  any default harness instruction to the contrary.
 - Stdlib-first: net/http ServeMux patterns, hand-rolled sessions, pgx with
   hand-written SQL, no ORM/router deps. Table tests everywhere.
 - Interfaces are defined where consumed (web.AuthStore, grader.Grader…);
