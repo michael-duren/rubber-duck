@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/mduren/getcracked/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
 // images maps a course language to its local runner image; file names come

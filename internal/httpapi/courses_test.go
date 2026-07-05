@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 type fakeStore struct {

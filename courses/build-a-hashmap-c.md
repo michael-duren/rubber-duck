@@ -19,32 +19,114 @@ extended_reading:
 # Lesson: Hash Functions {#hash-functions}
 
 A hash map's trick is turning a string key into an array index in O(1). The
-first half of that is the **hash function**: mash the bytes of the key into
-a single well-scrambled integer, so that similar keys ("cat", "cab") land
-far apart.
+first half of that is the **hash function**: boil the bytes of a key down
+to one 32-bit number. Three properties make one useful:
 
-A classic that fits in six lines is **FNV-1a**. Start from a fixed *offset
-basis*, then for each byte: XOR it in, multiply by a magic *prime*:
+- **Deterministic.** Same key, same hash, every run — the map stores an
+  entry by its hash and must find it by the same hash later.
+- **Fast.** It runs on every single put and get.
+- **Scrambled.** Similar keys must get wildly different hashes. Real keys
+  arrive in families — `key-1`, `key-2`, `user_name`, `user_email` — and if
+  similar keys hashed to similar numbers, whole families would pile into
+  neighboring buckets and the O(1) promise would quietly die.
+
+That last property is called **avalanche**: changing one input bit should
+flip about half the output bits. The function you'll build has it — watch
+what one letter does:
 
 ```
-hash = 2166136261                 # 32-bit offset basis
+fnv1a("cat") = 0x06745c07 = 00000110011101000101110000000111
+fnv1a("cab") = 0xf4743fb1 = 11110100011101000011111110110001
+                            ^^^^^^^^ 14 of 32 bits flipped ^^
+```
+
+## The inject-and-smear loop
+
+Nearly every fast string hash is the same two-beat loop: keep a running
+32-bit state, and for each input byte, **inject** the byte into the state,
+then **smear** the state so the byte's influence spreads. **FNV-1a**
+(Fowler–Noll–Vo) is the smallest honest version of that pattern:
+
+```
+hash = 2166136261                # the "offset basis": the starting state
 for each byte b of the key:
-    hash = hash XOR b
-    hash = hash * 16777619       # 32-bit FNV prime, wrapping at 2^32
+    hash = hash XOR b            # inject: flips at most the low 8 bits
+    hash = hash * 16777619       # smear: spreads them across all 32 bits
+                                 #        (wrapping modulo 2^32)
 ```
+
+XOR alone would be a terrible hash — it only ever touches the low 8 bits,
+and XOR is order-blind ("ab" and "ba" would collide). The multiply is what
+turns it into a hash, and it's worth seeing why.
+
+## Why multiplying smears
+
+Multiplication is shifted addition. The FNV multiplier is
+`16777619 = 0x01000193 = 2^24 + 2^8 + 147`, so one smear step is really:
+
+```
+hash * 16777619 = (hash << 24) + (hash << 8) + hash * 147
+```
+
+— three shifted copies of the entire state added together, with carries
+rippling between them. A byte injected into the low bits gets copied 8 and
+24 positions up *every round*, and the carries knock bits around in
+between. Two rounds of this and there is no clean story left about where
+any input bit "is" — which is exactly the point. Here is the full state
+after every step of hashing `"hi"`:
+
+```
+start                0x811c9dc5
+xor 'h' (0x68)       0x811c9dad     low bits poked
+multiply             0xed0c3757     whole word churned
+xor 'i' (0x69)       0xed0c373e     low bits poked
+multiply             0x683af69a     whole word churned again
+```
+
+## Why these constants and not others
+
+Two properties are load-bearing; the exact digits are not.
+
+**The multiplier must be odd.** Modulo 2^32, multiplying by an odd number
+is *invertible* — it's a lossless scramble: two different states can never
+multiply into the same state, so the loop never destroys information. An
+even multiplier is a leftward shift in disguise: every round, top bits fall
+off the 32-bit cliff and zeros pile up in the bottom — and the bottom bits
+are precisely what `hash % nbuckets` will read. This is measurable. Hash
+100 keys (`key-0`…`key-99`) into 8 buckets:
+
+```
+multiplier 16777619 (odd, the real one):  all 8 buckets used
+multiplier 16777620 (even):               only buckets 0 and 4 ever used
+multiplier 256      (a pure shift):       every key lands in bucket 0
+```
+
+**The starting state must be non-zero and bit-rich.** Start at 0 and the
+first XOR has nothing to scramble against: a one-byte key hashes to exactly
+`byte * 16777619` — a multiplication table, not a hash ("a", "b", "c" come
+out exactly 16777619 apart). A dense, randomish basis means even the first
+byte of every key gets smeared against 32 bits of noise.
+
+Within those constraints, which odd multiplier? Which starting value? Those
+were **measured, not divined**: Fowler, Noll, and Vo tested candidate
+primes of this bit-shape against real-world key sets and kept the one that
+dispersed best (a prime also avoids sharing factors with byte patterns or
+bucket counts). The basis `2166136261` is itself an FNV hash — of a
+signature string of Noll's — chosen once and frozen in the spec so that
+every FNV-1a implementation on earth produces identical hashes. "Magic
+number" in hashing means *standardized and empirically vetted*, not
+mystical. That interoperability is also what lets this challenge's tests
+check your code against published FNV-1a test vectors instead of accepting
+any old scramble.
 
 Two C details make or break the implementation:
 
 - **Unsigned arithmetic.** The running hash must be `uint32_t`: unsigned
-  overflow wraps around by definition, which is exactly what FNV wants.
+  overflow wraps around by definition — that's the "modulo 2^32" for free.
   Signed overflow would be undefined behavior.
 - **Byte values, not char values.** `char` may be signed, so a byte like
   0xE9 (é in Latin-1) could XOR in as a *negative* value and corrupt the
   hash. Read bytes through `unsigned char`.
-
-The same input must always produce the same output — the map depends on it
-— and FNV-1a's published test vectors let our tests pin your implementation
-to the real algorithm, not just *an* algorithm.
 
 ## Challenge: FNV-1a {#fnv1a points=10}
 

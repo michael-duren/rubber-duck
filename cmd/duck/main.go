@@ -28,9 +28,11 @@ func run(args []string) error {
 		return submitCmd(args[1:])
 	case "login":
 		return loginCmd(args[1:])
+	case "version":
+		return versionCmd(args[1:])
 	default:
 		return usageError
 	}
 }
 
-var usageError = fmt.Errorf("usage: duck <pull|test|submit|login> ...")
+var usageError = fmt.Errorf("usage: duck <pull|test|submit|login|version> ...")

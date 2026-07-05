@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mduren/getcracked/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
 type fakeJobs struct {
