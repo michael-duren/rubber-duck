@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 func Course(user *domain.User, course domain.Course, variants []domain.VariantSummary, scores map[string]domain.CourseScore) templ.Component {

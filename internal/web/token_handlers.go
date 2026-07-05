@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/web/views"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 const maxTokenNameBytes = 64

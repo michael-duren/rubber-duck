@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 func (s *Store) CreateUserToken(ctx context.Context, userID int64, name string, tokenHash []byte) (int64, error) {

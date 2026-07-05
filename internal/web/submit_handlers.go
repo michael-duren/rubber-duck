@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/web/views"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 // SubmissionStore is the store slice for the submission flow.
