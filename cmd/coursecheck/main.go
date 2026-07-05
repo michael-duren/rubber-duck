@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mduren/getcracked/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 func main() {
@@ -42,8 +42,7 @@ func main() {
 
 	res, err := ingest.Parse(src)
 	if err != nil {
-		var verr *ingest.ValidationError
-		if errors.As(err, &verr) {
+		if verr, ok := errors.AsType[*ingest.ValidationError](err); ok {
 			fmt.Printf("INGEST: %d problem(s)\n", len(verr.Problems))
 			for _, p := range verr.Problems {
 				fmt.Printf("  line %d: %s\n", p.Line, p.Message)
