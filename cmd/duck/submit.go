@@ -55,7 +55,7 @@ func submitCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("submit: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("unauthorized: token missing or revoked")
@@ -88,7 +88,7 @@ func pollSubmission(base, path, token string) error {
 			return fmt.Errorf("poll status: %w", err)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("poll status: server said %s: %s", resp.Status, body)
 		}

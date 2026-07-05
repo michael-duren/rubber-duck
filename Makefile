@@ -92,3 +92,6 @@ infra-validate:
 
 clean:
 	rm -f getcracked internal/web/static/app.css
+
+lint: ## run golangci-lint (same version config as CI)
+	golangci-lint run ./...
