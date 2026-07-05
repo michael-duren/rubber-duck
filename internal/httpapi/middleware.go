@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/auth"
 )
 
 // KeyStore validates agent API keys.

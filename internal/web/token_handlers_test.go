@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 func bearerPost(mux *http.ServeMux, path, token string, form url.Values) *httptest.ResponseRecorder {

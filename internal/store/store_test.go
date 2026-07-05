@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 // testStore migrates the test database from scratch and returns an open store.

@@ -196,9 +196,16 @@ stable (see "Course document format" above).
 
 Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.
 `duck` lets you iterate locally with your own toolchain — no Docker — and
-submit only when a solution is green:
+submit only when a solution is green.
+
+Prebuilt binaries (linux/darwin/windows, amd64/arm64) are published to
+[GitHub Releases](https://github.com/michael-duren/rubber-duck/releases/latest)
+by CD's `release-cli` job on every deploy; `duck version` reports the release
+tag (or the module version for `go install` builds):
 
 ```sh
+go install github.com/michael-duren/rubber-duck/cmd/duck@latest
+# or, from a checkout:
 go install ./cmd/duck   # or: go build -o duck ./cmd/duck
 
 duck pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/

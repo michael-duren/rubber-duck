@@ -1,0 +1,171 @@
+package views
+
+import (
+	"strings"
+
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// repoURL is the public source repository; the CLI install instructions
+// point at its releases and clone URL.
+const repoURL = "https://github.com/michael-duren/rubber-duck"
+
+templ About(user *domain.User) {
+	@Layout("About", user) {
+		<div class="mx-auto max-w-3xl">
+			<h1 class="text-3xl font-bold">About Rubber Duck <span aria-hidden="true">🦆</span></h1>
+			<p class="mt-3 text-slate-600 dark:text-slate-400">
+				A friendly home for software-engineering courses written by AI agents.
+				Every course is a set of lessons with graded code challenges: you write
+				real code, it runs against a real test suite in a sandbox, and passing
+				earns you points.
+			</p>
+			@docHeading("How a course works")
+			<ol class="mt-3 list-decimal space-y-2 pl-5 text-slate-700 dark:text-slate-300">
+				<li><a href="/signup" class={ docLink }>Sign up</a> with just a username — no email required.</li>
+				<li>Pick a course from the <a href="/" class={ docLink }>catalog</a>. Many courses come in several programming-language <span class="font-semibold">variants</span> (Go, Python, C) — pick the language you want to practice.</li>
+				<li>Work through the lessons in order. Each lesson ends in one or more <span class="font-semibold">challenges</span>: a prompt, starter code, and a hidden-in-plain-sight test suite.</li>
+				<li>Edit the starter code right in the browser and submit. Your submission is compiled and run against the challenge's tests in an isolated container.</li>
+				<li>Finish with the course's single <span class="font-semibold">final challenge</span>, worth the most points.</li>
+			</ol>
+			@docHeading("Grading and points")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Each challenge is worth a fixed number of points. Your course score is
+				the sum of your <span class="font-semibold">best</span> submission per
+				challenge, so resubmitting can only help you. Tests print a
+				per-test-case pass/fail log, and partial credit is awarded for
+				partially passing suites where the language supports it.
+			</p>
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Submissions run in a locked-down sandbox with no network access and
+				tight time limits. In production, a graded run takes a couple of
+				minutes end to end — fine for a final answer, slow for iterating.
+				For a fast edit-test loop, use the CLI.
+			</p>
+			@docHeading("Prefer the terminal?")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				The <span class="font-mono">duck</span> CLI pulls a course's challenges
+				to your machine, runs the same tests locally with your own toolchain in
+				seconds, and submits only when you're green.
+				<a href="/cli" class={ docLink }>Install and usage instructions →</a>
+			</p>
+			@docHeading("Want to publish a course?")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Courses are plain markdown documents published through a small REST
+				API — designed so AI agents (or humans) can author and maintain them
+				with ordinary pull requests. The document format and API are documented
+				in the <a href={ templ.SafeURL(repoURL) } class={ docLink }>source repository</a>.
+			</p>
+		</div>
+	}
+}
+
+templ CLI(user *domain.User, baseURL string) {
+	@Layout("CLI", user) {
+		<div class="mx-auto max-w-3xl">
+			<h1 class="text-3xl font-bold"><span class="text-emerald-600 dark:text-emerald-400">$</span> duck — the local CLI</h1>
+			<p class="mt-3 text-slate-600 dark:text-slate-400">
+				Server-side grading takes a couple of minutes per run. The
+				<span class="font-mono">duck</span> CLI gives you a seconds-fast loop
+				instead: pull a course's challenges into a local directory, run the
+				same tests with your own toolchain (no Docker needed), and submit for
+				a graded score only when everything passes.
+			</p>
+			@docHeading("Install")
+			<h3 class="mt-4 font-semibold">Prebuilt binary (recommended)</h3>
+			<p class="mt-2 text-slate-700 dark:text-slate-300">
+				Every release ships static binaries for Linux, macOS, and Windows on
+				<a href={ templ.SafeURL(repoURL + "/releases/latest") } class={ docLink }>the releases page</a>.
+				On Linux/macOS:
+			</p>
+			@shell(
+				"# pick your platform: duck-linux-amd64, duck-linux-arm64,",
+				"#                     duck-darwin-amd64, duck-darwin-arm64, duck-windows-amd64.exe",
+				"curl -fsSL "+repoURL+"/releases/latest/download/duck-linux-amd64 -o duck",
+				"chmod +x duck && sudo mv duck /usr/local/bin/",
+			)
+			<h3 class="mt-6 font-semibold">With Go</h3>
+			<p class="mt-2 text-slate-700 dark:text-slate-300">
+				With Go 1.26+ installed
+				(the binary lands in <span class="font-mono">$(go env GOPATH)/bin</span> —
+				make sure that's on your <span class="font-mono">PATH</span>):
+			</p>
+			@shell("go install github.com/michael-duren/rubber-duck/cmd/duck@latest")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">Either way, verify:</p>
+			@shell("duck version")
+			@docHeading("Log in once")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				<span class="font-mono">duck submit</span> needs a personal CLI token.
+				The easy way — prompts for your username and password, mints a token,
+				and saves it to <span class="font-mono">~/.config/duck/token</span>:
+			</p>
+			@shell("duck login --base " + baseURL)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Or mint one by hand on your <a href="/profile" class={ docLink }>profile page</a>
+				("Create CLI token") and either export it as
+				<span class="font-mono">DUCK_TOKEN</span> or save it to
+				<span class="font-mono">~/.config/duck/token</span>.
+			</p>
+			@docHeading("Work a course")
+			@shell(
+				"duck pull intro-to-concurrency/go --base "+baseURL,
+				"cd intro-to-concurrency-go",
+				"",
+				"# edit <challenge-slug>/solution file with your editor, then:",
+				"duck test concurrent-sum      # run that challenge's tests locally",
+				"duck test                     # or run every challenge's tests",
+				"duck submit concurrent-sum    # submit for points, polls until graded",
+			)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				<span class="font-mono">duck pull</span> scaffolds one directory per
+				challenge, each containing the starter code and the course's real test
+				suite, plus a <span class="font-mono">.duck-course.json</span> that
+				remembers the server URL — so <span class="font-mono">test</span> and
+				<span class="font-mono">submit</span> work from anywhere inside the
+				course tree with no flags.
+			</p>
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				<span class="font-mono">duck test</span> uses your own toolchain, so
+				you need the course language installed locally: <span class="font-mono">go</span>
+				(Go courses), <span class="font-mono">python3</span> + <span class="font-mono">pytest</span>
+				(Python), or a C compiler like <span class="font-mono">cc</span> (C).
+			</p>
+			@docHeading("Command reference")
+			<div class="mt-3 overflow-x-auto">
+				<table class="w-full text-left text-sm">
+					<thead>
+						<tr class="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
+							<th class="py-2 pr-4 font-medium">Command</th>
+							<th class="py-2 font-medium">What it does</th>
+						</tr>
+					</thead>
+					<tbody class="text-slate-700 dark:text-slate-300">
+						@cmdRow("duck pull <course>/<language> [--base URL]", "Scaffold the course's challenges into ./<course>-<language>/. URL defaults to $DUCK_BASE_URL.")
+						@cmdRow("duck test [challenge-slug]", "Run one challenge's tests locally — or every challenge's, with no slug. No submission, no points.")
+						@cmdRow("duck submit <challenge-slug>", "Send your solution to the server for grading and poll until the score comes back.")
+						@cmdRow("duck login [--base URL]", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
+						@cmdRow("duck version", "Print the CLI version.")
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+}
+
+const docLink = "font-medium text-emerald-700 underline decoration-emerald-600/40 underline-offset-2 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:decoration-emerald-400"
+
+templ docHeading(title string) {
+	<h2 class="mt-10 border-b border-slate-200 pb-2 text-xl font-semibold dark:border-slate-800">{ title }</h2>
+}
+
+// shell renders a copy-pasteable terminal snippet, one argument per line.
+templ shell(lines ...string) {
+	<pre class="mt-3 overflow-x-auto rounded-lg border border-slate-800 bg-slate-900 p-4 font-mono text-sm leading-relaxed text-slate-100"><code>{ strings.Join(lines, "\n") }</code></pre>
+}
+
+templ cmdRow(cmd, desc string) {
+	<tr class="border-b border-slate-100 dark:border-slate-900">
+		<td class="py-2 pr-4 align-top font-mono text-xs whitespace-nowrap">{ cmd }</td>
+		<td class="py-2">{ desc }</td>
+	</tr>
+}
