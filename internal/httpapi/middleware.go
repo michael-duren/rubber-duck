@@ -4,18 +4,13 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/auth"
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
-
-// userTokenPrefix identifies a human CLI token (internal/auth.NewUserToken)
-// rather than an agent API key (internal/auth.NewAPIKey, prefix "gc_"). It
-// must be checked before the plain "gc_" prefix since it's a longer, more
-// specific prefix of it.
-const userTokenPrefix = "gc_u_"
 
 // KeyStore validates agent API keys and resolves human user tokens.
 type KeyStore interface {
@@ -42,12 +37,12 @@ func currentUser(r *http.Request) *domain.User {
 }
 
 // requireKey rejects requests without a valid "Authorization: Bearer …"
-// credential. Two forms are accepted: a "gc_u_"-prefixed human user token,
-// which attaches the resolved domain.User to the request context (see
+// credential. Two forms are accepted: an auth.UserTokenPrefix-ed human user
+// token, which attaches the resolved domain.User to the request context (see
 // currentUser) so writes can be attributed and versioned; and a plain
-// "gc_"-prefixed agent API key, which behaves exactly as before (no user
-// attached, writes stay unattributed and unversioned).
-func requireKey(ks KeyStore, next http.Handler) http.Handler {
+// "gc_"-prefixed agent API key, which attaches no user — those writes stay
+// unattributed and unversioned.
+func requireKey(logger *slog.Logger, ks KeyStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok {
@@ -55,13 +50,17 @@ func requireKey(ks KeyStore, next http.Handler) http.Handler {
 			return
 		}
 
-		if strings.HasPrefix(token, userTokenPrefix) {
+		// A user token must be intercepted here rather than falling through
+		// to the API-key hash check below, which would 401 it (a user-token
+		// hash never matches a stored API-key hash).
+		if strings.HasPrefix(token, auth.UserTokenPrefix) {
 			user, err := ks.UserByToken(r.Context(), auth.HashToken(token))
 			switch {
 			case errors.Is(err, domain.ErrNotFound):
 				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid or revoked user token", nil)
 				return
 			case err != nil:
+				logger.Error("auth check failed", "path", r.URL.Path, "err", err)
 				writeError(w, http.StatusInternalServerError, "internal", "auth check failed", nil)
 				return
 			}
@@ -72,6 +71,7 @@ func requireKey(ks KeyStore, next http.Handler) http.Handler {
 
 		valid, err := ks.APIKeyValid(r.Context(), auth.HashToken(token))
 		if err != nil {
+			logger.Error("auth check failed", "path", r.URL.Path, "err", err)
 			writeError(w, http.StatusInternalServerError, "internal", "auth check failed", nil)
 			return
 		}

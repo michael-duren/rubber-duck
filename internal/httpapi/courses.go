@@ -35,8 +35,19 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 		ExpectedVersion *int `json:"expected_version,omitempty"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDocumentBytes))
-	if err := dec.Decode(&body); err != nil || body.Markdown == "" {
+	if err := dec.Decode(&body); err != nil {
+		// A valid-but-huge body hits MaxBytesReader's limit and would
+		// otherwise surface as a baffling "must be JSON" 400.
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeError(w, http.StatusRequestEntityTooLarge, "document_too_large",
+				fmt.Sprintf("document exceeds the %d-byte limit", maxDocumentBytes), nil)
+			return
+		}
 		writeError(w, http.StatusBadRequest, "bad_request", `body must be JSON: {"markdown": "..."}`, nil)
+		return
+	}
+	if body.Markdown == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", `missing or empty "markdown" field`, nil)
 		return
 	}
 
@@ -71,9 +82,8 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 	// A human editor (authenticated via a gc_u_ user token, see
 	// requireKey) is attributed and may opt into the same optimistic
 	// concurrency check the web editor uses. An agent-key caller has no
-	// currentUser and keeps today's behavior exactly: unattributed,
-	// unversioned (see issue #36's scope) — any expected_version it sent
-	// is ignored, not validated.
+	// currentUser and stays unattributed and unversioned (see issue #36's
+	// scope) — any expected_version it sent is ignored, not validated.
 	var editedBy *int64
 	var expectedVersion *int
 	if user := currentUser(r); user != nil {
@@ -84,7 +94,7 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 	version, err := h.store.UpsertVariant(r.Context(), course, variant, editedBy, expectedVersion)
 	if errors.Is(err, domain.ErrVersionConflict) {
 		writeError(w, http.StatusConflict, "version_conflict",
-			"the variant has changed since your expected_version — pull again before pushing", nil)
+			"the variant has changed since your expected_version — re-fetch it and reapply your changes before pushing", nil)
 		return
 	}
 	if err != nil {

@@ -1,6 +1,7 @@
-// Command duck is the local-testing companion CLI: pull a course's
-// challenges, run tests with your own toolchain (no Docker), and submit
-// solutions to the server for a graded score.
+// Command duck is the local companion CLI. Learners pull a course's
+// challenges, run tests with their own toolchain (no Docker), and submit
+// solutions to the server for a graded score; authors round-trip a course
+// variant's markdown with `duck educator pull/lint/push`.
 package main
 
 import (

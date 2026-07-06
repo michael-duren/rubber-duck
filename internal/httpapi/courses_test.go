@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,8 @@ type fakeStore struct {
 	editedBy map[string]*int64 // "slug/lang" -> last UpsertVariant's editedBy
 
 	users map[string]domain.User // token -> user, for UserByToken
+
+	userByTokenErr error // if set, UserByToken fails with it (models the DB being down)
 }
 
 func newFakeStore() *fakeStore {
@@ -38,6 +41,9 @@ func newFakeStore() *fakeStore {
 // internal/auth.HashToken's output — requireKey hashes before calling this,
 // so the fake stores by that same hash to match).
 func (f *fakeStore) UserByToken(_ context.Context, tokenHash []byte) (domain.User, error) {
+	if f.userByTokenErr != nil {
+		return domain.User{}, f.userByTokenErr
+	}
 	u, ok := f.users[string(tokenHash)]
 	if !ok {
 		return domain.User{}, domain.ErrNotFound
@@ -250,6 +256,29 @@ func TestPutVariant(t *testing.T) {
 			t.Errorf("status = %d, want 400", rec.Code)
 		}
 	})
+
+	t.Run("empty markdown is 400", func(t *testing.T) {
+		mux, _ := testAPI(t)
+		rec := put(mux, "/api/v1/courses/x/variants/go", "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+	})
+
+	t.Run("oversized body is 413, not a JSON error", func(t *testing.T) {
+		mux, _ := testAPI(t)
+		rec := put(mux, "/api/v1/courses/x/variants/go", strings.Repeat("a", maxDocumentBytes))
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want 413", rec.Code)
+		}
+		var resp struct {
+			Error struct{ Code string }
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp.Error.Code != "document_too_large" {
+			t.Errorf("error code = %q, want document_too_large", resp.Error.Code)
+		}
+	})
 }
 
 // TestPutVariantUserToken covers issue #42: a human authenticated via a
@@ -350,6 +379,70 @@ func TestPutVariantUserToken(t *testing.T) {
 			t.Errorf("status = %d, want 401", rec.Code)
 		}
 	})
+
+	// Every other subtest hand-builds its token, so this is the one place
+	// that pins auth.NewUserToken's minted prefix to requireKey's dispatch:
+	// if the two drifted, this fails while the hand-built tokens stay green.
+	t.Run("token minted by auth.NewUserToken authenticates as its user", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		token, _ := auth.NewUserToken()
+		fs.addUser(token, domain.User{ID: 7, Username: "minty"})
+
+		rec := putAs(mux, token, nil)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status = %d body %s", rec.Code, rec.Body)
+		}
+		got := fs.editedBy[fs.key("intro-to-concurrency", "go")]
+		if got == nil || *got != 7 {
+			t.Errorf("editedBy = %v, want *7", got)
+		}
+	})
+
+	// The pull half of the duck educator round trip: GET authenticated by a
+	// user token returns the markdown plus the version to round-trip back.
+	t.Run("GET variant source works with a user token", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+		if rec := putAs(mux, "gc_u_alice", nil); rec.Code != http.StatusCreated {
+			t.Fatalf("seed put = %d body %s", rec.Code, rec.Body)
+		}
+
+		rec := doJSONAs(mux, "GET", path, "gc_u_alice", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d body %s", rec.Code, rec.Body)
+		}
+		var got map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &got)
+		if got["markdown"] != doc || got["version"].(float64) != 1 {
+			t.Errorf("got version %v and markdown match %t, want version 1 and matching markdown", got["version"], got["markdown"] == doc)
+		}
+	})
+}
+
+// TestRequireKeyStoreError covers auth-infrastructure failure (as opposed to
+// a bad credential): a store error must surface as a logged 500, not a 401,
+// and must not fall through to agent-key validation.
+func TestRequireKeyStoreError(t *testing.T) {
+	var logBuf bytes.Buffer
+	mux := http.NewServeMux()
+	fs := newFakeStore()
+	fs.userByTokenErr = errors.New("db down")
+	Register(mux, slog.New(slog.NewTextHandler(&logBuf, nil)), fs, fs)
+
+	rec := doJSONAs(mux, "GET", "/api/v1/courses", "gc_u_whatever", nil)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d body %s, want 500", rec.Code, rec.Body)
+	}
+	var resp struct {
+		Error struct{ Code string }
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Error.Code != "internal" {
+		t.Errorf("error code = %q, want internal", resp.Error.Code)
+	}
+	if !strings.Contains(logBuf.String(), "auth check failed") || !strings.Contains(logBuf.String(), "db down") {
+		t.Errorf("log output %q should record the auth failure and its cause", logBuf.String())
+	}
 }
 
 func TestRoundTripAndDelete(t *testing.T) {

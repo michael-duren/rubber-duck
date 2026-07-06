@@ -75,7 +75,8 @@ sandbox — milestone 2 swaps in a stronger isolate (e.g. gVisor) behind the
 
 ## Agent API
 
-All endpoints live under `/api/v1` and require a bearer key minted with
+All endpoints live under `/api/v1` and — except the public challenges
+listing, see the table — require a bearer key minted with
 `getcracked apikey create`, **or** a human's `gc_u_...` user CLI token (same
 one `duck submit`/`duck test` use):
 
@@ -84,10 +85,11 @@ Authorization: Bearer gc_<40 hex>
 Authorization: Bearer gc_u_<40 hex>
 ```
 
-A user token only changes behavior on the variant `PUT` (attribution +
-optional `expected_version`, see below) and `GET` (adds `version`); every
-other endpoint behaves the same regardless of which credential kind authorized
-it.
+The variant `GET` response always includes the variant's `version`,
+whichever credential kind authorized it. A user token only changes behavior
+on the variant `PUT` (attribution + optional `expected_version`, see below);
+every other endpoint behaves the same regardless of which credential kind
+authorized it.
 
 | Method & path | Behavior |
 |---|---|
@@ -98,6 +100,7 @@ it.
 | `DELETE /api/v1/courses/{slug}` | Remove a course and all variants. `204`. |
 | `DELETE /api/v1/courses/{slug}/variants/{language}` | Remove one variant. `204`. |
 | `GET /api/v1/tags` | All known tags. |
+| `GET /api/v1/courses/{slug}/variants/{language}/challenges` | **Public, no auth**: starter and test code for each challenge, used by `duck test` local runs. |
 
 Rules:
 
@@ -306,9 +309,12 @@ round-trips a single course-variant markdown document with the same
 `/api/v1` endpoints the "Agent API" section documents — `pull` to fetch it,
 your own editor to change it, `lint` to validate locally, `push` to publish.
 It needs the same user token as `duck submit` — same login as above, see
-"Local testing with `duck`" — there's no separate author credential; a
-missing or revoked token fails with `unauthorized: token missing or
-revoked`.
+"Local testing with `duck`" — there's no separate author credential. A
+revoked or invalid token fails with `unauthorized: token missing or
+revoked`; with no token configured at all, `duck` fails before any network
+call and tells you how to mint one. (An agent API key in `DUCK_TOKEN` also
+authenticates, but the server then ignores `expected_version` — use your
+personal `gc_u_...` token so stale pushes are caught.)
 
 ```sh
 duck educator pull intro-to-concurrency/go
@@ -338,6 +344,13 @@ This writes two files in the current directory:
   file back to, and sends its `version` as `expected_version` so a stale
   push — the variant changed since this pull — is rejected instead of
   silently overwritten (see below).
+
+Like the learner flow's `duck pull`, `educator pull` defaults to
+`http://localhost:8080`; override with `--base` or `DUCK_BASE_URL` — the
+resolved base is recorded in the sidecar so `push` targets the same server.
+And it protects local work the same way `push` protects the server's: if the
+markdown file already exists with different content (say, unpushed edits),
+`pull` refuses to overwrite it unless you pass `--force`.
 
 Now edit `intro-to-concurrency-go.md` directly with your own editor. It's a
 plain markdown file in the format described in "Course document format"
@@ -386,14 +399,15 @@ editor — changed the variant since this file was pulled, the push is
 rejected with `409 version_conflict` and `duck` prints:
 
 ```
-duck: someone else changed this course variant since you last pulled it — run `duck educator pull` again before pushing
+duck: someone else changed this course variant since you last pulled it — save your edits elsewhere, run `duck educator pull --force` to fetch the latest version, then reapply them and push again
 ```
 
 The fix is to re-pull (fetching the latest markdown and version) and
-reapply your edits, not to force an overwrite — `duck educator` has no
-`--force`/overwrite flag, by design. A `422` from the server (rare, since
-`push` already ran the same validation locally) prints line-numbered
-problems the same way `lint` does.
+reapply your edits — `--force` is needed there precisely because a plain
+`pull` refuses to overwrite the locally edited file. `push` itself has no
+force/overwrite flag, by design: the server-side conflict can't be
+bypassed. A `422` from the server (rare, since `push` already ran the same
+validation locally) prints line-numbered problems the same way `lint` does.
 
 This is the same `UpsertVariant` / optimistic-concurrency path as the Agent
 API's `PUT` (see "Agent API" above) and the browser editor (see "Editing

@@ -48,7 +48,7 @@ func Register(mux *http.ServeMux, logger *slog.Logger, keys KeyStore, store Cour
 	api.HandleFunc("GET /api/v1/courses", h.listCourses)
 	api.HandleFunc("GET /api/v1/tags", h.listTags)
 
-	mux.Handle("/api/v1/", requireKey(keys, api))
+	mux.Handle("/api/v1/", requireKey(logger, keys, api))
 
 	// Public: challenge prompts and tests aren't secret on a learning
 	// platform, and local test runs need them without a bearer key.

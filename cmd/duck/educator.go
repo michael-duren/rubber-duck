@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +19,9 @@ import (
 // educatorCmd dispatches `duck educator`/`duck ed` subcommands. Unlike
 // `duck pull`/`test`/`submit` (the learner flow, scaffolding one directory
 // per challenge), this family round-trips a single course-variant markdown
-// document with the author-facing /api/v1 endpoints added in issue #42 —
-// same bearer-token auth as `duck submit` (loadToken), no separate "author"
+// document with the /api/v1 variant endpoints, which issue #42 made
+// author-usable (gc_u_ user-token auth + optimistic concurrency) — same
+// bearer-token auth as `duck submit` (loadToken), no separate "author"
 // credential.
 func educatorCmd(args []string) error {
 	if len(args) == 0 {
@@ -74,6 +76,13 @@ func readEducatorMeta(mdPath string) (educatorMeta, error) {
 	var m educatorMeta
 	if err := json.Unmarshal(b, &m); err != nil {
 		return educatorMeta{}, fmt.Errorf("parse %s%s: %w", mdPath, educatorMetaSuffix, err)
+	}
+	// The sidecar is a user-editable file: catch a hand-edited or truncated
+	// one here, where the bad data enters, rather than failing later with an
+	// opaque HTTP error against a malformed URL. Version needs no check — a
+	// bogus 0 already yields a clean version conflict.
+	if m.BaseURL == "" || m.Course == "" || m.Language == "" {
+		return educatorMeta{}, fmt.Errorf("sidecar %s%s is missing base_url/course/language — re-run `duck educator pull`", mdPath, educatorMetaSuffix)
 	}
 	return m, nil
 }
@@ -146,7 +155,13 @@ func lintSource(src []byte) []lintProblem {
 func printProblems(path string, probs []lintProblem) {
 	fmt.Printf("%s: %d problem(s) found\n", path, len(probs))
 	for _, p := range probs {
-		fmt.Printf("  line %d: %s\n", p.Line, p.Message)
+		if p.Line > 0 {
+			fmt.Printf("  line %d: %s\n", p.Line, p.Message)
+		} else {
+			// Document-level problems (and the server's omitempty line field)
+			// carry no line number; "line 0" would point nowhere.
+			fmt.Printf("  %s\n", p.Message)
+		}
 	}
 }
 
@@ -156,12 +171,13 @@ func printProblems(path string, probs []lintProblem) {
 func educatorPullCmd(args []string) error {
 	fs := flag.NewFlagSet("educator pull", flag.ContinueOnError)
 	base := fs.String("base", envOr("DUCK_BASE_URL", "http://localhost:8080"), "server base URL")
+	force := fs.Bool("force", false, "overwrite a local file whose content differs from the server's")
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: duck educator pull <course>/<language> [--base URL]")
+		return fmt.Errorf("usage: duck educator pull <course>/<language> [--base URL] [--force]")
 	}
 	course, language, ok := strings.Cut(rest[0], "/")
 	if !ok || course == "" || language == "" {
@@ -174,7 +190,7 @@ func educatorPullCmd(args []string) error {
 	}
 
 	baseURL := strings.TrimRight(*base, "/")
-	getURL := baseURL + "/api/v1/courses/" + course + "/variants/" + language
+	getURL := baseURL + "/api/v1/courses/" + url.PathEscape(course) + "/variants/" + url.PathEscape(language)
 	req, err := http.NewRequest(http.MethodGet, getURL, nil)
 	if err != nil {
 		return err
@@ -203,13 +219,26 @@ func educatorPullCmd(args []string) error {
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return fmt.Errorf("parse response: %w", err)
 	}
+	// Zero values here mean a response without those keys (e.g. a server
+	// older than this CLI whose GET is markdown-only). Silently accepting
+	// them would write an empty file and a version-0 sidecar whose every
+	// future push reports a bogus conflict.
+	if payload.Markdown == "" || payload.Version < 1 {
+		return fmt.Errorf("server response is missing markdown or version — the server may be older than this duck CLI")
+	}
 
 	mdPath := course + "-" + language + ".md"
+	// Never silently eat local edits: a differing existing file may hold
+	// unpushed work (the exact situation a version-conflicted push sends
+	// people here from).
+	if existing, err := os.ReadFile(mdPath); err == nil && string(existing) != payload.Markdown && !*force {
+		return fmt.Errorf("%s already exists and differs from the server copy — refusing to overwrite it; save your local edits elsewhere, then re-run with --force", mdPath)
+	}
 	if err := os.WriteFile(mdPath, []byte(payload.Markdown), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", mdPath, err)
 	}
 	if err := writeEducatorMeta(mdPath, educatorMeta{
-		BaseURL: *base, Course: course, Language: language, Version: payload.Version,
+		BaseURL: baseURL, Course: course, Language: language, Version: payload.Version,
 	}); err != nil {
 		return fmt.Errorf("write sidecar: %w", err)
 	}
@@ -267,7 +296,7 @@ func educatorPushCmd(args []string) error {
 	}
 
 	baseURL := strings.TrimRight(meta.BaseURL, "/")
-	putURL := baseURL + "/api/v1/courses/" + meta.Course + "/variants/" + meta.Language
+	putURL := baseURL + "/api/v1/courses/" + url.PathEscape(meta.Course) + "/variants/" + url.PathEscape(meta.Language)
 	req, err := http.NewRequest(http.MethodPut, putURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return err
@@ -299,7 +328,16 @@ func educatorPushCmd(args []string) error {
 	if resp.StatusCode == http.StatusConflict {
 		_ = json.Unmarshal(body, &errResp)
 		if errResp.Error.Code == "version_conflict" {
-			return fmt.Errorf("someone else changed this course variant since you last pulled it — run `duck educator pull` again before pushing")
+			// Careful with this wording: plain `duck educator pull` would
+			// overwrite exactly the edits the user is trying to push, so
+			// tell them to save those edits first (pull refuses to clobber
+			// a differing file without --force, as a backstop).
+			return fmt.Errorf("someone else changed this course variant since you last pulled it — save your edits elsewhere, run `duck educator pull --force` to fetch the latest version, then reapply them and push again")
+		}
+		if errResp.Error.Message != "" {
+			// e.g. slug_mismatch when frontmatter was edited to disagree
+			// with the sidecar — the server's message is human-readable.
+			return fmt.Errorf("push: %s: %s", resp.Status, errResp.Error.Message)
 		}
 		return fmt.Errorf("push: server said %s: %s", resp.Status, body)
 	}
@@ -314,6 +352,10 @@ func educatorPushCmd(args []string) error {
 		return fmt.Errorf("push: server said %s: %s", resp.Status, body)
 	}
 
+	// Past this point the server has committed the write, so a failure is
+	// local bookkeeping only — say so explicitly, or the next push's stale
+	// expected_version turns it into a phantom "someone else changed this"
+	// conflict with no hint of the real cause.
 	var summary struct {
 		Version     int `json:"version"`
 		Lessons     int `json:"lessons"`
@@ -321,12 +363,12 @@ func educatorPushCmd(args []string) error {
 		TotalPoints int `json:"total_points"`
 	}
 	if err := json.Unmarshal(body, &summary); err != nil {
-		return fmt.Errorf("parse response: %w", err)
+		return fmt.Errorf("push succeeded on the server, but parsing its response failed: %w — run `duck educator pull` to resync the sidecar", err)
 	}
 
 	meta.Version = summary.Version
 	if err := writeEducatorMeta(mdPath, meta); err != nil {
-		return fmt.Errorf("update sidecar: %w", err)
+		return fmt.Errorf("push succeeded on the server (now version %d), but updating the local sidecar failed: %w — run `duck educator pull` to resync", summary.Version, err)
 	}
 
 	fmt.Printf("pushed %s — version %d (%d lessons, %d challenges, %d pts)\n",
