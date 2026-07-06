@@ -811,17 +811,22 @@ S1–S5. In (a), S1 — leader in term 2 — appends an entry at index 2 but
 replicates it to only one other server (S2) before crashing: a *minority*.
 In (b), S5 wins the next election (term 3, with votes from S3, S4, and
 itself) and writes a *different* entry at index 2. S5 crashes too; in (c),
-S1 restarts, wins election again as leader of term 4, and resumes normal
-replication. As a side effect of replicating its own term-4 entries, S1's
-old term-2 entry at index 2 now happens to sit on a majority of the cluster
-(S1, S2, and S3) — but nobody ever committed it. May a leader now count
-those replicas and consider index 2 committed? **No.** In (d), S5 — whose
-log still ends in the higher term 3, so it looks "up-to-date" by §5.4.1 even
-though it is missing S1's index-2 entry entirely — wins a later election
-from S2, S3, and S4, and overwrites index 2 with its own term-3 entry. If
-counting replicas had been enough to call index 2 committed back in (c),
-this would be a lost write: the one unforgivable sin of a consensus
-algorithm.
+S1 restarts and wins election again, this time as leader of term 4 — but it
+has not accepted any new client command yet, so its log still ends at
+index 2 with the same old term-2 entry. Coming to power, S1 just resumes
+normal replication (§5.3): retrying AppendEntries against S3 until the
+consistency check passes backfills that same old, already-existing entry
+onto S3 too. Nobody asked for that specifically; it falls out of the
+ordinary log-repair mechanism a new leader always runs. Now S1's old
+term-2 entry at index 2 sits on a majority of the cluster (S1, S2, and S3)
+— but nobody ever committed it. May a leader now count those replicas and
+consider index 2 committed? **No.** In (d), S5 — whose log still ends in
+term 3, higher than S1/S2/S3's term-2 last entry, so it looks "up-to-date"
+by §5.4.1 even though it is missing S1's index-2 entry entirely — wins a
+later election from S2, S3, and S4, and overwrites index 2 with its own
+term-3 entry. If counting replicas had been enough to call index 2
+committed back in (c), this would be a lost write: the one unforgivable
+sin of a consensus algorithm.
 
 The fix: a leader only ever commits by counting replicas for entries **from its
 own current term**. Old-term entries are never committed directly. They get
