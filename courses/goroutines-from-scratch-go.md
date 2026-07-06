@@ -238,9 +238,11 @@ The runtime's answer is a pair of functions you'll see all over `proc.go`:
   never stopped: after `gopark` it immediately picked up another runnable G.
 
 `sync.Mutex` is a consumer of this machinery: its fast path is a single
-atomic CAS in userspace, and only the contended slow path calls into the
-runtime semaphore (`semacquire`/`semrelease`), which is a futex-style
-"sleep until someone releases" built on gopark/goready.
+atomic CAS (compare-and-swap: "if the value is still what I last saw, swap
+in the new one — atomically, in one CPU instruction, no lock needed") in
+userspace, and only the contended slow path calls into the runtime
+semaphore (`semacquire`/`semrelease`), which is a futex-style "sleep until
+someone releases" built on gopark/goready.
 
 You can't call `gopark` from user code — but you don't need to, because
 **a channel operation is a gopark/goready pair in a trench coat**. A blocked
@@ -898,9 +900,12 @@ that scale:
 **Distributed queues + work stealing.** A single shared run queue would mean
 every M fighting over one lock (this was, roughly, the pre-Go-1.1 scheduler,
 and it was a bottleneck). Instead each P has its own lock-free ring, and an
-M that runs dry goes hunting in `findRunnable`: global queue, netpoll, then
-up to four rounds of picking random victim Ps and **stealing half** their
-run queue. Stealing half amortizes: one steal buys a while of quiet.
+M that runs dry goes hunting in `findRunnable`: global queue, **netpoll**
+(a non-blocking check of the OS's readiness notifier — epoll on Linux,
+kqueue on BSD/macOS — for goroutines that were parked waiting on a network
+connection and have since become ready), then up to four rounds of picking
+random victim Ps and **stealing half** their run queue. Stealing half
+amortizes: one steal buys a while of quiet.
 
 Emptying your run queue shouldn't mean parking the thread immediately — new
 work might land a microsecond later, and unparking a thread is far more
