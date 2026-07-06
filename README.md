@@ -356,3 +356,5 @@ make deploy PROJECT=<project-id>    # builds, pushes (tag = git SHA), tofu apply
 
 Cloud Run only rolls a new revision when the image *string* changes, so
 deploys use a unique tag per commit rather than `latest`.
+
+TMP_URL: https://gc-app-55059163933.us-central1.run.app/
