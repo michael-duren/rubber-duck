@@ -1,6 +1,7 @@
-// Command duck is the local-testing companion CLI: pull a course's
-// challenges, run tests with your own toolchain (no Docker), and submit
-// solutions to the server for a graded score.
+// Command duck is the local companion CLI. Learners pull a course's
+// challenges, run tests with their own toolchain (no Docker), and submit
+// solutions to the server for a graded score; authors round-trip a course
+// variant's markdown with `duck educator pull/lint/push`.
 package main
 
 import (
@@ -33,12 +34,14 @@ func run(args []string) error {
 		return loginCmd(args[1:])
 	case "version":
 		return versionCmd(args[1:])
+	case "educator", "ed":
+		return educatorCmd(args[1:])
 	default:
 		return errUsageError
 	}
 }
 
-var errUsageError = errors.New("usage: duck <pull|test|submit|login|version> [args]")
+var errUsageError = errors.New("usage: duck <pull|test|submit|login|version|educator (ed)> [args]")
 
 // parseInterleaved parses fs accepting flags before AND after positional
 // arguments (`duck pull intro-to-go/go --base URL`), which stdlib flag

@@ -17,9 +17,11 @@ import (
 // user made the change, if any; nil means the write is agent-authored
 // (e.g. the /api/v1 markdown-publish path). Returns the new version.
 //
-// expectedVersion implements optimistic concurrency for the web editor: nil
-// means "don't check" (agent-API publishes and any other unversioned write
-// path); non-nil means the write must be rejected — atomically, without a
+// expectedVersion implements optimistic concurrency for human-driven writes
+// (the web editor, and the agent API's user-token PUT that backs `duck
+// educator push`): nil means "don't check" (agent-key publishes and any
+// other unversioned write path); non-nil means the write must be rejected —
+// atomically, without a
 // separate read-then-write race — if the variant's stored version has moved
 // on since the caller loaded it. The version check happens as part of the
 // variant UPSERT's own WHERE clause (UPDATE ... WHERE version = expected,

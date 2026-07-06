@@ -71,45 +71,64 @@ jobs:
           GC_API_KEY: ${{ secrets.GC_API_KEY }}
         run: make publish GC_URL="$(tofu -chdir=infra output -raw service_url)"
 
-  # Publish the duck CLI as prebuilt binaries on a GitHub Release. Runs
-  # after deploy (not just test) so the binaries under releases/latest
+  # Tag the deployed commit so goreleaser has a release tag to build from.
+  # Runs after deploy (not just test) so the binaries under releases/latest
   # always match the server version actually running in prod — the web
   # UI's /cli page links here.
-  release-cli:
+  #
+  # Plain semver tags (not e.g. duck-v0.1.N) on purpose: the Go toolchain
+  # only recognizes vX.Y.Z, so this is what makes
+  # `go install .../cmd/duck@latest` resolve to the tagged release commit,
+  # and `duck version` report the same tag for go-installed builds (via
+  # ReadBuildInfo) as for the goreleaser-stamped binaries.
+  #
+  # goreleaser runs in this workflow (not a separate on-tag one) because
+  # tags pushed with GITHUB_TOKEN don't trigger other workflows.
+  tag:
     needs: deploy
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Create and push release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v0.1.${{ github.run_number }}"
+          git push origin "v0.1.${{ github.run_number }}"
 
-      - uses: actions/setup-go@v5
+  # Publish the duck CLI: GitHub Release with raw binaries (named as the
+  # /cli page's curl instructions expect) + archives, and push the
+  # Homebrew cask to michael-duren/homebrew-tap. See .goreleaser.yaml.
+  goreleaser:
+    name: "Release"
+    needs:
+      - test
+      - tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
         with:
-          go-version: "1.26.4"
-
-      # Plain semver tags (not e.g. duck-v0.1.N) on purpose: the Go
-      # toolchain only recognizes vX.Y.Z, so this is what makes
-      # `go install .../cmd/duck@latest` resolve to the tagged release
-      # commit, and `duck version` report the same tag for go-installed
-      # builds (via ReadBuildInfo) as for the stamped binaries below.
-      - name: Cross-compile duck
-        run: |
-          echo "DUCK_TAG=v0.1.${{ github.run_number }}" >> "$GITHUB_ENV"
-          mkdir -p dist
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
-            goos="${target%/*}" goarch="${target#*/}"
-            ext=""; [ "$goos" = windows ] && ext=".exe"
-            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-              go build -trimpath \
-              -ldflags "-s -w -X main.version=v0.1.${{ github.run_number }}" \
-              -o "dist/duck-$goos-$goarch$ext" ./cmd/duck
-          done
-
-      - name: Create release
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$DUCK_TAG" dist/* \
-            --latest \
-            --title "duck $DUCK_TAG" \
-            --notes "duck CLI built from ${GITHUB_SHA::7}. Install: \`go install github.com/michael-duren/rubber-duck/cmd/duck@$DUCK_TAG\`, or download the binary for your platform, chmod +x, put it on your PATH. See /cli on the site for full instructions."
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
