@@ -7,3 +7,5 @@ infra/*.tfstate
 infra/*.tfstate.backup
 infra/*.tfvars
 issues/
+# Added by goreleaser init:
+dist/
