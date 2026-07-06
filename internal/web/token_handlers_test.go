@@ -129,7 +129,7 @@ func TestSubmitBySlugWithClaimedVerdict(t *testing.T) {
 	fs.variantSlug = "intro-to-concurrency"
 
 	token, hash := auth.NewUserToken()
-	fs.CreateUserToken(context.Background(), 1, "cli", hash)
+	_, _ = fs.CreateUserToken(context.Background(), 1, "cli", hash)
 
 	// 3 of 4 leaf tests passed locally: proportional credit, round(10*3/4)=8.
 	out := "--- PASS: TestA\n--- PASS: TestB\n--- PASS: TestC\n--- FAIL: TestD\n"
