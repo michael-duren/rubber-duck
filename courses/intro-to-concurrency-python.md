@@ -12,7 +12,7 @@ extended_reading:
     url: https://docs.python.org/3/library/queue.html
 ---
 
-# Lesson: Goroutines Basics {#goroutines-basics}
+# Lesson: Threads Basics {#goroutines-basics}
 
 A `threading.Thread` is an OS-backed thread managed by the Python runtime.
 The GIL means threads don't run Python bytecode in true parallel, but they do
@@ -29,9 +29,14 @@ threading.Thread(target=worker).start()
 ```
 
 `Thread.start()` begins running `target` in a new thread and returns
-immediately. The program doesn't wait for background threads to finish on
-its own — call `.join()` on a thread to block until it completes, which is
-why synchronization matters.
+immediately — the calling thread keeps going without waiting. Python's
+default (non-daemon) threads do keep the process alive until they finish,
+even if you never call `.join()`, but that isn't the same as your own code
+knowing when a thread is done. Call `.join()` on a thread to block until it
+completes, which is how you safely use a value a thread produced — the
+`sum_nums` challenge below needs both halves' sums before it can add them,
+so it must join both threads first. (A thread started with `daemon=True`
+is the exception: the process kills it outright on exit, unjoined.)
 
 ## Challenge: Run Work Concurrently {#concurrent-sum points=10}
 
