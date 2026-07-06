@@ -4,22 +4,143 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
+// slugPattern matches the lowercase-kebab-case course slugs used throughout
+// the system (courses/*.md file names, agent API paths, URLs here) — the
+// "New course" form checks a submitted slug against it before ever handing
+// it to ingest.Parse, so a bad slug gets a clear message instead of turning
+// into a confusing frontmatter validation error later.
+var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// newCourseLanguages are the languages offered by the "New course" form's
+// language <select> — the three toolchains dockergrader/cloudrungrader
+// actually support (internal/grader) and README documents as the allowed
+// `language:` frontmatter values.
+var newCourseLanguages = []string{"go", "python", "c"}
+
+// newCoursePage renders the small entry-point form for starting a brand-new
+// course or adding a new language variant to an existing one (issue #38).
+// It's reached two ways: empty, from the catalog's "+ New course" button,
+// or pre-filled via slug/title/description query params, from an existing
+// course page's "+ Add language variant" link — either way this form only
+// asks for enough to seed a frontmatter template, not the full document.
+func (h *handlers) newCoursePage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	h.render(w, r, views.NewCourse(currentUser(r), q.Get("slug"), q.Get("title"), q.Get("language"), q.Get("description"), newCourseLanguages, ""))
+}
+
+// createCourse validates the "New course" form and, on success, redirects
+// into the same raw-markdown editor used to edit an existing variant
+// (editVariantPage/saveVariant) rather than creating anything itself: the
+// redirect's new=1 query param tells editVariantPage to seed a template
+// instead of 404ing for this not-yet-existing slug/language, and the first
+// Save on that page is what actually persists a course/variant row, via the
+// ordinary saveVariant path — no separate creation code needed there.
+func (h *handlers) createCourse(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	title := strings.TrimSpace(r.FormValue("title"))
+	language := strings.TrimSpace(r.FormValue("language"))
+	description := strings.TrimSpace(r.FormValue("description"))
+
+	var errMsg string
+	switch {
+	case slug == "" || title == "" || language == "":
+		errMsg = "Slug, title, and language are all required."
+	case !slugPattern.MatchString(slug):
+		errMsg = "Slug must be lowercase letters, numbers, and hyphens only (e.g. intro-to-concurrency)."
+	case !slices.Contains(newCourseLanguages, language):
+		errMsg = "Language must be one of: " + strings.Join(newCourseLanguages, ", ") + "."
+	}
+	if errMsg != "" {
+		h.render(w, r, views.NewCourse(currentUser(r), slug, title, language, description, newCourseLanguages, errMsg))
+		return
+	}
+
+	q := url.Values{"new": {"1"}, "title": {title}, "description": {description}}
+	http.Redirect(w, r, fmt.Sprintf("/courses/%s/%s/edit?%s", slug, language, q.Encode()), http.StatusSeeOther)
+}
+
+// newVariantTemplate builds the minimal valid course document (issue #38)
+// used to pre-fill the editor for a slug/language that doesn't exist yet:
+// required frontmatter (README "Course document format"), one lesson, and
+// one final challenge with Starter/Tests blocks — ingest.Parse requires at
+// least those to validate a document, so this passes as-is or with the
+// TODOs filled in, never a validation error on an unedited first save.
+func newVariantTemplate(slug, language, title, description string) string {
+	if title == "" {
+		title = slug
+	}
+	if description == "" {
+		description = "TODO: one-paragraph pitch."
+	}
+	starter, tests := seedCodeStubs(language)
+	return "---\n" +
+		"course: " + slug + "\n" +
+		"title: " + title + "\n" +
+		"language: " + language + "\n" +
+		"description: " + description + "\n" +
+		"---\n\n" +
+		"# Lesson: Getting Started {#getting-started}\n\n" +
+		"TODO: write this lesson's content.\n\n" +
+		"# Final Challenge: TODO {#todo points=10}\n\n" +
+		"TODO: describe the challenge.\n\n" +
+		"### Starter\n\n" +
+		"```" + language + "\n" + starter + "```\n\n" +
+		"### Tests\n\n" +
+		"```" + language + "\n" + tests + "```\n"
+}
+
+// seedCodeStubs returns placeholder Starter/Tests code for the given
+// language, matching each toolchain's expected shape (README "Course
+// document format") closely enough to be a sane starting point, not a
+// working solution — the point is a template that validates, not one that
+// grades.
+func seedCodeStubs(language string) (starter, tests string) {
+	switch language {
+	case "go":
+		return "package challenge\n\n// TODO: starter code\n", "package challenge\n\n// TODO: tests\n"
+	case "python":
+		return "# TODO: starter code\n", "# TODO: tests\nfrom solution import example\n"
+	case "c":
+		return "// TODO: starter code\n", "// TODO: tests\nint main(void) {\n\treturn 0;\n}\n"
+	default:
+		return "TODO: starter code\n", "TODO: tests\n"
+	}
+}
+
 // editVariantPage renders the raw markdown for a course variant in an
 // editable textarea. Reuses store.VariantSource, the same lookup the agent
 // API's GET /courses/{slug}/variants/{language} uses to round-trip a
 // document. The version it was loaded at rides along in a hidden form field
 // (see views.EditVariant) so saveVariant can detect a concurrent edit.
+//
+// A missing variant is a 404, same as before issue #38, UNLESS new=1 is
+// present in the query string: that only arrives via createCourse's
+// redirect, so it means the user deliberately started this slug/language
+// through the "New course" form, and the page should seed a template
+// instead of 404ing. Without new=1, a mistyped/nonexistent URL still 404s —
+// organic navigation to a bad slug/lang must not silently become a "create"
+// page.
 func (h *handlers) editVariantPage(w http.ResponseWriter, r *http.Request) {
 	slug, lang := r.PathValue("slug"), r.PathValue("lang")
 	src, version, err := h.courses.VariantSource(r.Context(), slug, lang)
 	if errors.Is(err, domain.ErrNotFound) {
+		if r.URL.Query().Get("new") == "1" {
+			q := r.URL.Query()
+			tmpl := newVariantTemplate(slug, lang, q.Get("title"), q.Get("description"))
+			h.render(w, r, views.EditVariant(currentUser(r), slug, lang, tmpl, 0, "", nil, 0))
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}

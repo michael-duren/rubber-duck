@@ -32,6 +32,8 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("GET /about", h.aboutPage)
 	pages.HandleFunc("GET /cli", h.cliPage)
 	pages.HandleFunc("GET /tokens", h.tokensPage)
+	pages.HandleFunc("GET /courses/new", h.requireUser(h.newCoursePage))
+	pages.HandleFunc("POST /courses/new", h.requireUser(h.createCourse))
 	pages.HandleFunc("GET /courses/{slug}", h.coursePage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}", h.variantPage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}/edit", h.requireUser(h.editVariantPage))

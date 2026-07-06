@@ -8,8 +8,15 @@ import (
 
 templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLangs []string, activeTag, activeLang string) {
 	@Layout("Courses", user) {
-		<h1 class="text-3xl font-bold">Courses</h1>
-		<p class="mt-1 text-slate-600 dark:text-slate-400">Pick a course, work the challenges, collect the points.</p>
+		<div class="flex flex-wrap items-start justify-between gap-3">
+			<div>
+				<h1 class="text-3xl font-bold">Courses</h1>
+				<p class="mt-1 text-slate-600 dark:text-slate-400">Pick a course, work the challenges, collect the points.</p>
+			</div>
+			if user != nil {
+				<a href="/courses/new" class="rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ New course</a>
+			}
+		</div>
 		if len(allTags) > 0 || len(allLangs) > 0 {
 			<div class="mt-6 flex flex-wrap items-center gap-2">
 				@filterChip("all", "/", activeTag == "" && activeLang == "")

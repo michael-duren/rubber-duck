@@ -165,6 +165,203 @@ func TestSaveVariantSuccessRedirectsAndAttributesEditor(t *testing.T) {
 	}
 }
 
+// --- issue #38: creating a brand-new course / language variant ---
+
+// TestNewCoursePageRequiresAuth mirrors TestEditVariantPageRequiresAuth: the
+// entry-point form is behind h.requireUser same as the editor it feeds.
+func TestNewCoursePageRequiresAuth(t *testing.T) {
+	mux, _ := testMux(t)
+	req := httptest.NewRequest("GET", "/courses/new", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("anonymous GET /courses/new = %d, want 303 redirect to /login", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/login" {
+		t.Errorf("Location = %q, want /login", loc)
+	}
+}
+
+// TestNewCoursePageRenders covers the plain, un-prefilled form (the
+// catalog's "+ New course" link) and the pre-filled variant (an existing
+// course's "+ Add language variant" link, which arrives with slug/title in
+// the query string).
+func TestNewCoursePageRenders(t *testing.T) {
+	mux, _ := testMux(t)
+	session := loginAlice(t, mux)
+
+	req := httptest.NewRequest("GET", "/courses/new", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /courses/new = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`name="slug"`, `name="title"`, `name="language"`, `name="description"`, `action="/courses/new"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected form to contain %q, got: %s", want, body)
+		}
+	}
+
+	req = httptest.NewRequest("GET", "/courses/new?slug=intro-to-concurrency&title=Introduction+to+Concurrency&description=A+pitch", nil)
+	req.AddCookie(session)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /courses/new (prefilled) = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body = rec.Body.String()
+	for _, want := range []string{"intro-to-concurrency", "Introduction to Concurrency", "A pitch"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected prefilled form to contain %q, got: %s", want, body)
+		}
+	}
+}
+
+// TestCreateCourseValidation covers createCourse rejecting a bad submit
+// (missing fields, an invalid slug, an unsupported language) by re-rendering
+// the form with an error rather than redirecting into the editor.
+func TestCreateCourseValidation(t *testing.T) {
+	cases := []struct {
+		name           string
+		form           url.Values
+		wantErrsnippet string
+	}{
+		{"missing slug", url.Values{"title": {"T"}, "language": {"go"}}, "required"},
+		{"missing title", url.Values{"slug": {"my-course"}, "language": {"go"}}, "required"},
+		{"missing language", url.Values{"slug": {"my-course"}, "title": {"T"}}, "required"},
+		{"bad slug", url.Values{"slug": {"My Course!"}, "title": {"T"}, "language": {"go"}}, "lowercase"},
+		{"bad language", url.Values{"slug": {"my-course"}, "title": {"T"}, "language": {"rust"}}, "must be one of"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mux, _ := testMux(t)
+			session := loginAlice(t, mux)
+			rec := postForm(mux, "/courses/new", c.form, session)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("POST /courses/new = %d, want 200 (re-render): %s", rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), c.wantErrsnippet) {
+				t.Errorf("expected error containing %q, got: %s", c.wantErrsnippet, rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestCreateCourseRedirectsIntoEditor is the success path: a valid submit
+// redirects (303) into the editor at the entered slug/language, with new=1
+// so editVariantPage seeds a template instead of 404ing.
+func TestCreateCourseRedirectsIntoEditor(t *testing.T) {
+	mux, _ := testMux(t)
+	session := loginAlice(t, mux)
+
+	rec := postForm(mux, "/courses/new",
+		url.Values{"slug": {"brand-new-course"}, "title": {"Brand New Course"}, "language": {"go"}, "description": {"A pitch."}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /courses/new = %d, want 303: %s", rec.Code, rec.Body)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/courses/brand-new-course/go/edit?") {
+		t.Fatalf("Location = %q, want /courses/brand-new-course/go/edit?...", loc)
+	}
+	u, err := url.Parse(loc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	if q.Get("new") != "1" {
+		t.Errorf("redirect query missing new=1: %q", loc)
+	}
+	if q.Get("title") != "Brand New Course" || q.Get("description") != "A pitch." {
+		t.Errorf("redirect query should carry title/description through, got: %q", loc)
+	}
+}
+
+// TestEditVariantPageNewSeedsTemplate covers editVariantPage's new=1 branch:
+// a nonexistent slug/lang, reached with new=1 (as createCourse's redirect
+// does), renders a seeded template instead of 404ing.
+func TestEditVariantPageNewSeedsTemplate(t *testing.T) {
+	mux, _ := testMux(t)
+	session := loginAlice(t, mux)
+
+	req := httptest.NewRequest("GET", "/courses/brand-new-course/go/edit?new=1&title=Brand+New+Course&description=A+pitch.", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET .../edit?new=1 for missing variant = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"course: brand-new-course", "title: Brand New Course", "language: go", "description: A pitch.", "# Lesson:", "# Final Challenge:"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected seeded template to contain %q, got: %s", want, body)
+		}
+	}
+}
+
+// TestEditVariantPageWithoutNewStill404s is the regression guard called out
+// by issue #38: without new=1, a nonexistent slug/lang must still 404 —
+// don't let every mistyped URL become an accidental "create" page.
+func TestEditVariantPageWithoutNewStill404s(t *testing.T) {
+	mux, _ := testMux(t)
+	session := loginAlice(t, mux)
+
+	req := httptest.NewRequest("GET", "/courses/brand-new-course/go/edit", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET .../edit (no new=1) for missing variant = %d, want 404", rec.Code)
+	}
+}
+
+// TestSaveVariantCreatesNewCourseNoFriction is the end-to-end check of
+// issue #38's core claim: saving the seeded template as-is creates the
+// course + variant via the ordinary saveVariant path, with no version
+// conflict and no destructive-republish confirmation (there's nothing to
+// conflict with or overwrite yet).
+func TestSaveVariantCreatesNewCourseNoFriction(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	tmpl := newVariantTemplate("brand-new-course", "go", "Brand New Course", "A pitch.")
+	rec := postForm(mux, "/courses/brand-new-course/go/edit",
+		url.Values{"markdown": {tmpl}, "version": {"0"}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST seeded template = %d, want 303 (saved): %s", rec.Code, rec.Body)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/courses/brand-new-course/go" {
+		t.Errorf("Location = %q, want /courses/brand-new-course/go", loc)
+	}
+	if len(fs.upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	}
+	call := fs.upserts[0]
+	if call.Course.Slug != "brand-new-course" || call.Variant.Language != "go" {
+		t.Errorf("upserted course/variant = %+v / %+v", call.Course, call.Variant)
+	}
+}
+
+// TestSaveVariantCreatesNewCourseWithMinimalEdits is the same flow, but with
+// the TODO placeholders filled in first — the point of the seeded template
+// is that it's a starting point, not necessarily the final document.
+func TestSaveVariantCreatesNewCourseWithMinimalEdits(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	tmpl := newVariantTemplate("brand-new-course", "python", "Brand New Course", "A pitch.")
+	edited := strings.Replace(tmpl, "TODO: write this lesson's content.", "Here's the real lesson content.", 1)
+	rec := postForm(mux, "/courses/brand-new-course/python/edit",
+		url.Values{"markdown": {edited}, "version": {"0"}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST edited seeded template = %d, want 303 (saved): %s", rec.Code, rec.Body)
+	}
+	if len(fs.upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	}
+}
+
 // fakeVariantGo is a minimal domain.Variant satisfying fakeStore's
 // VariantDetail/VariantSource slug+language matching for the "go" variant of
 // intro-to-concurrency; only Language is consulted by the fake.

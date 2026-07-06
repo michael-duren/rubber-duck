@@ -1,0 +1,87 @@
+package views
+
+import (
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// NewCourse is the small entry-point form for starting a brand-new course or
+// adding a new language variant to an existing one (issue #38). It doesn't
+// create anything itself: submitting redirects into the same raw-markdown
+// editor (EditVariant) used to edit an existing variant, seeded with a
+// minimal frontmatter template — the first Save there is what actually
+// persists a course/variant row, via the ordinary save path.
+//
+// slug/title/description arrive pre-filled two ways: empty, for the
+// catalog's "+ New course" link, or carrying an existing course's slug/
+// title/description, for that course's page's "+ Add language variant"
+// link (in which case only language is really left for the user to pick,
+// though every field stays editable — nothing is destructive until Save on
+// the editor page).
+templ NewCourse(user *domain.User, slug, title, language, description string, languages []string, errMsg string) {
+	@Layout("New course", user) {
+		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / new
+		</nav>
+		<h1 class="mt-4 text-2xl font-bold">New course or language variant</h1>
+		<p class="mt-1 text-slate-600 dark:text-slate-400">
+			This just seeds a starter document in the editor — nothing is saved until you save it there.
+		</p>
+		if errMsg != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		<form method="post" action="/courses/new" class="mt-6 flex max-w-md flex-col gap-4">
+			@csrfField()
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Course slug
+				<input
+					type="text"
+					name="slug"
+					required
+					pattern="[a-z0-9]+(-[a-z0-9]+)*"
+					value={ slug }
+					placeholder="intro-to-concurrency"
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Title
+				<input
+					type="text"
+					name="title"
+					required
+					value={ title }
+					placeholder="Introduction to Concurrency"
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Language
+				<select
+					name="language"
+					required
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+				>
+					<option value="">Select a language…</option>
+					for _, l := range languages {
+						if l == language {
+							<option value={ l } selected>{ l }</option>
+						} else {
+							<option value={ l }>{ l }</option>
+						}
+					}
+				</select>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Description
+				<input
+					type="text"
+					name="description"
+					value={ description }
+					placeholder="One-paragraph pitch."
+					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Continue to editor</button>
+		</form>
+	}
+}
