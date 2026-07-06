@@ -76,6 +76,29 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 		}
 	}
 
+	// The WHERE clause on the DO UPDATE action only gates the DO UPDATE
+	// *action* of the INSERT ... ON CONFLICT below — when there's no
+	// conflicting row at all (the variant was deleted, or never existed),
+	// Postgres just takes the plain INSERT branch, which isn't subject to
+	// that WHERE clause. That means an expectedVersion asserting "I loaded
+	// an existing row at this version" would otherwise be silently ignored
+	// whenever the row is missing, letting a stale write resurrect a
+	// deleted variant. Lock and check existence explicitly first, in this
+	// same transaction, so a genuinely-missing row with a non-zero expected
+	// version is rejected instead of silently treated as a fresh create.
+	var existingVersion int
+	err = tx.QueryRow(ctx, `
+		SELECT version FROM course_variants
+		WHERE course_id = $1 AND language = $2
+		FOR UPDATE`, courseID, variant.Language).Scan(&existingVersion)
+	notFound := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !notFound {
+		return 0, fmt.Errorf("lock variant: %w", err)
+	}
+	if expectedVersion != nil && notFound && *expectedVersion != 0 {
+		return 0, domain.ErrVersionConflict
+	}
+
 	// The WHERE clause on the DO UPDATE action is the atomic version check:
 	// when expectedVersion is nil the clause is always true (unconditional
 	// upsert, today's behavior). When non-nil, Postgres only applies the
@@ -84,7 +107,9 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 	// row's condition false, so RETURNING yields nothing and Scan reports
 	// pgx.ErrNoRows, which we treat as a version conflict. This never races:
 	// the check and the write happen in the same statement, not a separate
-	// read followed by a write.
+	// read followed by a write. The FOR UPDATE lock taken just above makes
+	// this race-free against concurrent deletes/updates within the
+	// transaction, too — not just against a stale expectedVersion.
 	var variantID int64
 	var version int
 	err = tx.QueryRow(ctx, `

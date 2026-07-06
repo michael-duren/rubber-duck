@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -502,7 +503,24 @@ func TestEditVariantPageShowsSubmissionWarning(t *testing.T) {
 	if !strings.Contains(body, "Yes, save anyway") {
 		t.Error("expected the confirming submit control when submissions exist")
 	}
+	// The "Yes, save anyway" button is only meaningful if the hidden field it
+	// depends on (see views.EditVariant/edit.templ) is actually present —
+	// assert on the markup (via a regex tolerant of templ's exact
+	// whitespace/self-closing-slash codegen) so a future template edit that
+	// drops the hidden field, while leaving the button's visible text
+	// intact, fails a test instead of silently breaking every
+	// destructive-save confirmation.
+	if !confirmedHiddenFieldPattern.MatchString(body) {
+		t.Error("expected the hidden confirmed=1 field the 'Yes, save anyway' button depends on")
+	}
 }
+
+// confirmedHiddenFieldPattern matches an <input type="hidden" ...> tag that
+// also carries name="confirmed" and value="1", in either attribute order,
+// without depending on templ's exact whitespace or self-closing-slash
+// codegen (see edit_templ.go, which renders it without a trailing "/").
+var confirmedHiddenFieldPattern = regexp.MustCompile(
+	`<input[^>]*type="hidden"[^>]*name="confirmed"[^>]*value="1"[^>]*>|<input[^>]*type="hidden"[^>]*value="1"[^>]*name="confirmed"[^>]*>`)
 
 // TestSaveVariantNoSubmissionsSavesImmediately is the non-regression case:
 // a variant with zero submissions saves on the first plain Save, with no
@@ -557,6 +575,41 @@ func TestSaveVariantWithSubmissionsRequiresConfirmation(t *testing.T) {
 	}
 }
 
+// TestSaveVariantVersionConflictWinsOverSubmissionConfirmation covers the
+// composition of issue #36 (version conflict) and issue #37 (submission
+// confirmation) when both apply to the same submit: saveVariant's doc
+// comment says the version-conflict peek runs, and wins, before the
+// submission-count check, so a stale submit against a variant that also has
+// outstanding submissions must show the version-conflict message — not the
+// submission-count warning — and must not save either way.
+func TestSaveVariantVersionConflictWinsOverSubmissionConfirmation(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+	fs.variantVersion = 2 // someone else already saved after this page was loaded at version 1
+	fs.subCount = 5       // ...and there are outstanding submissions on top of that
+
+	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (edited)", 1)
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {edited}, "version": {"1"}}, session) // stale version, no confirmed=1
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST stale version with submissions = %d, want 200 (re-render): %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Someone else changed this since you opened it") {
+		t.Errorf("expected the version-conflict message to win, got: %s", body)
+	}
+	if strings.Contains(body, "5 submission") || strings.Contains(body, "Yes, save anyway") {
+		t.Error("submission-count warning should not appear once the version conflict already applies")
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("neither check should let a save through, got %d upserts", len(fs.upserts))
+	}
+}
+
 // TestSaveVariantWithSubmissionsConfirmedSaves is the other half of the same
 // case: the same submit, but with confirmed=1 present (as the rendered "Yes,
 // save anyway" button sends), must proceed and save.
@@ -576,6 +629,54 @@ func TestSaveVariantWithSubmissionsConfirmedSaves(t *testing.T) {
 	}
 	if len(fs.upserts) != 1 {
 		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	}
+}
+
+// TestCreateCourseExistingSlugShowsStoredContent guards against a future
+// regression in the new=1 flow: createCourse blindly redirects into the
+// editor with new=1 for whatever slug/language was submitted — it doesn't
+// itself check whether a variant already exists there — so the only thing
+// standing between this "New course" form and silently blanking existing
+// content is editVariantPage's own VariantSource lookup (its new=1 branch
+// only fires on domain.ErrNotFound; an existing variant falls through to the
+// ordinary render with the real stored markdown). This exercises that
+// end-to-end: "creating" a course at a slug/language fakeStore already has a
+// variant for must land on the existing stored markdown, never the blank
+// newVariantTemplate.
+func TestCreateCourseExistingSlugShowsStoredContent(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+
+	rec := postForm(mux, "/courses/new",
+		url.Values{"slug": {"intro-to-concurrency"}, "title": {"Introduction to Concurrency"}, "language": {"go"}, "description": {"A pitch."}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /courses/new (existing slug/lang) = %d, want 303: %s", rec.Code, rec.Body)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/courses/intro-to-concurrency/go/edit?") {
+		t.Fatalf("Location = %q, want /courses/intro-to-concurrency/go/edit?...", loc)
+	}
+
+	req := httptest.NewRequest("GET", loc, nil)
+	req.AddCookie(session)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200: %s", loc, rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Introduction to Concurrency") {
+		t.Errorf("expected the existing stored markdown, got: %s", body)
+	}
+	if strings.Contains(body, "TODO: write this lesson's content.") {
+		t.Error("an existing variant's content must not be replaced by the blank new-course template")
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("this flow must not save anything, got %d upserts", len(fs.upserts))
 	}
 }
 

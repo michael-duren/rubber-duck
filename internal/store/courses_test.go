@@ -115,6 +115,76 @@ func TestUpsertVariantVersionConflict(t *testing.T) {
 	}
 }
 
+// TestUpsertVariantNewVariantExpectedVersionZero exercises the interaction
+// between genuinely-new-variant creation (expectedVersion pointing at 0, no
+// existing row at all — see saveVariant's version == 0 carve-out and
+// UpsertVariant's own existence check) and the optimistic-concurrency guard,
+// against the real store rather than a fake: before this, only the
+// in-memory fakeStore in internal/web exercised that interaction, never the
+// real SQL (WHERE $5::int IS NULL OR version = $5::int against a row that
+// doesn't exist yet).
+func TestUpsertVariantNewVariantExpectedVersionZero(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	src, err := os.ReadFile("../../seed/intro-to-go.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := ingest.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	course, variant, err := ingest.ToDomain(res, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected0 := 0
+
+	// First-ever creation: no existing row, expectedVersion = 0. Must
+	// succeed — a missing row with expectedVersion 0 is the legitimate
+	// "brand new" case, not a conflict.
+	v1, err := s.UpsertVariant(ctx, course, variant, nil, &expected0)
+	if err != nil {
+		t.Fatalf("first upsert (new variant, expectedVersion=0): %v", err)
+	}
+	if v1 != 1 {
+		t.Errorf("version after first-ever insert = %d, want 1", v1)
+	}
+	gotSrc, gotVersion, err := s.VariantSource(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("VariantSource: %v", err)
+	}
+	if gotVersion != 1 {
+		t.Errorf("stored version = %d, want 1", gotVersion)
+	}
+	if gotSrc != variant.SourceMD {
+		t.Errorf("stored source_md does not match what was upserted")
+	}
+
+	// Second call for the same course/language, still expecting version 0:
+	// the row now exists at version 1, so this must be rejected as a
+	// version conflict rather than silently overwriting it.
+	stale := variant
+	stale.SourceMD = variant.SourceMD + "\n<!-- stale second create, must be rejected -->"
+	if _, err := s.UpsertVariant(ctx, course, stale, nil, &expected0); !errors.Is(err, domain.ErrVersionConflict) {
+		t.Fatalf("second upsert (expectedVersion=0 after row exists) error = %v, want domain.ErrVersionConflict", err)
+	}
+
+	// Stored data must reflect only the first, winning write.
+	gotSrc, gotVersion, err = s.VariantSource(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("VariantSource: %v", err)
+	}
+	if gotVersion != 1 {
+		t.Errorf("stored version after rejected stale create = %d, want 1", gotVersion)
+	}
+	if gotSrc != variant.SourceMD {
+		t.Errorf("stored source_md was clobbered by the rejected stale create")
+	}
+}
+
 // TestVariantSubmissionCount covers issue #37: the web editor warns before a
 // save that would cascade-delete submissions, using this count to name the
 // exact impact.

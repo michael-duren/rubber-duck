@@ -21,14 +21,15 @@ func (s *Store) VariantDetail(ctx context.Context, courseSlug, language string) 
 		                 FROM course_tags ct JOIN tags t ON t.id = ct.tag_id
 		                 WHERE ct.course_id = c.id), '{}'),
 		       c.updated_at,
-		       v.id, v.language, v.version, v.updated_at
+		       v.id, v.language, v.version, v.updated_at, u.username
 		FROM courses c
 		JOIN course_variants v ON v.course_id = c.id AND v.language = $2
+		LEFT JOIN users u ON u.id = v.edited_by
 		WHERE c.slug = $1`,
 		courseSlug, language,
 	).Scan(&c.ID, &c.Slug, &c.Title, &c.DescriptionMD, &c.DescriptionHTML,
 		&c.DurationHours, &c.ExtendedReading, &c.Tags, &c.UpdatedAt,
-		&v.ID, &v.Language, &v.Version, &v.UpdatedAt)
+		&v.ID, &v.Language, &v.Version, &v.UpdatedAt, &v.EditedByUsername)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
 	}

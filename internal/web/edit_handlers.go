@@ -59,6 +59,15 @@ func (h *handlers) createCourse(w http.ResponseWriter, r *http.Request) {
 		errMsg = "Slug, title, and language are all required."
 	case !slugPattern.MatchString(slug):
 		errMsg = "Slug must be lowercase letters, numbers, and hyphens only (e.g. intro-to-concurrency)."
+	case slug == "new":
+		// slugPattern happily matches the literal "new", but GET
+		// /courses/new is registered as its own literal route (the "New
+		// course" form) alongside the GET /courses/{slug} wildcard, and
+		// ServeMux always prefers a literal match over a wildcard one — so a
+		// course actually created with this slug would never be reachable
+		// at its own /courses/new detail page (only its /courses/new/{lang}
+		// variant pages would still work). Reject it here instead.
+		errMsg = "\"new\" is a reserved slug — pick a different one."
 	case !slices.Contains(newCourseLanguages, language):
 		errMsg = "Language must be one of: " + strings.Join(newCourseLanguages, ", ") + "."
 	}
@@ -188,8 +197,8 @@ const versionConflictMsg = "Someone else changed this since you opened it — re
 // guard against a race between this read and the write.
 func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 	slug, lang := r.PathValue("slug"), r.PathValue("lang")
-	markdown := r.FormValue("markdown")
-	src := []byte(markdown)
+	mdText := r.FormValue("markdown")
+	src := []byte(mdText)
 
 	// The hidden "version" field always round-trips from views.EditVariant;
 	// a missing/unparseable value only happens from a stale form or
@@ -197,7 +206,7 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 	// here — render with 0 and ask the user to reload.
 	version, verr := strconv.Atoi(r.FormValue("version"))
 	if verr != nil {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, 0,
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, 0,
 			"Missing or invalid version — reload the page and try again.", nil, 0))
 		return
 	}
@@ -208,7 +217,7 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 		for i, p := range pErr.Problems {
 			problems[i] = views.EditProblem{Line: p.Line, Message: p.Message}
 		}
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, version, "", problems, 0))
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, "", problems, 0))
 		return
 	}
 	if err != nil {
@@ -219,7 +228,7 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 	if res.Course.Course != slug || res.Course.Language != lang {
 		msg := fmt.Sprintf("This page edits %s/%s but the document's frontmatter says %s/%s — fix the frontmatter or navigate to the matching course/language before saving.",
 			slug, lang, res.Course.Course, res.Course.Language)
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, version, msg, nil, 0))
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, msg, nil, 0))
 		return
 	}
 
@@ -230,9 +239,29 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// See the doc comment above for why this runs, and wins, before the
-	// submission-count confirmation check.
-	if _, storedVersion, srcErr := h.courses.VariantSource(r.Context(), slug, lang); srcErr == nil && storedVersion != version {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, version, versionConflictMsg, nil, 0))
+	// submission-count confirmation check. srcErr is branched on explicitly
+	// (rather than only used as a boolean gate) because domain.ErrNotFound
+	// here can mean the variant was deleted by someone else since this
+	// user's GET — falling through to UpsertVariant in that case would let
+	// a non-nil, non-zero expectedVersion sail past Postgres's ON CONFLICT
+	// check (no conflicting row to trigger it), silently resurrecting a
+	// deleted course/variant from stale content. version == 0 is excluded
+	// from that: it's the createCourse/new=1 template flow's legitimate
+	// first save of a variant that has never existed, so ErrNotFound there
+	// is expected, not a concurrent deletion — same version == 0 carve-out
+	// UpsertVariant's own existence check applies below.
+	_, storedVersion, srcErr := h.courses.VariantSource(r.Context(), slug, lang)
+	if errors.Is(srcErr, domain.ErrNotFound) && version != 0 {
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version,
+			"This course variant no longer exists — it may have been deleted since you opened it.", nil, 0))
+		return
+	}
+	if srcErr != nil && !errors.Is(srcErr, domain.ErrNotFound) {
+		h.serverError(w, r, srcErr)
+		return
+	}
+	if srcErr == nil && storedVersion != version {
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, versionConflictMsg, nil, 0))
 		return
 	}
 
@@ -249,14 +278,14 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if subCount > 0 && r.FormValue("confirmed") != "1" {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, version, "", nil, subCount))
+		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, "", nil, subCount))
 		return
 	}
 
 	user := currentUser(r) // non-nil: this route is behind h.requireUser
 	if _, err := h.courses.UpsertVariant(r.Context(), course, variant, &user.ID, &version); err != nil {
 		if errors.Is(err, domain.ErrVersionConflict) {
-			h.render(w, r, views.EditVariant(currentUser(r), slug, lang, markdown, version, versionConflictMsg, nil, 0))
+			h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, versionConflictMsg, nil, 0))
 			return
 		}
 		h.serverError(w, r, err)
@@ -295,5 +324,7 @@ func (h *handlers) previewVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(html))
+	if _, err := w.Write([]byte(html)); err != nil {
+		h.logger.Error("write preview response", "err", err)
+	}
 }

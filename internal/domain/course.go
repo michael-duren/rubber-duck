@@ -23,13 +23,23 @@ type Reading struct {
 // Variant is one programming-language rendition of a course. It owns its
 // lessons and challenges: translations may differ in granularity.
 type Variant struct {
-	ID        int64
-	Language  string
-	SourceMD  string
-	Version   int
-	Lessons   []Lesson
-	Final     Challenge
-	UpdatedAt time.Time
+	ID       int64
+	Language string
+	SourceMD string
+	// Version is populated on reads from course_variants.version. It is not
+	// consulted on writes: store.UpsertVariant's optimistic-concurrency check
+	// and the version it writes come from its own expectedVersion parameter
+	// and return value, not from this field — setting it before a write has
+	// no effect.
+	Version int
+	Lessons []Lesson
+	Final   Challenge
+	// EditedByUsername is the username of the user who last saved this
+	// variant through the web editor. It is nil when the variant was
+	// agent-authored via the /api/v1 ingest path (edited_by IS NULL) or has
+	// never been edited through the web UI.
+	EditedByUsername *string
+	UpdatedAt        time.Time
 }
 
 type Lesson struct {
