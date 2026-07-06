@@ -46,6 +46,26 @@ func TestEditVariantPageRequiresAuth(t *testing.T) {
 	}
 }
 
+// TestSaveVariantRequiresAuth covers the POST side of auth-gating that
+// TestEditVariantPageRequiresAuth leaves untested: the GET page redirects an
+// anonymous visitor, but the actual write path (saveVariant) needs its own
+// check, since it's the handler that would persist an anonymous edit if the
+// route ever lost its h.requireUser wrapping.
+func TestSaveVariantRequiresAuth(t *testing.T) {
+	mux, fs := testMux(t)
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {"whatever"}, "version": {"0"}}, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("anonymous POST /edit = %d, want 303 redirect to /login", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/login" {
+		t.Errorf("Location = %q, want /login", loc)
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("anonymous POST must not save, got %d upserts", len(fs.upserts))
+	}
+}
+
 func TestEditVariantPageMissingVariant(t *testing.T) {
 	mux, _ := testMux(t)
 	session := loginAlice(t, mux)
@@ -163,6 +183,17 @@ func TestSaveVariantSuccessRedirectsAndAttributesEditor(t *testing.T) {
 	if *call.EditedBy != aliceID {
 		t.Errorf("EditedBy = %d, want %d (alice)", *call.EditedBy, aliceID)
 	}
+	// The redirect and attribution checks above don't confirm the actual
+	// document content was persisted — assert that separately: the fake
+	// store's variantSource is only updated by UpsertVariant on success
+	// (see fakeStore.UpsertVariant), so this is a genuine "stale" ->
+	// "newly-submitted markdown" read-after-write check, not a tautology.
+	if fs.variantSource != seedMarkdown(t) {
+		t.Error("stored markdown should be updated to exactly what was submitted")
+	}
+	if call.Variant.SourceMD != seedMarkdown(t) {
+		t.Error("UpsertVariant should be called with the submitted markdown, not the stale stored one")
+	}
 }
 
 // --- issue #38: creating a brand-new course / language variant ---
@@ -176,6 +207,23 @@ func TestNewCoursePageRequiresAuth(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("anonymous GET /courses/new = %d, want 303 redirect to /login", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/login" {
+		t.Errorf("Location = %q, want /login", loc)
+	}
+}
+
+// TestCreateCourseRequiresAuth is the POST-side counterpart of
+// TestNewCoursePageRequiresAuth: the form-viewing GET redirects an anonymous
+// visitor, but createCourse (the handler that actually redirects into the
+// editor and, on the following save, creates the course) needs its own
+// auth-gating check too.
+func TestCreateCourseRequiresAuth(t *testing.T) {
+	mux, _ := testMux(t)
+	rec := postForm(mux, "/courses/new",
+		url.Values{"slug": {"brand-new-course"}, "title": {"T"}, "language": {"go"}}, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("anonymous POST /courses/new = %d, want 303 redirect to /login", rec.Code)
 	}
 	if loc := rec.Header().Get("Location"); loc != "/login" {
 		t.Errorf("Location = %q, want /login", loc)

@@ -193,6 +193,59 @@ GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
 a variant's lessons/challenges and resets submissions for it — keep slugs
 stable (see "Course document format" above).
 
+## Editing courses in the browser
+
+Alongside the agent API and the git-based `courses/*.md` workflow above,
+any logged-in user can create or edit course content directly in the
+browser — a "click edit" wiki path, not just a contributor/PR path. This
+was a deliberate product decision (any authenticated account can edit;
+abuse is handled by disabling the account, not by a special role/permission
+gate) and is a first step towards the database, rather than `courses/*.md`,
+becoming the actual source of truth for course content — for now all three
+paths (agent API, git + `make publish`, and the browser editor) write
+through the same validation and storage, so content stays consistent no
+matter which one was used.
+
+**Where to find it.** A course variant's page (`/courses/{slug}/{lang}`)
+has an "Edit" link; a course's page has a "+ Add language variant" link;
+the catalog has a "+ New course" link. All three require being logged in
+(any account, no special role) and redirect anonymous visitors to
+`/login`.
+
+**Creating a course or variant.** "+ New course" / "+ Add language
+variant" opens a small form (slug, title, language, description) that
+seeds a minimal, already-valid frontmatter template — one lesson and one
+final challenge with placeholder starter/test code — into the same editor
+described below, rather than creating anything itself. Nothing is
+persisted until that first Save.
+
+**Editing and saving.** The editor is a raw-markdown textarea, pre-filled
+with the variant's stored source. Saving runs the exact same
+`ingest.Parse` / `ingest.ToDomain` / `store.UpsertVariant` path the agent
+API's `PUT` uses:
+
+- Invalid markdown re-renders the editor with the same line-numbered
+  problems the agent API returns as `422` details — the textarea keeps
+  exactly what you typed, never reverting to the last-saved version.
+- The page carries the version it was loaded at in a hidden field
+  (optimistic concurrency). If someone else saved in the meantime, your
+  save is rejected with "someone else changed this since you opened it —
+  reload to see their version" instead of silently overwriting their
+  change.
+- If the variant already has submissions, saving shows "saving will reset
+  progress for N submissions… — re-publishing replaces its lessons and
+  challenges, which deletes them" and requires an explicit "Yes, save
+  anyway" click before it proceeds — the same destructive re-publish
+  semantics documented above for `make publish`, just surfaced up front
+  instead of buried in this README. A variant with no submissions yet
+  saves immediately, no extra click.
+
+**Live preview.** A preview pane next to the textarea shows the rendered
+markdown (headings, code blocks with syntax highlighting) via an AJAX call
+to `POST /courses/{slug}/{lang}/edit/preview`, debounced as you type. It's
+read-only and decoupled from saving: a slow or failed preview never blocks
+or is required for an actual Save, and it never writes anything itself.
+
 ## Local testing with `duck`
 
 `duck` runs a course's tests locally with your own toolchain — no Docker —
