@@ -83,19 +83,24 @@ func (s *Store) CourseBySlug(ctx context.Context, slug string) (domain.Course, [
 	return c, vs, rows.Err()
 }
 
-// VariantSource returns the stored markdown so agents can round-trip it.
-func (s *Store) VariantSource(ctx context.Context, slug, language string) (string, error) {
+// VariantSource returns the stored markdown, plus its current version, so
+// callers can round-trip it. The web editor threads the version through a
+// hidden form field to detect concurrent edits (see UpsertVariant's
+// expectedVersion); the agent API's GET endpoint ignores it — its documented
+// JSON shape is markdown-only.
+func (s *Store) VariantSource(ctx context.Context, slug, language string) (string, int, error) {
 	var src string
+	var version int
 	err := s.pool.QueryRow(ctx, `
-		SELECT v.source_md
+		SELECT v.source_md, v.version
 		FROM course_variants v JOIN courses c ON c.id = v.course_id
 		WHERE c.slug = $1 AND v.language = $2`,
 		slug, language,
-	).Scan(&src)
+	).Scan(&src, &version)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", domain.ErrNotFound
+		return "", 0, domain.ErrNotFound
 	}
-	return src, err
+	return src, version, err
 }
 
 func (s *Store) DeleteCourse(ctx context.Context, slug string) error {

@@ -2,9 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
+	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
@@ -30,7 +32,7 @@ func TestUpsertVariant(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	v1, err := s.UpsertVariant(ctx, course, variant, &u.ID)
+	v1, err := s.UpsertVariant(ctx, course, variant, &u.ID, nil)
 	if err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
@@ -41,7 +43,7 @@ func TestUpsertVariant(t *testing.T) {
 		t.Errorf("edited_by after human edit = %v, want %d", editedBy, u.ID)
 	}
 
-	v2, err := s.UpsertVariant(ctx, course, variant, nil)
+	v2, err := s.UpsertVariant(ctx, course, variant, nil, nil)
 	if err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
@@ -50,6 +52,66 @@ func TestUpsertVariant(t *testing.T) {
 	}
 	if editedBy := variantEditedBy(t, s, course.Slug, variant.Language); editedBy != nil {
 		t.Errorf("edited_by after agent (nil) edit = %v, want nil", editedBy)
+	}
+}
+
+// TestUpsertVariantVersionConflict exercises the optimistic-concurrency path
+// (issue #36): a save whose expectedVersion no longer matches the stored
+// version must be rejected atomically — no read-then-write race — and must
+// not touch the stored data at all, leaving only the winning write in place.
+func TestUpsertVariantVersionConflict(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	src, err := os.ReadFile("../../seed/intro-to-go.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := ingest.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	course, variant, err := ingest.ToDomain(res, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("initial upsert: %v", err)
+	}
+
+	// Winning write: correctly expects version 1 (the current stored
+	// version), so it's applied and bumps the version to 2.
+	winning := variant
+	winning.SourceMD = variant.SourceMD + "\n<!-- winning edit -->"
+	expected1 := 1
+	v2, err := s.UpsertVariant(ctx, course, winning, nil, &expected1)
+	if err != nil {
+		t.Fatalf("winning upsert: %v", err)
+	}
+	if v2 != 2 {
+		t.Fatalf("version after winning upsert = %d, want 2", v2)
+	}
+
+	// Stale write: still expects version 1, but the actual stored version
+	// has already moved to 2 (the winning write above) — must be rejected,
+	// not silently applied on top.
+	stale := variant
+	stale.SourceMD = variant.SourceMD + "\n<!-- stale edit, must be rejected -->"
+	if _, err := s.UpsertVariant(ctx, course, stale, nil, &expected1); !errors.Is(err, domain.ErrVersionConflict) {
+		t.Fatalf("stale upsert error = %v, want domain.ErrVersionConflict", err)
+	}
+
+	// Stored data must reflect only the winning write.
+	gotSrc, gotVersion, err := s.VariantSource(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("VariantSource: %v", err)
+	}
+	if gotVersion != 2 {
+		t.Errorf("stored version = %d, want 2 (stale write must not bump it further)", gotVersion)
+	}
+	if gotSrc != winning.SourceMD {
+		t.Errorf("stored source_md was clobbered by the rejected stale write")
 	}
 }
 

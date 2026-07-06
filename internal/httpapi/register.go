@@ -10,10 +10,15 @@ import (
 
 // CourseStore is the slice of the store the agent API needs.
 type CourseStore interface {
-	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error)
+	// expectedVersion is always nil from this API: agent publishes aren't
+	// versioned (see internal/store.Store.UpsertVariant's doc comment).
+	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
-	VariantSource(ctx context.Context, slug, language string) (string, error)
+	// VariantSource's int return is the variant's current version; this
+	// package's only caller (getVariantSource) ignores it since the
+	// documented GET response shape is markdown-only.
+	VariantSource(ctx context.Context, slug, language string) (string, int, error)
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
 	DeleteCourse(ctx context.Context, slug string) error
 	DeleteVariant(ctx context.Context, slug, language string) error

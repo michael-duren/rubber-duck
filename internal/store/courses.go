@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -15,7 +16,19 @@ import (
 // their submissions) and bumps its version. editedBy records which human
 // user made the change, if any; nil means the write is agent-authored
 // (e.g. the /api/v1 markdown-publish path). Returns the new version.
-func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error) {
+//
+// expectedVersion implements optimistic concurrency for the web editor: nil
+// means "don't check" (agent-API publishes and any other unversioned write
+// path); non-nil means the write must be rejected — atomically, without a
+// separate read-then-write race — if the variant's stored version has moved
+// on since the caller loaded it. The version check happens as part of the
+// variant UPSERT's own WHERE clause (UPDATE ... WHERE version = expected,
+// checked via "no row returned" rather than a prior read), and on a mismatch
+// this returns domain.ErrVersionConflict before committing — since the whole
+// call runs in one transaction that's rolled back on any early return,
+// nothing is persisted at all in that case, not even the course-level
+// title/description/tags upserted earlier in this same call.
+func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -63,6 +76,15 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 		}
 	}
 
+	// The WHERE clause on the DO UPDATE action is the atomic version check:
+	// when expectedVersion is nil the clause is always true (unconditional
+	// upsert, today's behavior). When non-nil, Postgres only applies the
+	// update — and only then returns a row — if the stored version still
+	// matches; a concurrent winning write that bumped the version makes this
+	// row's condition false, so RETURNING yields nothing and Scan reports
+	// pgx.ErrNoRows, which we treat as a version conflict. This never races:
+	// the check and the write happen in the same statement, not a separate
+	// read followed by a write.
 	var variantID int64
 	var version int
 	err = tx.QueryRow(ctx, `
@@ -73,9 +95,13 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 			version = course_variants.version + 1,
 			updated_at = now(),
 			edited_by = EXCLUDED.edited_by
+		WHERE $5::int IS NULL OR course_variants.version = $5::int
 		RETURNING id, version`,
-		courseID, variant.Language, variant.SourceMD, editedBy,
+		courseID, variant.Language, variant.SourceMD, editedBy, expectedVersion,
 	).Scan(&variantID, &version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, domain.ErrVersionConflict
+	}
 	if err != nil {
 		return 0, fmt.Errorf("upsert variant: %w", err)
 	}

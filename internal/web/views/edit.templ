@@ -17,8 +17,12 @@ type EditProblem struct {
 // EditVariant is the raw-markdown editor for one course variant. markdown is
 // rendered verbatim in the textarea: on GET it's the stored source
 // (store.VariantSource); on a failed POST it's exactly what the user
-// submitted, so a rejected save never discards their edits.
-templ EditVariant(user *domain.User, slug, lang, markdown, errMsg string, problems []EditProblem) {
+// submitted, so a rejected save never discards their edits. version is
+// carried in a hidden field so a save can detect a concurrent edit (issue
+// #36): on GET it's the version just loaded; on a failed POST it's
+// unchanged, so retrying without reloading still targets the same version
+// (and correctly conflicts again, rather than silently jumping forward).
+templ EditVariant(user *domain.User, slug, lang, markdown string, version int, errMsg string, problems []EditProblem) {
 	@Layout("Edit "+slug+" ("+lang+")", user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
 			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
@@ -41,6 +45,7 @@ templ EditVariant(user *domain.User, slug, lang, markdown, errMsg string, proble
 		}
 		<form method="post" action={ templ.SafeURL("/courses/" + slug + "/" + lang + "/edit") } class="mt-6 flex flex-col gap-3">
 			@csrfField()
+			<input type="hidden" name="version" value={ strconv.Itoa(version) }/>
 			<textarea
 				name="markdown"
 				rows="30"

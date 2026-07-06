@@ -90,7 +90,7 @@ func TestSaveVariantValidationErrorPreservesInput(t *testing.T) {
 
 	badMarkdown := "this is not a valid course document at all"
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {badMarkdown}}, session)
+		url.Values{"markdown": {badMarkdown}, "version": {"0"}}, session)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST invalid markdown = %d, want 200 (re-render)", rec.Code)
 	}
@@ -116,7 +116,7 @@ func TestSaveVariantSlugMismatchPreservesInput(t *testing.T) {
 
 	// Valid document, but posted to a URL naming a different course slug.
 	rec := postForm(mux, "/courses/some-other-course/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}}, session)
+		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST slug-mismatched markdown = %d, want 200 (re-render)", rec.Code)
 	}
@@ -141,7 +141,7 @@ func TestSaveVariantSuccessRedirectsAndAttributesEditor(t *testing.T) {
 	fs.variantSource = "stale"
 
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}}, session)
+		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST valid markdown = %d, want 303: %s", rec.Code, rec.Body)
 	}
@@ -169,3 +169,64 @@ func TestSaveVariantSuccessRedirectsAndAttributesEditor(t *testing.T) {
 // VariantDetail/VariantSource slug+language matching for the "go" variant of
 // intro-to-concurrency; only Language is consulted by the fake.
 var fakeVariantGo = domain.Variant{Language: "go"}
+
+// TestSaveVariantVersionConflictPreservesInput covers issue #36: someone
+// else's save landed between this page being loaded (at version 1) and this
+// submit, so the fake store's current version has already moved to 2. The
+// stale submit must be rejected with a clear message, must not silently
+// refetch/merge, and — like every other rejected save — must preserve
+// exactly what the user typed rather than reverting to stored content.
+func TestSaveVariantVersionConflictPreservesInput(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+	fs.variantVersion = 2 // someone else already saved after this page was loaded at version 1
+
+	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (edited)", 1)
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {edited}, "version": {"1"}}, session)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST stale version = %d, want 200 (re-render): %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Someone else changed this since you opened it") {
+		t.Errorf("expected version-conflict message, got: %s", body)
+	}
+	if !strings.Contains(body, "(edited)") {
+		t.Error("edit page should preserve exactly what the user submitted on a version conflict")
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("stale write must not be applied, got %d upserts", len(fs.upserts))
+	}
+	if fs.variantSource != seedMarkdown(t) {
+		t.Error("stored variant must be untouched by the rejected stale write")
+	}
+}
+
+// TestSaveVariantMissingVersionPreservesInput covers a malformed/tampered
+// submit missing the hidden version field: it must be rejected (there's no
+// version to safely check against) rather than treated as an unconditional
+// overwrite, while still preserving the user's submitted text.
+func TestSaveVariantMissingVersionPreservesInput(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}}, session) // no "version" field
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST missing version = %d, want 200 (re-render): %s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "Missing or invalid version") {
+		t.Errorf("expected missing-version message, got: %s", rec.Body.String())
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("write without a version must not be applied, got %d upserts", len(fs.upserts))
+	}
+}

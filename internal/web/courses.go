@@ -19,11 +19,17 @@ type CourseReader interface {
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
 
-	// VariantSource returns the raw stored markdown for the edit form.
-	VariantSource(ctx context.Context, courseSlug, language string) (string, error)
+	// VariantSource returns the raw stored markdown for the edit form, plus
+	// its current version so the form can carry it in a hidden field and
+	// detect a concurrent edit on save (see UpsertVariant's expectedVersion).
+	VariantSource(ctx context.Context, courseSlug, language string) (string, int, error)
 	// UpsertVariant persists a parsed course/variant. editedBy is the acting
 	// user's ID for human web edits, nil for agent/system writes.
-	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error)
+	// expectedVersion, if non-nil, rejects the write with
+	// domain.ErrVersionConflict when the stored version has moved on since
+	// the caller loaded it (optimistic concurrency for the web editor); the
+	// web save handler always passes it, other callers pass nil.
+	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
 }
 
 func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {
