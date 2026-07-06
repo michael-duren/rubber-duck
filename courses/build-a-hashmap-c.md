@@ -129,16 +129,22 @@ Two C details make or break the implementation:
   isn't confined to the one byte the loop nominally touches. Before the
   XOR, `char` promotes to `int`; a signed 0xE9 promotes to -23, which as a
   32-bit pattern is 0xFFFFFFE9 — the sign bit has smeared across all 32
-  bits. Hashing that single byte from the offset basis:
+  bits. Watch just the injection half of the loop — the XOR, before the
+  multiply — against the offset basis:
 
   ```
-  (unsigned char)0xe9, correct:    0x811c9d2c
-  (char)0xe9, sign-extended bug:   0x7ee3622c
+  offset basis                      0x811c9dc5
+  xor (unsigned char)0xe9, correct  0x811c9d2c   (only the low byte moved)
+  xor (char)0xe9, sign-extended bug 0x7ee3622c   (far more than the low byte moved)
   ```
 
-  Far more than the low byte changed. Read bytes through `unsigned char`
-  and the promotion zero-extends instead, leaving only the intended byte
-  disturbed.
+  Read bytes through `unsigned char` and the promotion zero-extends, so the
+  XOR disturbs only the intended byte, exactly like the property described
+  above. Sign-extend it instead and the XOR itself already corrupts bits
+  the loop had no business touching — bits the multiply step then smears
+  across the rest of the word, so `fnv1a("\xe9")` comes out completely
+  different (0x6c0b6c44 correct vs. 0xebf38b44 with the bug), not just
+  different in one byte.
 
 ## Challenge: FNV-1a {#fnv1a points=10}
 
