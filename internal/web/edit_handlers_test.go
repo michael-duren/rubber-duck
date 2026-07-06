@@ -530,3 +530,59 @@ func TestSaveVariantWithSubmissionsConfirmedSaves(t *testing.T) {
 		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
 	}
 }
+
+// --- issue #39: live preview ---
+
+// TestPreviewVariantRequiresAuth mirrors TestEditVariantPageRequiresAuth:
+// the preview endpoint is gated exactly like the editor page it serves, so
+// an anonymous caller never gets a rendering oracle.
+func TestPreviewVariantRequiresAuth(t *testing.T) {
+	mux, _ := testMux(t)
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit/preview", url.Values{"markdown": {"# Hi"}}, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("anonymous POST /edit/preview = %d, want 303 redirect to /login", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/login" {
+		t.Errorf("Location = %q, want /login", loc)
+	}
+}
+
+// TestPreviewVariantStripsFrontmatterAndRendersMarkdown covers the core
+// behavior: a full course document (frontmatter + a fenced code block) POSTed
+// to the preview endpoint comes back as HTML with the frontmatter gone and
+// the markdown structure (heading, code block) actually rendered — not the
+// raw frontmatter keys, and not a real save (no store upsert).
+func TestPreviewVariantStripsFrontmatterAndRendersMarkdown(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	doc := "---\n" +
+		"course: intro-to-concurrency\n" +
+		"title: Introduction to Concurrency\n" +
+		"language: go\n" +
+		"description: A course.\n" +
+		"---\n\n" +
+		"# Lesson: Getting Started {#getting-started}\n\n" +
+		"Some prose about goroutines.\n\n" +
+		"```go\n" +
+		"func main() {}\n" +
+		"```\n"
+
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit/preview", url.Values{"markdown": {doc}}, session)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /edit/preview = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "course:") || strings.Contains(body, "language:") {
+		t.Errorf("preview HTML should not contain raw frontmatter keys, got: %s", body)
+	}
+	if !strings.Contains(body, "<h1") {
+		t.Errorf("expected a rendered heading, got: %s", body)
+	}
+	if !strings.Contains(body, "<pre") && !strings.Contains(body, "<code") {
+		t.Errorf("expected a rendered code block, got: %s", body)
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("preview must be side-effect-free, got %d upserts", len(fs.upserts))
+	}
+}

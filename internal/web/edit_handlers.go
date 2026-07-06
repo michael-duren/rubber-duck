@@ -12,6 +12,7 @@ import (
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/markdown"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
@@ -263,4 +264,36 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/courses/%s/%s", slug, lang), http.StatusSeeOther)
+}
+
+// previewVariant renders whatever markdown a user currently has in the
+// editor's textarea (not necessarily saved, not necessarily even valid) as
+// an HTML fragment for the editor's live preview pane (issue #39). It's
+// reached by the page's own inline script, POSTing the textarea's current
+// value on a debounce, and gated behind h.requireUser same as the edit page
+// itself and saveVariant — an anonymous visitor gets no preview endpoint any
+// more than they get the editor that calls it.
+//
+// This intentionally shares almost nothing with saveVariant: no
+// ingest.Parse/ToDomain, no store write, no version or submission-count
+// check. The preview is read-only and side-effect-free, so it can't
+// interfere with — or be blocked behind — those checks, and a save can
+// still succeed (or correctly fail) independent of whatever the preview
+// pane is currently showing.
+//
+// The submitted markdown is a full course document, frontmatter included,
+// which markdown.ToHTML doesn't know how to render as anything but stray
+// text — so the leading frontmatter block is stripped first (see
+// markdown.StripFrontmatter) before rendering the remainder, the same
+// lesson/challenge prose a learner would actually see on the rendered
+// course page.
+func (h *handlers) previewVariant(w http.ResponseWriter, r *http.Request) {
+	body := markdown.StripFrontmatter([]byte(r.FormValue("markdown")))
+	html, err := markdown.ToHTML(body)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(html))
 }
