@@ -321,6 +321,15 @@ def embed_texts(texts):
     return _model.encode(texts, normalize_embeddings=True).tolist()
 ```
 
+`all-MiniLM-L6-v2` maps each string to 384 floats — that's the "few hundred
+long" vector made concrete. It also has an input limit: text past 256 word
+pieces gets truncated, and a truncated chunk embeds only its first part. This
+is why the 800-character default from the chunking lesson isn't arbitrary —
+it comfortably fits under that limit with room to spare, so every chunk gets
+embedded in full instead of silently losing its tail. Swap in a model with a
+shorter limit (or hand it much bigger chunks) and this stops being true —
+worth checking whenever you change either knob.
+
 Prefer a hosted embeddings API? Same shape, swap the body (and
 `pip install openai`, `export OPENAI_API_KEY=...`):
 
@@ -665,9 +674,14 @@ finish on the task, not on source #7). This is the same job LangChain's
 retrieved context into a template. Frameworks make it configurable; the
 string logic is this.
 
-Now the LLM client — the exact injectable-callable pattern from the CLI
-chatbot course, `client(prompt) -> str` (`pip install anthropic`, or adapt
-to the OpenAI SDK the same way as in that course):
+Now the LLM client — the same injectable-callable seam as the CLI chatbot
+course, simplified for this course's shape. There, `client(messages) -> str`
+took the full conversation history, because each turn had to see everything
+said before. Here there's no multi-turn memory to replay — every question
+gets one assembled prompt and one answer — so the callable narrows to
+`client(prompt) -> str`, a single string in, a string back
+(`pip install anthropic`, or adapt to the OpenAI SDK the same way as in that
+course):
 
 ```python
 import anthropic
