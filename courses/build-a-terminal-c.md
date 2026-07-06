@@ -1995,7 +1995,14 @@ int sgr_reset(char *dst, size_t cap) {
  *   \x1b[0 [;1] [;4] [;7] [;fg-params] [;bg-params] m
  * Return length or -1 if it doesn't fit in cap.
  * HINT: build the parameter list into dst incrementally with
- * snprintf(dst + len, cap - len, ...), checking each step. */
+ * snprintf(dst + len, cap - len, ...), checking each step — and
+ * "checking" means bailing out with -1 the instant one step
+ * overflows, before computing the next cap - len. Both cap and len
+ * are size_t (unsigned): if you let len advance past cap first and
+ * check afterward, cap - len wraps around to a huge number instead
+ * of going negative, and the next snprintf call gets handed a bogus
+ * size and a dst + len pointer that already points past the buffer's
+ * end. */
 int sgr_encode(char *dst, size_t cap, const struct style *st) {
     /* TODO: "\x1b[0"                                     */
     /* TODO: ";1" ";4" ";7" for bold/underline/reverse    */
@@ -5144,8 +5151,9 @@ an afternoon. Cheap at the price.)
 
 Run the numbers to see why doubling matters here too: loading a
 100,000-line file line-by-line with grow-by-one does ~5 billion
-bytes of copying; with doubling, ~1.6 million. That's the difference
-between "instant" and "why is my editor frozen".
+element-copies (N²/2); with doubling, ~200,000 (the geometric series
+sums to about 2N). That's the difference between "instant" and "why
+is my editor frozen".
 
 ## Challenge: The Line Buffer {#editor-widget points=30}
 
