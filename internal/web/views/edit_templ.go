@@ -162,14 +162,14 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 				return templ_7745c5c3_Err
 			}
 			if errMsg != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 50, Col: 155}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 50, Col: 144}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -185,7 +185,7 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 				return templ_7745c5c3_Err
 			}
 			if len(problems) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300\"><p class=\"font-semibold\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300\"><p class=\"font-semibold\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -257,7 +257,7 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 				return templ_7745c5c3_Err
 			}
 			if submissionCount > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<p class=\"mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200\">Saving will reset progress for ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<p class=\"mt-4 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200\">Saving will reset progress for ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -322,7 +322,7 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"> <textarea id=\"markdown-editor\" name=\"markdown\" rows=\"30\" spellcheck=\"false\" class=\"w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-900\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"> <textarea id=\"markdown-editor\" name=\"markdown\" rows=\"30\" spellcheck=\"false\" class=\"w-full border border-slate-300 bg-white p-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-900\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -340,17 +340,17 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 				return templ_7745c5c3_Err
 			}
 			if submissionCount > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<input type=\"hidden\" name=\"confirmed\" value=\"1\"> <button type=\"submit\" class=\"self-start rounded-md bg-amber-600 px-3 py-2 font-medium text-white hover:bg-amber-500\">Yes, save anyway</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<input type=\"hidden\" name=\"confirmed\" value=\"1\"> <button type=\"submit\" class=\"self-start bg-amber-600 px-3 py-2 font-medium text-white hover:bg-amber-500\">Yes, save anyway</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<button type=\"submit\" class=\"self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Save</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<button type=\"submit\" class=\"self-start bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Save</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</form><div class=\"flex flex-col gap-3\"><span class=\"font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400\">Preview</span><div id=\"markdown-preview\" class=\"prose prose-slate min-h-[30rem] max-w-none overflow-auto rounded-md border border-slate-300 bg-white p-3 dark:prose-invert dark:border-slate-700 dark:bg-slate-900\"></div></div></div><script>\n\t\t\t(function () {\n\t\t\t\tvar textarea = document.getElementById(\"markdown-editor\");\n\t\t\t\tvar preview = document.getElementById(\"markdown-preview\");\n\t\t\t\tif (!textarea || !preview) return;\n\n\t\t\t\tvar previewURL = location.pathname.replace(/\\/edit$/, \"/edit/preview\");\n\t\t\t\tvar debounce;\n\n\t\t\t\tfunction renderPreview() {\n\t\t\t\t\tvar csrf = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\t\t\tvar body = new URLSearchParams({\n\t\t\t\t\t\tmarkdown: textarea.value,\n\t\t\t\t\t\tcsrf_token: csrf ? csrf.value : \"\",\n\t\t\t\t\t});\n\t\t\t\t\tfetch(previewURL, {\n\t\t\t\t\t\tmethod: \"POST\",\n\t\t\t\t\t\theaders: { \"Content-Type\": \"application/x-www-form-urlencoded\" },\n\t\t\t\t\t\tbody: body,\n\t\t\t\t\t}).then(function (res) {\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\tres.text().then(function (html) {\n\t\t\t\t\t\t\t\tpreview.innerHTML = html;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t}).catch(function () {\n\t\t\t\t\t\t// A network hiccup shouldn't disrupt editing; the next\n\t\t\t\t\t\t// debounced keystroke retries.\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\ttextarea.addEventListener(\"input\", function () {\n\t\t\t\t\tclearTimeout(debounce);\n\t\t\t\t\tdebounce = setTimeout(renderPreview, 400);\n\t\t\t\t});\n\t\t\t\trenderPreview();\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</form><div class=\"flex flex-col gap-3\"><span class=\"font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400\">Preview</span><div id=\"markdown-preview\" class=\"prose prose-slate min-h-[30rem] max-w-none overflow-auto border border-slate-300 bg-white p-3 dark:prose-invert dark:border-slate-700 dark:bg-slate-900\"></div></div></div><script>\n\t\t\t(function () {\n\t\t\t\tvar textarea = document.getElementById(\"markdown-editor\");\n\t\t\t\tvar preview = document.getElementById(\"markdown-preview\");\n\t\t\t\tif (!textarea || !preview) return;\n\n\t\t\t\tvar previewURL = location.pathname.replace(/\\/edit$/, \"/edit/preview\");\n\t\t\t\tvar debounce;\n\n\t\t\t\tfunction renderPreview() {\n\t\t\t\t\tvar csrf = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\t\t\tvar body = new URLSearchParams({\n\t\t\t\t\t\tmarkdown: textarea.value,\n\t\t\t\t\t\tcsrf_token: csrf ? csrf.value : \"\",\n\t\t\t\t\t});\n\t\t\t\t\tfetch(previewURL, {\n\t\t\t\t\t\tmethod: \"POST\",\n\t\t\t\t\t\theaders: { \"Content-Type\": \"application/x-www-form-urlencoded\" },\n\t\t\t\t\t\tbody: body,\n\t\t\t\t\t}).then(function (res) {\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\tres.text().then(function (html) {\n\t\t\t\t\t\t\t\tpreview.innerHTML = html;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t}).catch(function () {\n\t\t\t\t\t\t// A network hiccup shouldn't disrupt editing; the next\n\t\t\t\t\t\t// debounced keystroke retries.\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\ttextarea.addEventListener(\"input\", function () {\n\t\t\t\t\tclearTimeout(debounce);\n\t\t\t\t\tdebounce = setTimeout(renderPreview, 400);\n\t\t\t\t});\n\t\t\t\trenderPreview();\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

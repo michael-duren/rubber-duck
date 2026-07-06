@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
@@ -44,7 +45,11 @@ func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, lang := r.URL.Query().Get("tag"), r.URL.Query().Get("lang")
+	// tag repeats: ?tag=web&tag=api narrows to courses carrying every
+	// selected tag (multi-select in the catalog's --tag dropdown).
+	tags, lang := r.URL.Query()["tag"], r.URL.Query().Get("lang")
+	tags = slices.DeleteFunc(tags, func(t string) bool { return t == "" })
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var allTags, allLangs []string
 	filtered := courses[:0:0]
 	for _, c := range courses {
@@ -58,14 +63,56 @@ func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {
 				allLangs = append(allLangs, l)
 			}
 		}
-		if (tag == "" || slices.Contains(c.Tags, tag)) && (lang == "" || slices.Contains(c.Languages, lang)) {
+		if hasAllTags(c, tags) && (lang == "" || slices.Contains(c.Languages, lang)) && matchesQuery(c, query) {
 			filtered = append(filtered, c)
 		}
 	}
 	slices.Sort(allTags)
 	slices.Sort(allLangs)
 
-	h.render(w, r, views.Catalog(currentUser(r), filtered, allTags, allLangs, tag, lang))
+	// htmx live-search swaps only the results fragment; a history restore
+	// (back button after htmx pruned its cache) still needs the full page.
+	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-History-Restore-Request") != "true" {
+		h.render(w, r, views.CatalogResults(filtered, query, tags, lang))
+		return
+	}
+	h.render(w, r, views.Catalog(currentUser(r), filtered, allTags, allLangs, tags, lang, query))
+}
+
+// hasAllTags reports whether the course carries every selected tag; an empty
+// selection matches everything.
+func hasAllTags(c domain.CourseSummary, tags []string) bool {
+	for _, t := range tags {
+		if !slices.Contains(c.Tags, t) {
+			return false
+		}
+	}
+	return true
+}
+
+// matchesQuery reports whether the search box text hits a course's title,
+// slug, tags, or languages, case-insensitively. The slug matters because
+// titles and slugs word-break differently ("Hash Map" vs build-a-hashmap).
+// An empty query matches everything.
+func matchesQuery(c domain.CourseSummary, query string) bool {
+	if query == "" {
+		return true
+	}
+	q := strings.ToLower(query)
+	if strings.Contains(strings.ToLower(c.Title), q) || strings.Contains(c.Slug, q) {
+		return true
+	}
+	for _, t := range c.Tags {
+		if strings.Contains(strings.ToLower(t), q) {
+			return true
+		}
+	}
+	for _, l := range c.Languages {
+		if strings.Contains(strings.ToLower(l), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handlers) coursePage(w http.ResponseWriter, r *http.Request) {

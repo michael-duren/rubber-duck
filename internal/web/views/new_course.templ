@@ -27,7 +27,7 @@ templ NewCourse(user *domain.User, slug, title, language, description string, la
 			This just seeds a starter document in the editor — nothing is saved until you save it there.
 		</p>
 		if errMsg != "" {
-			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+			<p class="mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
 		}
 		<form method="post" action="/courses/new" class="mt-6 flex max-w-md flex-col gap-4">
 			@csrfField()
@@ -40,7 +40,7 @@ templ NewCourse(user *domain.User, slug, title, language, description string, la
 					pattern="[a-z0-9]+(-[a-z0-9]+)*"
 					value={ slug }
 					placeholder="intro-to-concurrency"
-					class="rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+					class="border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
 				/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm font-medium">
@@ -51,7 +51,7 @@ templ NewCourse(user *domain.User, slug, title, language, description string, la
 					required
 					value={ title }
 					placeholder="Introduction to Concurrency"
-					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+					class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
 				/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm font-medium">
@@ -59,7 +59,7 @@ templ NewCourse(user *domain.User, slug, title, language, description string, la
 				<select
 					name="language"
 					required
-					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+					class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
 				>
 					<option value="">Select a language…</option>
 					for _, l := range languages {
@@ -78,10 +78,10 @@ templ NewCourse(user *domain.User, slug, title, language, description string, la
 					name="description"
 					value={ description }
 					placeholder="One-paragraph pitch."
-					class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+					class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
 				/>
 			</label>
-			<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Continue to editor</button>
+			<button type="submit" class="self-start bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Continue to editor</button>
 		</form>
 	}
 }

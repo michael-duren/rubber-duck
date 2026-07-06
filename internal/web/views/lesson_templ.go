@@ -353,7 +353,7 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<section class=\"mt-8 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900\"><div class=\"flex flex-wrap items-center justify-between gap-2\"><h2 class=\"text-xl font-semibold\"><span class=\"font-mono text-emerald-600 dark:text-emerald-400\">›</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<section class=\"mt-8 border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900\"><div class=\"flex flex-wrap items-center justify-between gap-2\"><h2 class=\"text-xl font-semibold\"><span class=\"font-mono text-emerald-600 dark:text-emerald-400\">›</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -439,7 +439,7 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" name=\"code\" rows=\"14\" spellcheck=\"false\" class=\"mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" name=\"code\" rows=\"14\" spellcheck=\"false\" class=\"mt-2 w-full border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -470,7 +470,7 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" name=\"code\" rows=\"14\" spellcheck=\"false\" class=\"mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" name=\"code\" rows=\"14\" spellcheck=\"false\" class=\"mt-2 w-full border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -488,12 +488,12 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<button type=\"submit\" class=\"mt-3 rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500\">Run tests</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<button type=\"submit\" class=\"mt-3 bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500\">Run tests</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(submissions) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<details class=\"mt-6 rounded-lg border border-slate-200 p-4 dark:border-slate-800\"><summary class=\"cursor-pointer font-medium text-slate-700 dark:text-slate-300\">Your attempts (")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<details class=\"mt-6 border border-slate-200 p-4 dark:border-slate-800\"><summary class=\"cursor-pointer font-medium text-slate-700 dark:text-slate-300\">Your attempts (")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -524,7 +524,7 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" class=\"flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800\"><div class=\"text-sm\"><span class=\"font-mono text-slate-600 dark:text-slate-400\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" class=\"flex items-center justify-between bg-slate-50 px-3 py-2 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800\"><div class=\"text-sm\"><span class=\"font-mono text-slate-600 dark:text-slate-400\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -542,14 +542,14 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 						return templ_7745c5c3_Err
 					}
 					if sub.Status == "passed" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<span class=\"ml-2 inline-block rounded px-2 py-1 text-xs font-medium\" style=\"background-color: #d1fae5; color: #065f46;\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<span class=\"ml-2 inline-block px-2 py-1 text-xs font-medium\" style=\"background-color: #d1fae5; color: #065f46;\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var30 string
 						templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Status)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 94, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 94, Col: 135}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 						if templ_7745c5c3_Err != nil {
@@ -560,14 +560,14 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 							return templ_7745c5c3_Err
 						}
 					} else if sub.Status == "failed" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<span class=\"ml-2 inline-block rounded px-2 py-1 text-xs font-medium\" style=\"background-color: #fee2e2; color: #7f1d1d;\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<span class=\"ml-2 inline-block px-2 py-1 text-xs font-medium\" style=\"background-color: #fee2e2; color: #7f1d1d;\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var31 string
 						templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Status)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 96, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 96, Col: 135}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 						if templ_7745c5c3_Err != nil {
@@ -578,14 +578,14 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 							return templ_7745c5c3_Err
 						}
 					} else if sub.Status == "error" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span class=\"ml-2 inline-block rounded px-2 py-1 text-xs font-medium\" style=\"background-color: #fef3c7; color: #78350f;\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span class=\"ml-2 inline-block px-2 py-1 text-xs font-medium\" style=\"background-color: #fef3c7; color: #78350f;\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var32 string
 						templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Status)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 98, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 98, Col: 135}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 						if templ_7745c5c3_Err != nil {
@@ -596,14 +596,14 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 							return templ_7745c5c3_Err
 						}
 					} else if sub.Status == "pending" || sub.Status == "running" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<span class=\"ml-2 inline-block rounded px-2 py-1 text-xs font-medium\" style=\"background-color: #dbeafe; color: #1e40af;\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<span class=\"ml-2 inline-block px-2 py-1 text-xs font-medium\" style=\"background-color: #dbeafe; color: #1e40af;\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var33 string
 						templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Status)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 100, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 100, Col: 135}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 						if templ_7745c5c3_Err != nil {
@@ -614,14 +614,14 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<span class=\"ml-2 inline-block rounded px-2 py-1 text-xs font-medium\" style=\"background-color: #f3f4f6; color: #374151;\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<span class=\"ml-2 inline-block px-2 py-1 text-xs font-medium\" style=\"background-color: #f3f4f6; color: #374151;\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var34 string
 						templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Status)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 102, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/lesson.templ`, Line: 102, Col: 135}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 						if templ_7745c5c3_Err != nil {
@@ -675,7 +675,7 @@ func ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, sub
 				}
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<p class=\"mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300\"><a href=\"/login\" class=\"font-medium text-emerald-600 hover:underline dark:text-emerald-400\">Log in</a> to submit a solution and earn points.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<p class=\"mt-4 border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300\"><a href=\"/login\" class=\"font-medium text-emerald-600 hover:underline dark:text-emerald-400\">Log in</a> to submit a solution and earn points.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -29,6 +29,7 @@ type fakeStore struct {
 	submissions    map[int64]domain.Submission
 	nextSub        int64
 	rateLimit      func(userID, challengeID int64) bool // nil = never limited
+	courses        []domain.CourseSummary               // returned by ListCourses (catalog tests)
 }
 
 // upsertCall records one UpsertVariant invocation so tests can assert on the
@@ -168,8 +169,10 @@ func (f *fakeStore) DeleteOtherSessions(_ context.Context, userID int64, keepTok
 }
 
 // CourseReader stubs: auth tests don't exercise course pages beyond the
-// (empty) catalog rendered at "/".
-func (f *fakeStore) ListCourses(context.Context) ([]domain.CourseSummary, error) { return nil, nil }
+// (empty) catalog rendered at "/"; catalog tests seed f.courses.
+func (f *fakeStore) ListCourses(context.Context) ([]domain.CourseSummary, error) {
+	return f.courses, nil
+}
 
 func (f *fakeStore) CourseBySlug(context.Context, string) (domain.Course, []domain.VariantSummary, error) {
 	return domain.Course{}, nil, domain.ErrNotFound

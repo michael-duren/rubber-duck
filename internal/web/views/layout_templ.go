@@ -44,7 +44,7 @@ func Layout(title string, user *domain.User) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Rubber Duck</title><link rel=\"stylesheet\" href=\"/static/app.css\"><script>\n\t\t\t\tif (localStorage.getItem(\"theme\") === \"light\") {\n\t\t\t\t\tdocument.documentElement.classList.remove(\"dark\");\n\t\t\t\t}\n\t\t\t</script></head><body class=\"min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100\"><header class=\"border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950\"><nav class=\"mx-auto flex max-w-6xl items-center justify-between px-4 py-3\"><div class=\"flex items-center gap-6\"><a href=\"/\" class=\"font-mono text-lg font-bold tracking-tight\"><span class=\"text-emerald-600 dark:text-emerald-400\">$</span> rubber-duck <span aria-hidden=\"true\">🦆</span></a><div class=\"flex items-center gap-4 text-sm\"><a href=\"/\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">Courses</a> <a href=\"/about\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">About</a> <a href=\"/cli\" class=\"font-mono text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">CLI</a></div></div><div class=\"flex items-center gap-4 text-sm\"><button type=\"button\" aria-label=\"Toggle theme\" class=\"rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white\" onclick=\"document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')\">dark/light</button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Rubber Duck</title><link rel=\"stylesheet\" href=\"/static/app.css\"><script>\n\t\t\t\tif (localStorage.getItem(\"theme\") === \"light\") {\n\t\t\t\t\tdocument.documentElement.classList.remove(\"dark\");\n\t\t\t\t}\n\t\t\t</script><script src=\"/static/htmx.min.js\"></script><script defer src=\"/static/alpine.min.js\"></script></head><body class=\"crt min-h-screen bg-slate-50 text-slate-900 dark:bg-[#0b0f0d] dark:text-slate-100\"><header class=\"border-b border-slate-200 bg-white dark:border-emerald-900/50 dark:bg-[#0b0f0d]\"><nav class=\"mx-auto flex max-w-6xl items-center justify-between px-4 py-3\"><div class=\"flex items-center gap-6\"><a href=\"/\" class=\"font-mono text-lg font-bold tracking-tight\"><span class=\"text-emerald-600 dark:text-emerald-400\">$</span> rubber-duck <span aria-hidden=\"true\">🦆</span></a><div class=\"flex items-center gap-4 text-sm\"><a href=\"/\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">Courses</a> <a href=\"/about\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">About</a> <a href=\"/cli\" class=\"font-mono text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">CLI</a></div></div><div class=\"flex items-center gap-4 text-sm\"><button type=\"button\" aria-label=\"Toggle theme\" class=\"border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white\" onclick=\"document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')\">dark/light</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -56,7 +56,7 @@ func Layout(title string, user *domain.User) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(user.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 42, Col: 139}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 44, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -75,7 +75,7 @@ func Layout(title string, user *domain.User) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<a href=\"/login\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">Log in</a> <a href=\"/signup\" class=\"rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500\">Sign up</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<a href=\"/login\" class=\"text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white\">Log in</a> <a href=\"/signup\" class=\"bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500\">Sign up</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -127,7 +127,7 @@ func csrfField() templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 65, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 67, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -163,14 +163,14 @@ func tagChip(tag string) templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300\">#")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-600 dark:bg-emerald-950/60 dark:text-emerald-300/80\">#")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(tag)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 70, Col: 127}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 72, Col: 129}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -206,14 +206,14 @@ func langChip(lang string) templ.Component {
 			templ_7745c5c3_Var8 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"rounded border border-sky-300 px-1.5 py-0.5 font-mono text-xs text-sky-700 dark:border-sky-800 dark:text-sky-300\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"border border-sky-300 px-1.5 py-0.5 font-mono text-xs text-sky-700 dark:border-sky-800 dark:text-sky-300\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(lang)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 75, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 77, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -249,14 +249,14 @@ func pointsBadge(points int) templ.Component {
 			templ_7745c5c3_Var10 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<span class=\"rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<span class=\"bg-amber-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(points)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 80, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 82, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
