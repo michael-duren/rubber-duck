@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/michael-duren/rubber-duck/internal/auth"
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
@@ -19,13 +20,29 @@ type fakeStore struct {
 	courses  map[string]domain.Course
 	sources  map[string]string
 	variants map[string]domain.Variant
+	editedBy map[string]*int64 // "slug/lang" -> last UpsertVariant's editedBy
+
+	users map[string]domain.User // token -> user, for UserByToken
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		versions: map[string]int{}, courses: map[string]domain.Course{},
 		sources: map[string]string{}, variants: map[string]domain.Variant{},
+		editedBy: map[string]*int64{}, users: map[string]domain.User{},
 	}
+}
+
+// UserByToken looks up a user by the raw token string (tests key f.users by
+// the plaintext token rather than a hash, since the fake never sees
+// internal/auth.HashToken's output — requireKey hashes before calling this,
+// so the fake stores by that same hash to match).
+func (f *fakeStore) UserByToken(_ context.Context, tokenHash []byte) (domain.User, error) {
+	u, ok := f.users[string(tokenHash)]
+	if !ok {
+		return domain.User{}, domain.ErrNotFound
+	}
+	return u, nil
 }
 
 func (f *fakeStore) key(slug, lang string) string { return slug + "/" + lang }
@@ -42,12 +59,21 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 	return c, v, nil
 }
 
-func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant, _ *int64, _ *int) (int, error) {
+// UpsertVariant mirrors the real store's optimistic-concurrency contract
+// (see internal/store.Store.UpsertVariant and internal/web's identically
+// patterned fake in auth_handlers_test.go): a non-nil expectedVersion that
+// doesn't match the stored version is rejected with domain.ErrVersionConflict
+// and leaves all state untouched.
+func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant, editedBy *int64, expectedVersion *int) (int, error) {
 	k := f.key(c.Slug, v.Language)
+	if expectedVersion != nil && *expectedVersion != f.versions[k] {
+		return 0, domain.ErrVersionConflict
+	}
 	f.variants[k] = v
 	f.versions[k]++
 	f.courses[c.Slug] = c
 	f.sources[k] = v.SourceMD
+	f.editedBy[k] = editedBy
 	return f.versions[k], nil
 }
 
@@ -93,20 +119,32 @@ func (f *fakeStore) DeleteVariant(_ context.Context, slug, lang string) error {
 
 func (f *fakeStore) ListTags(context.Context) ([]string, error) { return []string{"backend"}, nil }
 
-// allowAllKeys accepts any bearer token.
-type allowAllKeys struct{}
+// APIKeyValid accepts any bearer token that reaches this method — requireKey
+// only calls it for non-"gc_u_" tokens, so this models "any agent key is
+// valid" the same way the old standalone allowAllKeys fake did.
+func (f *fakeStore) APIKeyValid(context.Context, []byte) (bool, error) { return true, nil }
 
-func (allowAllKeys) APIKeyValid(context.Context, []byte) (bool, error) { return true, nil }
+// addUser registers a user token in the fake so a test can authenticate as
+// that user via "Bearer "+token.
+func (f *fakeStore) addUser(token string, user domain.User) {
+	f.users[string(auth.HashToken(token))] = user
+}
 
 func testAPI(t *testing.T) (*http.ServeMux, *fakeStore) {
 	t.Helper()
 	mux := http.NewServeMux()
 	fs := newFakeStore()
-	Register(mux, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), allowAllKeys{}, fs)
+	Register(mux, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), fs, fs)
 	return mux, fs
 }
 
 func doJSON(mux *http.ServeMux, method, path string, body any) *httptest.ResponseRecorder {
+	return doJSONAs(mux, method, path, "gc_test", body)
+}
+
+// doJSONAs is doJSON with a caller-chosen bearer token, so tests can
+// authenticate as either an agent key or a "gc_u_" user token.
+func doJSONAs(mux *http.ServeMux, method, path, bearer string, body any) *httptest.ResponseRecorder {
 	var rd *bytes.Reader
 	if body != nil {
 		b, _ := json.Marshal(body)
@@ -115,7 +153,7 @@ func doJSON(mux *http.ServeMux, method, path string, body any) *httptest.Respons
 		rd = bytes.NewReader(nil)
 	}
 	req := httptest.NewRequest(method, path, rd)
-	req.Header.Set("Authorization", "Bearer gc_test")
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	return rec
@@ -214,6 +252,106 @@ func TestPutVariant(t *testing.T) {
 	})
 }
 
+// TestPutVariantUserToken covers issue #42: a human authenticated via a
+// gc_u_ user token (rather than an agent API key) gets attribution
+// (editedBy) and optional optimistic concurrency (expected_version) on PUT.
+func TestPutVariantUserToken(t *testing.T) {
+	doc := seedDoc(t)
+	path := "/api/v1/courses/intro-to-concurrency/variants/go"
+
+	putAs := func(mux *http.ServeMux, bearer string, expectedVersion *int) *httptest.ResponseRecorder {
+		body := map[string]any{"markdown": doc}
+		if expectedVersion != nil {
+			body["expected_version"] = *expectedVersion
+		}
+		return doJSONAs(mux, "PUT", path, bearer, body)
+	}
+
+	t.Run("valid user token attributes the write", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+
+		rec := putAs(mux, "gc_u_alice", nil)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status = %d body %s", rec.Code, rec.Body)
+		}
+		got := fs.editedBy[fs.key("intro-to-concurrency", "go")]
+		if got == nil || *got != 42 {
+			t.Errorf("editedBy = %v, want *42", got)
+		}
+	})
+
+	t.Run("expected_version mismatch is 409 version_conflict", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+
+		if rec := putAs(mux, "gc_u_alice", nil); rec.Code != http.StatusCreated {
+			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
+		}
+		wrong := 999 // stored version is now 1; 999 can never match
+		rec := putAs(mux, "gc_u_alice", &wrong)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status = %d body %s", rec.Code, rec.Body)
+		}
+		var resp struct {
+			Error struct{ Code string }
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp.Error.Code != "version_conflict" {
+			t.Errorf("error code = %q, want version_conflict", resp.Error.Code)
+		}
+	})
+
+	t.Run("expected_version match succeeds", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+
+		if rec := putAs(mux, "gc_u_alice", nil); rec.Code != http.StatusCreated {
+			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
+		}
+		one := 1
+		rec := putAs(mux, "gc_u_alice", &one)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("second put with matching expected_version = %d body %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("expected_version omitted succeeds like an unversioned write", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+
+		if rec := putAs(mux, "gc_u_alice", nil); rec.Code != http.StatusCreated {
+			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
+		}
+		rec := putAs(mux, "gc_u_alice", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("second put without expected_version = %d body %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("agent key ignores expected_version instead of erroring", func(t *testing.T) {
+		mux, _ := testAPI(t)
+		if rec := doJSON(mux, "PUT", path, map[string]string{"markdown": doc}); rec.Code != http.StatusCreated {
+			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
+		}
+		// An agent key sending a wildly wrong expected_version must be a
+		// no-op, not a 409: agent publishes stay unversioned.
+		wrong := 999
+		rec := putAs(mux, "gc_test", &wrong)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d body %s, want 200 (expected_version ignored for agent keys)", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("unknown user token is 401", func(t *testing.T) {
+		mux, _ := testAPI(t)
+		rec := putAs(mux, "gc_u_nobody", nil)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+}
+
 func TestRoundTripAndDelete(t *testing.T) {
 	mux, _ := testAPI(t)
 	doc := seedDoc(t)
@@ -223,10 +361,15 @@ func TestRoundTripAndDelete(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get source = %d", rec.Code)
 	}
-	var got map[string]string
-	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal get response: %v", err)
+	}
 	if got["markdown"] != doc {
 		t.Error("round-tripped markdown differs from submitted document")
+	}
+	if got["version"].(float64) != 1 {
+		t.Errorf("version = %v, want 1", got["version"])
 	}
 
 	if rec := doJSON(mux, "DELETE", "/api/v1/courses/intro-to-concurrency/variants/go", nil); rec.Code != http.StatusNoContent {
