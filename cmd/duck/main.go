@@ -33,12 +33,14 @@ func run(args []string) error {
 		return loginCmd(args[1:])
 	case "version":
 		return versionCmd(args[1:])
+	case "educator", "ed":
+		return educatorCmd(args[1:])
 	default:
 		return errUsageError
 	}
 }
 
-var errUsageError = errors.New("usage: duck <pull|test|submit|login|version> [args]")
+var errUsageError = errors.New("usage: duck <pull|test|submit|login|version|educator (ed)> [args]")
 
 // parseInterleaved parses fs accepting flags before AND after positional
 // arguments (`duck pull intro-to-go/go --base URL`), which stdlib flag
