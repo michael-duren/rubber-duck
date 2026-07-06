@@ -16,7 +16,7 @@ extended_reading:
 
 By the end of this course you will have a chatbot running in your terminal —
 your API key, your machine, a real model on the other end. Each lesson adds
-one piece to that app, and each challenge unit-tests the one pure function you
+one piece to that app, and each challenge unit-tests the one function you
 just wrote. The full app runs locally; the graded challenges never touch the
 network.
 
@@ -69,6 +69,14 @@ print(response.content[0].text)
 
 Run it: `python chatbot.py`. That's a real model answering you.
 
+`max_tokens` is required, and it's easy to confuse with the context window
+you'll meet in the memory lesson — they cap different things. `max_tokens`
+limits how long *this one reply* can be; the model stops generating,
+possibly mid-sentence, once it hits that count. The context window is the
+model's hard limit on *total* input size across the whole conversation.
+Set `max_tokens` too low and long answers get truncated; that's independent
+of how much history you've accumulated.
+
 One wrinkle worth noticing: Anthropic's API takes the system prompt as a
 separate `system=` parameter, while OpenAI's API takes it as a
 `{"role": "system", ...}` message at the front of the list. We'll keep the
@@ -89,8 +97,9 @@ def make_conversation(system_prompt):
 Small, but it pins down real decisions: a blank or missing prompt means an
 empty history (no junk system message), stray whitespace gets stripped, and —
 importantly — every call returns a *fresh list*. If two conversations shared
-one list, turning one chat would haunt the other. That bug class (shared
-mutable defaults) is a Python classic; the tests below check for it.
+one list, mutating one chat's history would corrupt the other's. That kind of
+aliasing bug — handing every caller the same mutable object instead of a
+fresh one — is a Python classic; the tests below check for it.
 
 ## Challenge: Start the Conversation {#make-conversation points=10}
 
@@ -144,7 +153,9 @@ def test_each_call_returns_a_fresh_list():
 
 A chatbot is a loop: read input, append a user message, send the whole
 history, append the reply, print it, repeat. The design question is where to
-put the seam so the loop logic is testable without the network.
+put the seam — a point in the code where you can swap in different behavior
+(a fake client instead of a real one) without touching the surrounding
+logic — so the loop logic is testable without the network.
 
 The answer: define the turn as a function that takes the API as an argument.
 A **client** in this course is just a callable — `client(messages) -> str` —
@@ -447,7 +458,15 @@ def call_with_retries(fn, attempts):
 ```
 
 Bounded is the important word: retry forever and a real outage turns your app
-into a busy-loop. Use it in the chat loop by wrapping the client call in a
+into a busy-loop. Notice the wrapper catches bare `Exception` — deliberately
+broad, since the tests below only care about attempt counting. A real app
+should usually narrow that to the transient errors described above (the
+Anthropic SDK raises typed exceptions — `RateLimitError`, `APIConnectionError`,
+`InternalServerError` — for exactly this), so a bug in your own code, like a
+`TypeError` from a bad dict key, fails immediately instead of quietly burning
+through your retry budget.
+
+Use it in the chat loop by wrapping the client call in a
 zero-argument lambda:
 
 ```python
@@ -562,9 +581,12 @@ def test_raises_after_exhausting_attempts():
 
 Your chatbot is done: it starts from a system prompt, loops through turns,
 remembers the conversation, trims to a budget, and survives flaky calls. The
-final challenge is the engine of that app as one pure function — everything
-you built, with the interactive `input()` loop replaced by a list of scripted
-user inputs and the real API replaced by an injected client.
+final challenge is the engine of that app as one function — everything you
+built, with the interactive `input()` loop replaced by a list of scripted
+user inputs and the real API replaced by an injected client. It doesn't
+mutate `user_inputs` or return anything shared, so with a deterministic fake
+client (as in the tests) it behaves like a pure function; wire in the real
+`anthropic_client` and it's exactly your app's loop, network calls included.
 
 Implement `run_conversation(user_inputs, client, system_prompt=None, max_messages=None)`:
 
