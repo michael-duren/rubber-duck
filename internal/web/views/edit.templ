@@ -22,7 +22,16 @@ type EditProblem struct {
 // #36): on GET it's the version just loaded; on a failed POST it's
 // unchanged, so retrying without reloading still targets the same version
 // (and correctly conflicts again, rather than silently jumping forward).
-templ EditVariant(user *domain.User, slug, lang, markdown string, version int, errMsg string, problems []EditProblem) {
+//
+// submissionCount is how many submissions exist against this variant right
+// now (store.VariantSubmissionCount): saving replaces the variant's lessons
+// and challenges wholesale, cascading a delete of exactly these rows (issue
+// #37). When it's > 0 the form shows a warning banner naming the exact
+// count and swaps the plain Save button for a "Yes, save anyway" button
+// that also sends a hidden confirmed=1 field; saveVariant only proceeds
+// with the destructive write once that field is present. A variant with no
+// submissions gets the plain Save button, unchanged from before this issue.
+templ EditVariant(user *domain.User, slug, lang, markdown string, version int, errMsg string, problems []EditProblem, submissionCount int) {
 	@Layout("Edit "+slug+" ("+lang+")", user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
 			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
@@ -43,6 +52,11 @@ templ EditVariant(user *domain.User, slug, lang, markdown string, version int, e
 				</ul>
 			</div>
 		}
+		if submissionCount > 0 {
+			<p class="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+				Saving will reset progress for { strconv.Itoa(submissionCount) } submission{ plural(submissionCount) } made against this variant — re-publishing replaces its lessons and challenges, which deletes them. Save again to confirm.
+			</p>
+		}
 		<form method="post" action={ templ.SafeURL("/courses/" + slug + "/" + lang + "/edit") } class="mt-6 flex flex-col gap-3">
 			@csrfField()
 			<input type="hidden" name="version" value={ strconv.Itoa(version) }/>
@@ -52,7 +66,12 @@ templ EditVariant(user *domain.User, slug, lang, markdown string, version int, e
 				spellcheck="false"
 				class="w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
 			>{ markdown }</textarea>
-			<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Save</button>
+			if submissionCount > 0 {
+				<input type="hidden" name="confirmed" value="1"/>
+				<button type="submit" class="self-start rounded-md bg-amber-600 px-3 py-2 font-medium text-white hover:bg-amber-500">Yes, save anyway</button>
+			} else {
+				<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Save</button>
+			}
 		</form>
 	}
 }

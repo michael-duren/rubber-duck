@@ -30,6 +30,11 @@ type CourseReader interface {
 	// the caller loaded it (optimistic concurrency for the web editor); the
 	// web save handler always passes it, other callers pass nil.
 	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
+	// VariantSubmissionCount reports how many submissions exist against this
+	// variant's challenges — UpsertVariant's wholesale replace cascades a
+	// delete of exactly these, so the edit page uses it to warn before that
+	// happens (issue #37).
+	VariantSubmissionCount(ctx context.Context, courseSlug, language string) (int, error)
 }
 
 func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {

@@ -115,6 +115,62 @@ func TestUpsertVariantVersionConflict(t *testing.T) {
 	}
 }
 
+// TestVariantSubmissionCount covers issue #37: the web editor warns before a
+// save that would cascade-delete submissions, using this count to name the
+// exact impact.
+func TestVariantSubmissionCount(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	_, ids := seedChallenges(t, s)
+	first, second := ids[0], ids[1]
+
+	src, err := os.ReadFile("../../seed/intro-to-go.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := ingest.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	course, variant, err := ingest.ToDomain(res, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A freshly-seeded variant has no submissions yet.
+	count, err := s.VariantSubmissionCount(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("VariantSubmissionCount: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count before any submissions = %d, want 0", count)
+	}
+
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := s.CreateSubmission(ctx, u.ID, first, "package x"); err != nil {
+		t.Fatalf("create submission 1: %v", err)
+	}
+	if _, err := s.CreateSubmission(ctx, u.ID, second, "package x"); err != nil {
+		t.Fatalf("create submission 2: %v", err)
+	}
+
+	count, err = s.VariantSubmissionCount(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("VariantSubmissionCount: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2 (one per submitted challenge, regardless of user)", count)
+	}
+
+	// A nonexistent variant reports 0 rather than erroring.
+	if noneCount, err := s.VariantSubmissionCount(ctx, "nope", "go"); err != nil || noneCount != 0 {
+		t.Errorf("count for missing variant = %d, %v; want 0, nil", noneCount, err)
+	}
+}
+
 // variantEditedBy reads the edited_by column directly; it's attribution
 // metadata, not part of any domain read path yet.
 func variantEditedBy(t *testing.T, s *Store, courseSlug, language string) *int64 {

@@ -230,3 +230,106 @@ func TestSaveVariantMissingVersionPreservesInput(t *testing.T) {
 		t.Errorf("write without a version must not be applied, got %d upserts", len(fs.upserts))
 	}
 }
+
+// TestEditVariantPageShowsSubmissionWarning covers issue #37's GET side: a
+// variant with existing submissions shows the exact count as soon as the
+// page loads, before the user ever clicks Save.
+func TestEditVariantPageShowsSubmissionWarning(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+	fs.subCount = 3
+
+	req := httptest.NewRequest("GET", "/courses/intro-to-concurrency/go/edit", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /edit = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "3 submission") {
+		t.Errorf("expected the exact submission count in the warning, got: %s", body)
+	}
+	if !strings.Contains(body, "Yes, save anyway") {
+		t.Error("expected the confirming submit control when submissions exist")
+	}
+}
+
+// TestSaveVariantNoSubmissionsSavesImmediately is the non-regression case:
+// a variant with zero submissions saves on the first plain Save, with no
+// confirmation step, exactly like before issue #37.
+func TestSaveVariantNoSubmissionsSavesImmediately(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = "stale"
+	fs.subCount = 0
+
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST with no submissions = %d, want 303 (saved immediately): %s", rec.Code, rec.Body)
+	}
+	if len(fs.upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	}
+}
+
+// TestSaveVariantWithSubmissionsRequiresConfirmation covers issue #37's core
+// case: a variant with existing submissions, submitted without the
+// confirmed=1 field, must not save — it re-renders the edit page instead,
+// naming the exact count and preserving exactly what the user typed.
+func TestSaveVariantWithSubmissionsRequiresConfirmation(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+	fs.subCount = 5
+
+	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (in progress)", 1)
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {edited}, "version": {"0"}}, session)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST unconfirmed with submissions = %d, want 200 (re-render): %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "5 submission") {
+		t.Errorf("expected the exact submission count in the warning, got: %s", body)
+	}
+	if !strings.Contains(body, "(in progress)") {
+		t.Error("edit page should preserve exactly what the user submitted while awaiting confirmation")
+	}
+	if len(fs.upserts) != 0 {
+		t.Errorf("unconfirmed destructive save must not be applied, got %d upserts", len(fs.upserts))
+	}
+}
+
+// TestSaveVariantWithSubmissionsConfirmedSaves is the other half of the same
+// case: the same submit, but with confirmed=1 present (as the rendered "Yes,
+// save anyway" button sends), must proceed and save.
+func TestSaveVariantWithSubmissionsConfirmedSaves(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+	fs.subCount = 5
+
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}, "confirmed": {"1"}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST confirmed with submissions = %d, want 303 (saved): %s", rec.Code, rec.Body)
+	}
+	if len(fs.upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	}
+}

@@ -103,6 +103,28 @@ func (s *Store) VariantSource(ctx context.Context, slug, language string) (strin
 	return src, version, err
 }
 
+// VariantSubmissionCount returns how many submissions exist against a
+// variant's challenges, keyed by slug+language — the same lookup shape as
+// VariantSource, which is what editVariantPage/saveVariant already have on
+// hand (no variant ID needed). Re-publishing a variant (UpsertVariant)
+// replaces its lessons/challenges, cascading a delete of exactly these rows,
+// so the web editor uses this count to warn before that happens (issue #37).
+// A variant that doesn't exist reports 0 rather than domain.ErrNotFound —
+// callers here already resolve existence via VariantSource first.
+func (s *Store) VariantSubmissionCount(ctx context.Context, slug, language string) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM submissions sub
+		JOIN challenges ch ON ch.id = sub.challenge_id
+		JOIN course_variants v ON v.id = ch.variant_id
+		JOIN courses c ON c.id = v.course_id
+		WHERE c.slug = $1 AND v.language = $2`,
+		slug, language,
+	).Scan(&count)
+	return count, err
+}
+
 func (s *Store) DeleteCourse(ctx context.Context, slug string) error {
 	ct, err := s.pool.Exec(ctx, `DELETE FROM courses WHERE slug = $1`, slug)
 	if err != nil {
