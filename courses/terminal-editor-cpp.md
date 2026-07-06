@@ -597,7 +597,7 @@ editor is waiting to see whether more bytes follow.
 ### A Key type: sum types over flag soup
 
 The decoder's output should say *which key*, in one honest type. The C
-tradition is an int with magic values (kilo uses `enum { ARROW_UP = 1000,
+tradition is an int with magic values (kilo uses `enum { ARROW_LEFT = 1000,
 ... }` above char range). Modern C++ has a better tool — the **sum
 type**:
 
@@ -869,7 +869,7 @@ ESC [ 2 J        erase the whole screen
 ESC [ K          erase from the cursor to the end of the line
 ESC [ H          cursor to row 1, column 1 (home)
 ESC [ 12 ; 40 H  cursor to row 12, column 40  — 1-BASED, row;col
-ESC [ 7 m        SGR: inverted video (swap fg/bg)
+ESC [ 7 m        SGR (Select Graphic Rendition): inverted video (swap fg/bg)
 ESC [ m          SGR: reset all attributes
 ESC [ ? 25 l     hide the cursor        (l = reset a private mode)
 ESC [ ? 25 h     show the cursor        (h = set a private mode)
@@ -4320,8 +4320,10 @@ Backspace, `0x12` is Ctrl-R. Everything else is a literal key.
   count/operator; so does an unrecognized key.
 - **Motions** (cursor moves, count-aware): `h l j k 0 ^ $ w b e G`
   and `gg` (a `g` waits for a second `g`; `g` + anything else aborts
-  cleanly). Semantics exactly as in your motion challenges — including
-  the no-goal-column `j`/`k` clamp.
+  cleanly — that second key is *discarded*, the same as an unrecognized
+  key clearing a pending count, not executed as a command of its own).
+  Semantics exactly as in your motion challenges — including the
+  no-goal-column `j`/`k` clamp.
 - **Operators**: `d` and `c`, with any motion above (via `resolve` +
   `apply_op`, provided), plus doubled `dd`/`cc`. A `nullopt` range
   (e.g. `dh` at column 0) is a no-op — and must not create an undo
