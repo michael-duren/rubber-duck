@@ -135,8 +135,12 @@ reg ^=  mask;   /* flip  every bit that is 1 in mask */
 ```
 
 A mask for a single pin is built by shifting: `1u << pin`. Note the `u` —
-shifting a plain (signed) `int` left into bit 31 is undefined behavior, and
-pin 31 is a perfectly real pin.
+shifting a plain (signed) `int` left into bit 31 is undefined behavior. The
+RP2040's GPIO pins only go up to 29, so `GPIO_OUT` never actually needs bit
+31, but plenty of other 32-bit registers use every bit: the SIO has 32
+hardware spinlocks, and `SIO_SPINLOCK_ST` reports all of them as a bitmap,
+one bit per spinlock, straight through to bit 31. Use `1u`, not `1`, and
+which register you're shifting into stops mattering.
 
 Each of those compound assignments is really three steps: **read** the
 register, **modify** the copy, **write** it back. Keep that shape in mind —
@@ -240,10 +244,13 @@ registers sit at these offsets (datasheet §2.3.1.7):
 
 Why the SET/CLR/XOR aliases when last lesson's read-modify-write already
 works? Because RMW is **three** operations, and between your read and your
-write an interrupt handler (or the second core) may also touch GPIO_OUT —
-its update gets silently overwritten. Writing a mask to `GPIO_OUT_SET` is
-**one** store; the hardware does the modify atomically. This pattern is all
-over the RP2040, so drivers barely ever RMW the SIO.
+write an interrupt handler — or the RP2040's *second* core; it's a dual-core
+chip, and both cores can drive GPIO through the same SIO block — may also
+touch GPIO_OUT. Do a plain RMW and that other write can land in the gap
+between your read and your write, and gets silently overwritten. Writing a
+mask to `GPIO_OUT_SET` is **one** store; the hardware does the modify
+atomically. This pattern is all over the RP2040, so drivers barely ever RMW
+the SIO.
 
 Instead of casting raw offsets one at a time, real drivers describe a whole
 register block as a struct whose field layout mirrors the datasheet, then
