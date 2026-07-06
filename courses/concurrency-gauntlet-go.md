@@ -27,23 +27,58 @@ The classic composition is the **or-channel**: given N done-channels, produce
 one channel that closes when *any* of them does. Two viable shapes:
 
 ```go
-// Recursive: each layer selects over a few inputs plus the next layer.
-// Closing propagates in both directions, so every goroutine exits.
-out := make(chan struct{})
-go func() {
-	defer close(out)
-	select {
-	case <-a:
-	case <-b:
-	case <-or(rest, out)...: // include out so children die with the parent
+// Recursive: peel off up to 3 channels per layer; the last case recurses
+// on the rest plus out itself, so a close of out (the parent dying) also
+// wakes up and retires every recursive layer underneath it.
+func or(chans ...<-chan struct{}) <-chan struct{} {
+	switch len(chans) {
+	case 0:
+		return nil
+	case 1:
+		return chans[0]
 	}
-}()
+	out := make(chan struct{})
+	go func() {
+		defer close(out)
+		switch len(chans) {
+		case 2:
+			select {
+			case <-chans[0]:
+			case <-chans[1]:
+			}
+		default:
+			select {
+			case <-chans[0]:
+			case <-chans[1]:
+			case <-chans[2]:
+			case <-or(append(chans[3:], out)...):
+			}
+		}
+	}()
+	return out
+}
 ```
 
 ```go
 // Flat: one goroutine, reflect.Select over N cases, exits after one fires.
 cases := make([]reflect.SelectCase, len(chans))
+for i, ch := range chans {
+	cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)}
+}
+out := make(chan struct{})
+go func() {
+	defer close(out)
+	reflect.Select(cases) // blocks until any one channel is ready or closed
+}()
 ```
+
+The recursive shape is the one worth internalizing: each layer only ever
+looks at 2 or 3 concrete channels plus one recursive call, so the select
+statement stays a fixed size no matter how many inputs you started with —
+the tradeoff is roughly N/3 nested goroutines for N inputs. The flat shape
+uses exactly one goroutine regardless of N, at the cost of building a
+`reflect.SelectCase` slice and paying reflection overhead on every call —
+worth it only if goroutine count matters more than that overhead.
 
 The trap is the obvious third shape: one goroutine per input channel. It works
 — and leaks a goroutine for every input that never closes. In a server that
@@ -876,11 +911,24 @@ done-channel per call:
 - Every other caller for K: find the entry under the lock, unlock,
   `<-done`, read the shared result.
 
-The ordering trap: delete the map entry **before** closing `done`. Do it in
-the other order and a caller who arrives in the gap joins a flight that
-already finished — reading results that are about to be overwritten, or
-waiting on nothing. Also note what singleflight is *not*: it's not a cache.
-Once a flight completes, the next caller starts a fresh one.
+The trap is the *insert*, not the cleanup order: checking "is K already in
+flight" and inserting a new call for it must happen as one atomic step under
+the lock. Split it into two lock acquisitions — check, unlock, then
+insert — and two callers arriving at the same instant can each conclude
+they're first, and both invoke `fn`. Whether you delete the map entry before
+or after closing `done` doesn't actually matter for correctness: `fn`'s
+result is written once, before anyone can observe it, so a caller that finds
+the entry still present just gets an already-final result a little late,
+and one that finds it gone starts a fresh call — neither reads a value
+that's "about to be overwritten." (For what it's worth, the real
+`golang.org/x/sync/singleflight` releases its waiters *before* deleting the
+map entry — the opposite of what you might guess — because both happen
+inside one uninterrupted locked section, so no caller can observe one
+without the other anyway.) What does matter: never hold the lock while `fn`
+runs — that would serialize every key, not just repeats of the same one —
+and always remove the entry eventually, so the next caller for K gets a
+fresh flight. Also note what singleflight is *not*: it's not a cache. Once a
+flight completes, the next caller starts a fresh one.
 
 ## Challenge: Singleflight From Scratch {#singleflight points=35}
 
@@ -1176,7 +1224,14 @@ goroutine. Two plumbing fittings show up constantly:
 
 - **Tee** splits one stream into two, like the shell command — every value
   goes to *both* outputs.
-- **Bridge** flattens a channel of channels into one stream.
+- **Bridge** flattens a channel of channels (`<-chan <-chan T`) into one
+  stream (`<-chan T`): read the next inner channel off the outer one, drain
+  it completely, then move to the next. It shows up when a producer hands
+  you a fresh channel per unit of work — pagination, one channel per
+  shard — and consumers just want one linear stream instead of juggling N.
+
+This lesson's challenge below is Tee only; Bridge is here so the name isn't
+a surprise if you meet it in the wild.
 
 Tee has a sharp edge: you must send each value to both outputs, but the two
 consumers run at different speeds, and you can't just send to one then the
