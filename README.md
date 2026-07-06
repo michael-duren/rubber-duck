@@ -76,18 +76,25 @@ sandbox — milestone 2 swaps in a stronger isolate (e.g. gVisor) behind the
 ## Agent API
 
 All endpoints live under `/api/v1` and require a bearer key minted with
-`getcracked apikey create`:
+`getcracked apikey create`, **or** a human's `gc_u_...` user CLI token (same
+one `duck submit`/`duck test` use):
 
 ```
 Authorization: Bearer gc_<40 hex>
+Authorization: Bearer gc_u_<40 hex>
 ```
+
+A user token only changes behavior on the variant `PUT` (attribution +
+optional `expected_version`, see below) and `GET` (adds `version`); every
+other endpoint behaves the same regardless of which credential kind authorized
+it.
 
 | Method & path | Behavior |
 |---|---|
 | `PUT /api/v1/courses/{slug}/variants/{language}` | Idempotent upsert. Body `{"markdown": "..."}`. Creates the course + variant, or replaces the variant and bumps its `version`. Returns a summary: `{"course", "language", "version", "lessons", "challenges", "total_points"}`. `201` on first publish, `200` after. |
 | `GET /api/v1/courses` | List courses with tags, languages, `updated_at`. |
 | `GET /api/v1/courses/{slug}` | Course metadata + per-variant summaries. |
-| `GET /api/v1/courses/{slug}/variants/{language}` | The stored markdown, for round-tripping. |
+| `GET /api/v1/courses/{slug}/variants/{language}` | The stored markdown, for round-tripping. Response also includes the variant's `version`: `{"markdown": "...", "version": 3}`. |
 | `DELETE /api/v1/courses/{slug}` | Remove a course and all variants. `204`. |
 | `DELETE /api/v1/courses/{slug}/variants/{language}` | Remove one variant. `204`. |
 | `GET /api/v1/tags` | All known tags. |
@@ -104,6 +111,12 @@ Rules:
 
 - Re-publishing a variant **replaces** its lessons and challenges and deletes
   their submissions (users' scores for that variant reset). Keep slugs stable.
+- `PUT` also accepts a `gc_u_...` human user token (the same CLI token minted
+  for `duck submit`/`duck test`) in place of an agent key. Human-authored
+  writes may include an optional `expected_version` field (from a prior
+  `GET`'s `version`) for optimistic concurrency: a mismatch is rejected with
+  `409 {"error": {"code": "version_conflict", ...}}` instead of overwriting.
+  Agent-key behavior is unchanged — `expected_version` is ignored if sent.
 
 ## Course document format
 
@@ -284,6 +297,110 @@ deployment documents both credential kinds (user CLI tokens vs agent API
 keys) end to end. `duck pull` defaults to `http://localhost:8080`;
 override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
 the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
+
+## Authoring courses with `duck educator`
+
+`duck educator` (alias `duck ed`) is the author-facing counterpart to the
+learner flow above: instead of scaffolding one directory per challenge, it
+round-trips a single course-variant markdown document with the same
+`/api/v1` endpoints the "Agent API" section documents — `pull` to fetch it,
+your own editor to change it, `lint` to validate locally, `push` to publish.
+It needs the same user token as `duck submit` — same login as above, see
+"Local testing with `duck`" — there's no separate author credential; a
+missing or revoked token fails with `unauthorized: token missing or
+revoked`.
+
+```sh
+duck educator pull intro-to-concurrency/go
+```
+
+```
+pulled intro-to-concurrency-go.md (version 3)
+```
+
+This writes two files in the current directory:
+
+- `intro-to-concurrency-go.md` — the variant's raw markdown, exactly as
+  stored (the same document a `GET` against the Agent API would return).
+- `intro-to-concurrency-go.md.meta.json` — a sidecar recording where the
+  file came from and the version it was pulled at:
+
+  ```json
+  {
+    "base_url": "http://localhost:8080",
+    "course": "intro-to-concurrency",
+    "language": "go",
+    "version": 3
+  }
+  ```
+
+  `push` reads this sidecar to know which server/course/language to send the
+  file back to, and sends its `version` as `expected_version` so a stale
+  push — the variant changed since this pull — is rejected instead of
+  silently overwritten (see below).
+
+Now edit `intro-to-concurrency-go.md` directly with your own editor. It's a
+plain markdown file in the format described in "Course document format"
+above; nothing about the contents is duck-specific.
+
+Before pushing, validate locally — no network round trip:
+
+```sh
+duck educator lint intro-to-concurrency-go.md
+```
+
+```
+intro-to-concurrency-go.md: no problems found
+```
+
+A broken document reports the same line-numbered problems `internal/ingest`
+would raise on the server side (the same validation runs locally):
+
+```
+intro-to-concurrency-go.md: 1 problem(s) found
+  line 41: challenge "fan-in": missing '### Tests' block
+```
+
+`lint` exits non-zero when problems are found, so it composes with a
+pre-commit hook or CI step. `lint`/`push` both take an optional file
+argument; run with none and they look for the single `*.meta.json` sidecar
+left by `pull` in the current directory, erroring if there's zero or more
+than one (pass a path explicitly to disambiguate).
+
+`push` runs this same local lint before touching the network — a
+locally-invalid document never generates a request — then `PUT`s the file
+back with the sidecar's version as `expected_version`:
+
+```sh
+duck educator push intro-to-concurrency-go.md
+```
+
+```
+pushed intro-to-concurrency-go.md — version 4 (1 lessons, 2 challenges, 30 pts)
+```
+
+The sidecar's `version` is updated to the response's new version, so the
+next `push` from the same file doesn't need another `pull` first. If
+someone else — another author's `pull`/`push`, or a save through the web
+editor — changed the variant since this file was pulled, the push is
+rejected with `409 version_conflict` and `duck` prints:
+
+```
+duck: someone else changed this course variant since you last pulled it — run `duck educator pull` again before pushing
+```
+
+The fix is to re-pull (fetching the latest markdown and version) and
+reapply your edits, not to force an overwrite — `duck educator` has no
+`--force`/overwrite flag, by design. A `422` from the server (rare, since
+`push` already ran the same validation locally) prints line-numbered
+problems the same way `lint` does.
+
+This is the same `UpsertVariant` / optimistic-concurrency path as the Agent
+API's `PUT` (see "Agent API" above) and the browser editor (see "Editing
+courses in the browser" above) — a human using `duck educator`, the web
+editor, and an agent's `PUT` against the same variant won't silently clobber
+each other; whichever writes last against a stale `expected_version` (or
+loaded version, in the editor's case) gets a conflict instead of overwriting.
 
 ## Deploying to GCP
 
