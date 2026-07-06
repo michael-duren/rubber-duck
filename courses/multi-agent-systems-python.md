@@ -561,8 +561,9 @@ handle it. "Find sources on X" should go straight to the researcher;
 "tighten this paragraph" needs only the writer; running the full
 research-write-review machine on either would waste three model calls.
 
-Anthropic's agents article calls this pattern *routing*, and it lists the
-two standard implementations:
+Anthropic's agents article calls this pattern *routing* — classify the
+incoming task, then dispatch it to a specialized handler. That classification
+step splits into two standard implementations:
 
 1. **A classifier LLM call.** Ask a model "which of these agents should
    handle this task? Reply with exactly one name." — an agent whose entire
