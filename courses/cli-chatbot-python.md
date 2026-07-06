@@ -16,7 +16,7 @@ extended_reading:
 
 By the end of this course you will have a chatbot running in your terminal —
 your API key, your machine, a real model on the other end. Each lesson adds
-one piece to that app, and each challenge unit-tests the one pure function you
+one piece to that app, and each challenge unit-tests the one function you
 just wrote. The full app runs locally; the graded challenges never touch the
 network.
 
@@ -68,6 +68,14 @@ print(response.content[0].text)
 ```
 
 Run it: `python chatbot.py`. That's a real model answering you.
+
+`max_tokens` is required, and it's easy to confuse with the context window
+you'll meet in the memory lesson — they cap different things. `max_tokens`
+limits how long *this one reply* can be; the model stops generating,
+possibly mid-sentence, once it hits that count. The context window is the
+model's hard limit on *total* input size across the whole conversation.
+Set `max_tokens` too low and long answers get truncated; that's independent
+of how much history you've accumulated.
 
 One wrinkle worth noticing: Anthropic's API takes the system prompt as a
 separate `system=` parameter, while OpenAI's API takes it as a
