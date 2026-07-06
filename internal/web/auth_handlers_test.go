@@ -16,15 +16,27 @@ import (
 
 // fakeStore is an in-memory AuthStore.
 type fakeStore struct {
-	users       map[string]fakeUser // by username
-	sessions    map[string]int64    // session token hash -> user id
-	tokens      map[int64]fakeToken // CLI token id -> token
-	nextTok     int64
-	variant     *domain.Variant // set by tests that need VariantDetail to resolve
-	variantSlug string
-	submissions map[int64]domain.Submission
-	nextSub     int64
-	rateLimit   func(userID, challengeID int64) bool // nil = never limited
+	users          map[string]fakeUser // by username
+	sessions       map[string]int64    // session token hash -> user id
+	tokens         map[int64]fakeToken // CLI token id -> token
+	nextTok        int64
+	variant        *domain.Variant // set by tests that need VariantDetail to resolve
+	variantSlug    string
+	variantSource  string       // raw markdown returned by VariantSource
+	variantVersion int          // version returned by VariantSource / checked by UpsertVariant
+	subCount       int          // returned by VariantSubmissionCount (issue #37)
+	upserts        []upsertCall // every *applied* UpsertVariant call, for edited_by assertions
+	submissions    map[int64]domain.Submission
+	nextSub        int64
+	rateLimit      func(userID, challengeID int64) bool // nil = never limited
+}
+
+// upsertCall records one UpsertVariant invocation so tests can assert on the
+// editor attribution (editedBy) the web edit handler passes through.
+type upsertCall struct {
+	Course   domain.Course
+	Variant  domain.Variant
+	EditedBy *int64
 }
 
 type fakeUser struct {
@@ -168,6 +180,41 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
 	}
 	return domain.Course{Slug: slug}, *f.variant, nil
+}
+
+// VariantSource backs the edit page's pre-filled textarea, and the version
+// hidden field the form round-trips.
+func (f *fakeStore) VariantSource(_ context.Context, slug, lang string) (string, int, error) {
+	if f.variant == nil || slug != f.variantSlug || lang != f.variant.Language {
+		return "", 0, domain.ErrNotFound
+	}
+	return f.variantSource, f.variantVersion, nil
+}
+
+// UpsertVariant models optimistic concurrency the same way the real store
+// does: a non-nil expectedVersion that doesn't match variantVersion is
+// rejected with domain.ErrVersionConflict and leaves all state (including
+// upserts, so tests can assert the stale write was never applied)
+// untouched. On success it records the call (so tests can assert editedBy)
+// and updates the fake's state so the save is immediately visible to
+// VariantDetail/VariantSource, mirroring the real store's read-your-writes
+// behavior.
+func (f *fakeStore) UpsertVariant(_ context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error) {
+	if expectedVersion != nil && *expectedVersion != f.variantVersion {
+		return 0, domain.ErrVersionConflict
+	}
+	f.upserts = append(f.upserts, upsertCall{Course: course, Variant: variant, EditedBy: editedBy})
+	f.variantSlug = course.Slug
+	f.variant = &variant
+	f.variantSource = variant.SourceMD
+	f.variantVersion++
+	return f.variantVersion, nil
+}
+
+// VariantSubmissionCount backs the destructive-save warning (issue #37);
+// tests set subCount directly to simulate existing submissions.
+func (f *fakeStore) VariantSubmissionCount(_ context.Context, slug, lang string) (int, error) {
+	return f.subCount, nil
 }
 
 // SubmissionStore stubs.

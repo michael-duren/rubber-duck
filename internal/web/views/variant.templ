@@ -17,6 +17,12 @@ templ Variant(user *domain.User, course domain.Course, v domain.Variant, complet
 			<h1 class="text-3xl font-bold">{ course.Title }</h1>
 			@langChip(v.Language)
 			@pointsBadge(v.TotalPoints())
+			if v.EditedByUsername != nil {
+				<span class="ml-auto font-mono text-xs text-slate-500 dark:text-slate-400">Last edited by { *v.EditedByUsername }</span>
+			}
+			if user != nil {
+				<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/edit", course.Slug, v.Language)) } class={ "rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400", templ.KV("ml-auto", v.EditedByUsername == nil) }>Edit</a>
+			}
 		</div>
 		<ol class="mt-8 flex flex-col gap-3">
 			for i, l := range v.Lessons {

@@ -1,0 +1,132 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// EditProblem is a line-numbered validation problem to display inline above
+// the textarea. It mirrors ingest.Problem without making this package (and
+// every templ-generated caller) depend on internal/ingest.
+type EditProblem struct {
+	Line    int
+	Message string
+}
+
+// EditVariant is the raw-markdown editor for one course variant. markdown is
+// rendered verbatim in the textarea: on GET it's the stored source
+// (store.VariantSource); on a failed POST it's exactly what the user
+// submitted, so a rejected save never discards their edits. version is
+// carried in a hidden field so a save can detect a concurrent edit (issue
+// #36): on GET it's the version just loaded; on a failed POST it's
+// unchanged, so retrying without reloading still targets the same version
+// (and correctly conflicts again, rather than silently jumping forward).
+//
+// submissionCount is how many submissions exist against this variant right
+// now (store.VariantSubmissionCount): saving replaces the variant's lessons
+// and challenges wholesale, cascading a delete of exactly these rows (issue
+// #37). When it's > 0 the form shows a warning banner naming the exact
+// count and swaps the plain Save button for a "Yes, save anyway" button
+// that also sends a hidden confirmed=1 field; saveVariant only proceeds
+// with the destructive write once that field is present. A variant with no
+// submissions gets the plain Save button, unchanged from before this issue.
+//
+// Alongside the textarea, a preview pane (issue #39) shows the rendered
+// markdown: an inline script POSTs the textarea's current value, debounced,
+// to POST .../edit/preview (previewVariant) and swaps the pane's innerHTML
+// with the response. That endpoint is read-only and entirely separate from
+// this form's submit — it never touches version/submissionCount, and a
+// broken or slow preview never blocks a real Save.
+templ EditVariant(user *domain.User, slug, lang, markdown string, version int, errMsg string, problems []EditProblem, submissionCount int) {
+	@Layout("Edit "+slug+" ("+lang+")", user) {
+		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
+			<a href={ templ.SafeURL("/courses/" + slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ slug }</a> /
+			<a href={ templ.SafeURL("/courses/" + slug + "/" + lang) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ lang }</a> / edit
+		</nav>
+		<h1 class="mt-4 text-2xl font-bold">Edit { slug } ({ lang })</h1>
+		if errMsg != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		if len(problems) > 0 {
+			<div class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+				<p class="font-semibold">{ strconv.Itoa(len(problems)) } problem{ plural(len(problems)) } found:</p>
+				<ul class="mt-2 list-disc pl-5">
+					for _, p := range problems {
+						<li>line { strconv.Itoa(p.Line) }: { p.Message }</li>
+					}
+				</ul>
+			</div>
+		}
+		if submissionCount > 0 {
+			<p class="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+				Saving will reset progress for { strconv.Itoa(submissionCount) } submission{ plural(submissionCount) } made against this variant — re-publishing replaces its lessons and challenges, which deletes them. Save again to confirm.
+			</p>
+		}
+		<div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+			<form method="post" action={ templ.SafeURL("/courses/" + slug + "/" + lang + "/edit") } class="flex flex-col gap-3">
+				@csrfField()
+				<input type="hidden" name="version" value={ strconv.Itoa(version) }/>
+				<textarea
+					id="markdown-editor"
+					name="markdown"
+					rows="30"
+					spellcheck="false"
+					class="w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+				>{ markdown }</textarea>
+				if submissionCount > 0 {
+					<input type="hidden" name="confirmed" value="1"/>
+					<button type="submit" class="self-start rounded-md bg-amber-600 px-3 py-2 font-medium text-white hover:bg-amber-500">Yes, save anyway</button>
+				} else {
+					<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Save</button>
+				}
+			</form>
+			<div class="flex flex-col gap-3">
+				<span class="font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Preview</span>
+				<div
+					id="markdown-preview"
+					class="prose prose-slate min-h-[30rem] max-w-none overflow-auto rounded-md border border-slate-300 bg-white p-3 dark:prose-invert dark:border-slate-700 dark:bg-slate-900"
+				></div>
+			</div>
+		</div>
+		<script>
+			(function () {
+				var textarea = document.getElementById("markdown-editor");
+				var preview = document.getElementById("markdown-preview");
+				if (!textarea || !preview) return;
+
+				var previewURL = location.pathname.replace(/\/edit$/, "/edit/preview");
+				var debounce;
+
+				function renderPreview() {
+					var csrf = document.querySelector('input[name="csrf_token"]');
+					var body = new URLSearchParams({
+						markdown: textarea.value,
+						csrf_token: csrf ? csrf.value : "",
+					});
+					fetch(previewURL, {
+						method: "POST",
+						headers: { "Content-Type": "application/x-www-form-urlencoded" },
+						body: body,
+					}).then(function (res) {
+						if (res.ok) {
+							res.text().then(function (html) {
+								preview.innerHTML = html;
+							});
+						}
+					}).catch(function () {
+						// A network hiccup shouldn't disrupt editing; the next
+						// debounced keystroke retries.
+					});
+				}
+
+				textarea.addEventListener("input", function () {
+					clearTimeout(debounce);
+					debounce = setTimeout(renderPreview, 400);
+				});
+				renderPreview();
+			})();
+		</script>
+	}
+}

@@ -25,7 +25,7 @@ func seedChallenges(t *testing.T, s *Store) (variantID int64, challengeIDs []int
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.UpsertVariant(context.Background(), course, variant); err != nil {
+	if _, err := s.UpsertVariant(context.Background(), course, variant, nil, nil); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	_, v, err := s.VariantDetail(context.Background(), course.Slug, variant.Language)

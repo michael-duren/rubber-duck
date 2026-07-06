@@ -63,7 +63,9 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	version, err := h.store.UpsertVariant(r.Context(), course, variant)
+	// Agent-authored write: no human editor to attribute, and no version
+	// check — agent publishes aren't versioned (see issue #36's scope).
+	version, err := h.store.UpsertVariant(r.Context(), course, variant, nil, nil)
 	if err != nil {
 		h.serverError(w, r, err)
 		return
@@ -130,7 +132,10 @@ func (h *handlers) getCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
-	src, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
+	// Version is deliberately ignored: the documented response shape is
+	// markdown-only (see README's Agent API table); only the web editor's
+	// hidden form field round-trips it.
+	src, _, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "no such course variant", nil)
 		return

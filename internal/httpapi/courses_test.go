@@ -42,7 +42,7 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 	return c, v, nil
 }
 
-func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant) (int, error) {
+func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant, _ *int64, _ *int) (int, error) {
 	k := f.key(c.Slug, v.Language)
 	f.variants[k] = v
 	f.versions[k]++
@@ -67,12 +67,12 @@ func (f *fakeStore) CourseBySlug(_ context.Context, slug string) (domain.Course,
 	return c, nil, nil
 }
 
-func (f *fakeStore) VariantSource(_ context.Context, slug, lang string) (string, error) {
+func (f *fakeStore) VariantSource(_ context.Context, slug, lang string) (string, int, error) {
 	src, ok := f.sources[f.key(slug, lang)]
 	if !ok {
-		return "", domain.ErrNotFound
+		return "", 0, domain.ErrNotFound
 	}
-	return src, nil
+	return src, f.versions[f.key(slug, lang)], nil
 }
 
 func (f *fakeStore) DeleteCourse(_ context.Context, slug string) error {
