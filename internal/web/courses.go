@@ -10,11 +10,20 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
-// CourseReader is the slice of the store the course pages need.
+// CourseReader is the slice of the store the course pages need. Despite the
+// name it also carries the two write operations the web markdown editor
+// needs (VariantSource/UpsertVariant): the read pages and the editor share
+// one *store.Store, so one interface keeps the wiring in Register simple.
 type CourseReader interface {
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
+
+	// VariantSource returns the raw stored markdown for the edit form.
+	VariantSource(ctx context.Context, courseSlug, language string) (string, error)
+	// UpsertVariant persists a parsed course/variant. editedBy is the acting
+	// user's ID for human web edits, nil for agent/system writes.
+	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error)
 }
 
 func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {

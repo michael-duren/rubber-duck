@@ -20,11 +20,21 @@ type fakeStore struct {
 	sessions    map[string]int64    // session token hash -> user id
 	tokens      map[int64]fakeToken // CLI token id -> token
 	nextTok     int64
-	variant     *domain.Variant // set by tests that need VariantDetail to resolve
-	variantSlug string
-	submissions map[int64]domain.Submission
-	nextSub     int64
-	rateLimit   func(userID, challengeID int64) bool // nil = never limited
+	variant       *domain.Variant // set by tests that need VariantDetail to resolve
+	variantSlug   string
+	variantSource string       // raw markdown returned by VariantSource
+	upserts       []upsertCall // every UpsertVariant call, for edited_by assertions
+	submissions   map[int64]domain.Submission
+	nextSub       int64
+	rateLimit     func(userID, challengeID int64) bool // nil = never limited
+}
+
+// upsertCall records one UpsertVariant invocation so tests can assert on the
+// editor attribution (editedBy) the web edit handler passes through.
+type upsertCall struct {
+	Course   domain.Course
+	Variant  domain.Variant
+	EditedBy *int64
 }
 
 type fakeUser struct {
@@ -168,6 +178,25 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 		return domain.Course{}, domain.Variant{}, domain.ErrNotFound
 	}
 	return domain.Course{Slug: slug}, *f.variant, nil
+}
+
+// VariantSource backs the edit page's pre-filled textarea.
+func (f *fakeStore) VariantSource(_ context.Context, slug, lang string) (string, error) {
+	if f.variant == nil || slug != f.variantSlug || lang != f.variant.Language {
+		return "", domain.ErrNotFound
+	}
+	return f.variantSource, nil
+}
+
+// UpsertVariant records the call (so tests can assert editedBy) and updates
+// the fake's state so a save is immediately visible to VariantDetail/
+// VariantSource, mirroring the real store's read-your-writes behavior.
+func (f *fakeStore) UpsertVariant(_ context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error) {
+	f.upserts = append(f.upserts, upsertCall{Course: course, Variant: variant, EditedBy: editedBy})
+	f.variantSlug = course.Slug
+	f.variant = &variant
+	f.variantSource = variant.SourceMD
+	return len(f.upserts), nil
 }
 
 // SubmissionStore stubs.

@@ -1,0 +1,53 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// EditProblem is a line-numbered validation problem to display inline above
+// the textarea. It mirrors ingest.Problem without making this package (and
+// every templ-generated caller) depend on internal/ingest.
+type EditProblem struct {
+	Line    int
+	Message string
+}
+
+// EditVariant is the raw-markdown editor for one course variant. markdown is
+// rendered verbatim in the textarea: on GET it's the stored source
+// (store.VariantSource); on a failed POST it's exactly what the user
+// submitted, so a rejected save never discards their edits.
+templ EditVariant(user *domain.User, slug, lang, markdown, errMsg string, problems []EditProblem) {
+	@Layout("Edit "+slug+" ("+lang+")", user) {
+		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
+			<a href={ templ.SafeURL("/courses/" + slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ slug }</a> /
+			<a href={ templ.SafeURL("/courses/" + slug + "/" + lang) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ lang }</a> / edit
+		</nav>
+		<h1 class="mt-4 text-2xl font-bold">Edit { slug } ({ lang })</h1>
+		if errMsg != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		if len(problems) > 0 {
+			<div class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+				<p class="font-semibold">{ strconv.Itoa(len(problems)) } problem{ plural(len(problems)) } found:</p>
+				<ul class="mt-2 list-disc pl-5">
+					for _, p := range problems {
+						<li>line { strconv.Itoa(p.Line) }: { p.Message }</li>
+					}
+				</ul>
+			</div>
+		}
+		<form method="post" action={ templ.SafeURL("/courses/" + slug + "/" + lang + "/edit") } class="mt-6 flex flex-col gap-3">
+			@csrfField()
+			<textarea
+				name="markdown"
+				rows="30"
+				spellcheck="false"
+				class="w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+			>{ markdown }</textarea>
+			<button type="submit" class="self-start rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Save</button>
+		</form>
+	}
+}
