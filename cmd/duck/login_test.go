@@ -38,6 +38,14 @@ func TestExtractCSRFToken(t *testing.T) {
 		},
 		{"no csrf field at all", `<form><input name="username"/></form>`, ""},
 		{"name present but no value attr", `<input name="csrf_token" data-x="1"/>`, ""},
+		{
+			// The value= search must stay inside the csrf input's own tag:
+			// grabbing a later tag's value would submit garbage as the CSRF
+			// token and surface as a baffling 403 instead of a clear error.
+			"no value attr, later tag has one",
+			`<input name="csrf_token"/><input name="next" value="/dashboard"/>`,
+			"",
+		},
 		{"empty value", `<input name="csrf_token" value=""/>`, ""},
 		{"unterminated value", `<input name="csrf_token" value="abc`, ""},
 	}
@@ -110,6 +118,7 @@ type fakeAuthServer struct {
 
 	brokenProfile   bool
 	omitLoginCSRF   bool
+	loginFails      bool
 	omitProfileCSRF bool
 	mintFails       bool
 	omitMintedToken bool
@@ -126,6 +135,12 @@ func (f *fakeAuthServer) start(t *testing.T) *httptest.Server {
 	mux.HandleFunc("POST /login", f.postLogin)
 	mux.HandleFunc("GET /profile", f.getProfile)
 	mux.HandleFunc("POST /profile/tokens", f.postToken)
+	// The real server serves the course list at / — the target of the 303
+	// after a successful login. Serve a 200 so the login POST's final
+	// (post-redirect) status matches production.
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><body>courses</body></html>`)
+	})
 	srv := httptest.NewServer(f.withCSRF(mux))
 	t.Cleanup(srv.Close)
 	return srv
@@ -175,7 +190,7 @@ func csrfFromCtx(r *http.Request) string {
 }
 
 func (f *fakeAuthServer) hasSession(r *http.Request) bool {
-	c, err := r.Cookie("gc_session")
+	c, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return false
 	}
@@ -195,6 +210,10 @@ func (f *fakeAuthServer) getLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fakeAuthServer) postLogin(w http.ResponseWriter, r *http.Request) {
+	if f.loginFails {
+		http.Error(w, "boom", http.StatusInternalServerError)
+		return
+	}
 	if r.FormValue("username") != f.username || r.FormValue("password") != f.password {
 		// Mirrors the real handler: wrong credentials re-render the login
 		// page with 200 OK, not an error status — the only reliable signal
@@ -207,7 +226,7 @@ func (f *fakeAuthServer) postLogin(w http.ResponseWriter, r *http.Request) {
 	sess := fmt.Sprintf("sess-%d", f.nextTok)
 	f.loggedIn[sess] = true
 	f.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "gc_session", Value: sess, Path: "/", HttpOnly: true})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: sess, Path: "/", HttpOnly: true})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -271,11 +290,12 @@ func TestFetchCLIToken_Success(t *testing.T) {
 }
 
 // TestFetchCLIToken_GetsBeforeEveryPost is the regression test for the
-// original bug: duck login used to POST /login (and would have POSTed
-// /profile/tokens) without ever GETing the page first to obtain the
-// double-submit CSRF cookie, so it always got a 403 in production. Because
-// fakeAuthServer enforces that same contract, any regression that drops a
-// GET call here fails this test with the exact error users used to see.
+// original bug: duck login used to POST /login without GETing the login
+// page first (no double-submit CSRF cookie, no csrf_token form field), so
+// every login got a 403 in production before the flow ever reached
+// /profile/tokens. Because fakeAuthServer enforces that same contract, any
+// regression that drops a GET call here fails this test with the exact
+// error users used to see.
 func TestFetchCLIToken_GetsBeforeEveryPost(t *testing.T) {
 	fake := newFakeAuthServer("duckwalker", "hunter2pass")
 	srv := fake.start(t)
@@ -325,6 +345,22 @@ func TestFetchCLIToken_WrongPassword(t *testing.T) {
 		if req == "GET /profile" || req == "POST /profile/tokens" {
 			t.Errorf("unexpected request after failed login: %s", req)
 		}
+	}
+}
+
+func TestFetchCLIToken_LoginServerError(t *testing.T) {
+	fake := newFakeAuthServer("duckwalker", "hunter2pass")
+	fake.loginFails = true
+	srv := fake.start(t)
+	client := newJarClient(t)
+
+	_, err := fetchCLIToken(client, srv.URL, "duckwalker", "hunter2pass")
+	if err == nil || !strings.Contains(err.Error(), "server said 500") {
+		t.Fatalf("err = %v, want a \"login failed: server said 500\" error", err)
+	}
+	// A server outage must not be misdiagnosed as bad credentials.
+	if strings.Contains(err.Error(), "username") {
+		t.Errorf("err = %q blames credentials for a server error", err.Error())
 	}
 }
 
@@ -409,7 +445,6 @@ func TestLoginCmd_EndToEnd(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("DUCK_TOKEN", "") // guard against a stale env token shadowing the file, as happened in manual testing
 
 	origStdin, origReadPassword := loginStdin, loginReadPassword
 	t.Cleanup(func() { loginStdin, loginReadPassword = origStdin, origReadPassword })
@@ -442,7 +477,6 @@ func TestLoginCmd_WrongPassword_NoTokenFileWritten(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("DUCK_TOKEN", "")
 
 	origStdin, origReadPassword := loginStdin, loginReadPassword
 	t.Cleanup(func() { loginStdin, loginReadPassword = origStdin, origReadPassword })
@@ -472,5 +506,23 @@ func TestLoginCmd_ReadUsernameError(t *testing.T) {
 
 	if err := loginCmd(nil); err == nil || !strings.Contains(err.Error(), "read username") {
 		t.Fatalf("loginCmd with empty stdin: err = %v, want a \"read username\" error", err)
+	}
+}
+
+func TestLoginCmd_ReadPasswordError(t *testing.T) {
+	origStdin, origReadPassword := loginStdin, loginReadPassword
+	t.Cleanup(func() { loginStdin, loginReadPassword = origStdin, origReadPassword })
+	loginStdin = bytes.NewBufferString("duckwalker\n")
+	loginReadPassword = func() ([]byte, error) { return nil, fmt.Errorf("inappropriate ioctl for device") }
+
+	if err := loginCmd(nil); err == nil || !strings.Contains(err.Error(), "read password") {
+		t.Fatalf("loginCmd with failing password read: err = %v, want a \"read password\" error", err)
+	}
+}
+
+func TestLoginCmd_UnknownFlagErrorIsSurfaced(t *testing.T) {
+	err := loginCmd([]string{"--bse", "http://localhost:1"})
+	if err == nil || !strings.Contains(err.Error(), "-bse") {
+		t.Fatalf("err = %v, want the flag error to name the unknown flag -bse", err)
 	}
 }

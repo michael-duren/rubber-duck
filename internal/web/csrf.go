@@ -8,6 +8,8 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
+// csrfCookie's name is mirrored in cmd/duck's login tests (fakeCSRFCookie),
+// whose fake server enforces this middleware's double-submit contract.
 const csrfCookie = "gc_csrf"
 
 func newCSRFToken() string {
