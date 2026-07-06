@@ -15,9 +15,12 @@ extended_reading:
 # Lesson: Threads Basics {#goroutines-basics}
 
 A `threading.Thread` is an OS-backed thread managed by the Python runtime.
-The GIL means threads don't run Python bytecode in true parallel, but they do
-overlap I/O and blocking work, and this course uses them to practice
-coordinating concurrent tasks — the coordination patterns are the point.
+In CPython (the runtime almost everyone uses), the Global Interpreter Lock
+(GIL) lets only one thread execute Python bytecode at a time, so threads
+don't run Python bytecode in true parallel — but the GIL is released during
+I/O and by some C-level operations, so threads still overlap I/O and
+blocking work. This course uses threads to practice coordinating concurrent
+tasks — the coordination patterns are the point, not raw CPU speedup.
 
 ```python
 import threading
@@ -74,7 +77,8 @@ def test_sum_nums():
 Python has no built-in channel type, but `queue.Queue` plays the same role:
 one thread puts values in, another gets them out, and the queue itself
 handles the locking. A `None` put onto the queue is a common convention for
-"no more values" — the receiving side treats it as a close signal.
+"no more values" — a **sentinel** value the receiving side treats as a close
+signal, rather than real data.
 
 ```python
 import queue
