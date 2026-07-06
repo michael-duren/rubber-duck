@@ -194,9 +194,15 @@ stable (see "Course document format" above).
 
 ## Local testing with `duck`
 
-Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.
-`duck` lets you iterate locally with your own toolchain — no Docker — and
-submit only when a solution is green.
+`duck` runs a course's tests locally with your own toolchain — no Docker —
+and never makes you wait on the server. `duck submit` runs the tests, sends
+the solution together with the local verdict, and the score lands instantly;
+the server re-grades in the background as an **audit** (informational only —
+it badges the submission "verified" on agreement or shows both outputs on a
+mismatch, but never rewrites the score). Server-side grading — a Cloud Run
+Job execution taking minutes in production — is still what browser
+submissions and `duck submit --remote` wait on, and what every audit runs
+through.
 
 Prebuilt binaries (linux/darwin/windows, amd64/arm64) are published to
 [GitHub Releases](https://github.com/michael-duren/rubber-duck/releases/latest)
@@ -210,12 +216,18 @@ go install ./cmd/duck   # or: go build -o duck ./cmd/duck
 
 duck pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
 duck test concurrent-sum            # go test ./... / pytest / cc, no submission
-duck submit concurrent-sum          # POSTs the solution, polls until graded
+duck submit concurrent-sum          # runs tests + submits; score is immediate
+duck submit concurrent-sum --remote # skip the local run; wait for server grading
 ```
 
-`duck submit` needs a user token, not an agent API key: mint one from your
-profile page ("Create CLI token") and either set `DUCK_TOKEN` or save it to
-`~/.config/duck/token`. `duck pull` defaults to `http://localhost:8080`;
+If the course language's toolchain isn't installed, `duck submit` falls back
+to `--remote` behavior automatically.
+
+`duck submit` needs a user token, not an agent API key: run `duck login`, or
+mint one from your profile page ("Create CLI token") and either set
+`DUCK_TOKEN` or save it to `~/.config/duck/token`. The `/tokens` page on any
+deployment documents both credential kinds (user CLI tokens vs agent API
+keys) end to end. `duck pull` defaults to `http://localhost:8080`;
 override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
 the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
 
@@ -285,7 +297,9 @@ the job to read) and signed PUT (for its result), and starts a
 `gc-grader-{lang}` job execution with those URLs as env overrides. The job
 fetches, runs the tests, and uploads a result file (first line = exit code).
 `gc-app` polls the execution via `run.viewer` until it completes, reads the
-result back from GCS, and updates the submission.
+result back from GCS, and updates the submission. Browser submissions wait
+on this flow; CLI-claimed submissions run it as a background audit that
+fills the `audit_*` columns without touching the claimed verdict.
 
 `infra/network.tf` adds a VPC + Serverless VPC Access connector + private
 DNS override + firewall so grader-job egress is locked to GCS only — see

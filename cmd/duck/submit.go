@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,11 +16,22 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
+// submitCmd is local-first: it runs the challenge's tests here, submits the
+// code together with the claimed verdict, and prints the result immediately —
+// the server re-grades in the background as an audit nobody waits on. The
+// slow synchronous server-graded path remains as --remote and as the
+// fallback when the language's toolchain isn't installed.
 func submitCmd(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: duck submit <challenge-slug>")
+	fs := flag.NewFlagSet("submit", flag.ContinueOnError)
+	remote := fs.Bool("remote", false, "skip the local test run; grade on the server and wait for it")
+	rest, err := parseInterleaved(fs, args)
+	if err != nil {
+		return err
 	}
-	slug := args[0]
+	if len(rest) != 1 {
+		return fmt.Errorf("usage: duck submit <challenge-slug> [--remote]")
+	}
+	slug := rest[0]
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -38,6 +51,37 @@ func submitCmd(args []string) error {
 		return fmt.Errorf("read solution (did you `duck pull` and pick a real slug?): %w", err)
 	}
 
+	claim := !*remote
+	if claim {
+		tool, err := toolchainFor(meta.Language)
+		if err != nil {
+			return err
+		}
+		if _, lookErr := exec.LookPath(tool); lookErr != nil {
+			fmt.Printf("%s not found locally — grading on the server instead (slower)\n", tool)
+			claim = false
+		}
+	}
+
+	form := url.Values{"code": {string(code)}}
+	var local runResult
+	if claim {
+		local, err = runChallenge(filepath.Join(root, slug), meta.Language)
+		if err != nil {
+			return err
+		}
+		status := grader.StatusFailed
+		if local.passed {
+			status = grader.StatusPassed
+		}
+		output := local.output
+		if local.timedOut {
+			output += "\n[time limit exceeded locally]"
+		}
+		form.Set("claimed_status", status)
+		form.Set("claimed_output", output)
+	}
+
 	token, err := loadToken()
 	if err != nil {
 		return err
@@ -45,7 +89,7 @@ func submitCmd(args []string) error {
 	base := strings.TrimRight(meta.BaseURL, "/")
 	submitURL := fmt.Sprintf("%s/courses/%s/%s/challenges/%s/submissions", base, meta.Course, meta.Language, slug)
 
-	req, err := http.NewRequest("POST", submitURL, strings.NewReader(url.Values{"code": {string(code)}}.Encode()))
+	req, err := http.NewRequest("POST", submitURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -64,15 +108,27 @@ func submitCmd(args []string) error {
 		return fmt.Errorf("submit: server said %s: %s", resp.Status, body)
 	}
 	var created struct {
-		ID  int64  `json:"id"`
-		URL string `json:"url"`
+		ID     int64  `json:"id"`
+		URL    string `json:"url"`
+		Status string `json:"status"`
+		Score  int    `json:"score"`
 	}
 	if err := json.Unmarshal(body, &created); err != nil {
 		return fmt.Errorf("parse submit response: %w", err)
 	}
 	fmt.Printf("submission: %s%s\n", base, created.URL)
 
-	return pollSubmission(base, created.URL, token)
+	if !claim {
+		return pollSubmission(base, created.URL, token)
+	}
+
+	if created.Status == grader.StatusPassed {
+		fmt.Printf("passed — +%d pts (server audit runs in the background)\n", created.Score)
+		return nil
+	}
+	fmt.Println(local.output)
+	fmt.Println("failed")
+	return fmt.Errorf("tests failed")
 }
 
 func pollSubmission(base, path, token string) error {

@@ -113,3 +113,56 @@ func TestSubmitBySlugAndPollStatus(t *testing.T) {
 		t.Errorf("unknown challenge slug = %d, want 404", rec.Code)
 	}
 }
+
+// A submission carrying a CLI-claimed verdict is stored already graded —
+// scored proportionally from the claimed output — and returned in the POST
+// response so the CLI never polls.
+func TestSubmitBySlugWithClaimedVerdict(t *testing.T) {
+	mux, fs := testMux(t)
+	fs.users["alice"] = fakeUser{id: 1, hash: "x"}
+	fs.variant = &domain.Variant{
+		Language: "go",
+		Lessons: []domain.Lesson{
+			{Slug: "l1", Challenges: []domain.Challenge{{ID: 42, Slug: "concurrent-sum", Points: 10}}},
+		},
+	}
+	fs.variantSlug = "intro-to-concurrency"
+
+	token, hash := auth.NewUserToken()
+	_, _ = fs.CreateUserToken(context.Background(), 1, "cli", hash)
+
+	// 3 of 4 leaf tests passed locally: proportional credit, round(10*3/4)=8.
+	out := "--- PASS: TestA\n--- PASS: TestB\n--- PASS: TestC\n--- FAIL: TestD\n"
+	rec := bearerPost(mux, "/courses/intro-to-concurrency/go/challenges/concurrent-sum/submissions", token, url.Values{
+		"code":           {"package challenge"},
+		"claimed_status": {"failed"},
+		"claimed_output": {out},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("claimed submit = %d body %s", rec.Code, rec.Body)
+	}
+	var created struct {
+		ID     int64  `json:"id"`
+		Status string `json:"status"`
+		Score  int    `json:"score"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if created.Status != "failed" || created.Score != 8 {
+		t.Errorf("claimed response = %+v, want failed/8", created)
+	}
+	sub := fs.submissions[created.ID]
+	if !sub.Claimed || sub.Status != "failed" || sub.Score != 8 {
+		t.Errorf("stored submission = %+v, want claimed failed/8", sub)
+	}
+
+	// Only passed/failed are claimable; anything else is a 400, not stored.
+	rec = bearerPost(mux, "/courses/intro-to-concurrency/go/challenges/concurrent-sum/submissions", token, url.Values{
+		"code":           {"package challenge"},
+		"claimed_status": {"error"},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("claimed_status=error = %d, want 400", rec.Code)
+	}
+}

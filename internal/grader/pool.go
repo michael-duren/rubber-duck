@@ -14,6 +14,7 @@ type SubmissionStore interface {
 	SubmissionJob(ctx context.Context, id int64) (domain.SubmissionJob, error)
 	MarkSubmissionRunning(ctx context.Context, id int64) error
 	CompleteSubmission(ctx context.Context, id int64, status, output string, score int, testsPassed, testsTotal *int) error
+	AuditSubmission(ctx context.Context, id int64, status, output string) error
 	PendingSubmissionIDs(ctx context.Context) ([]int64, error)
 }
 
@@ -81,30 +82,47 @@ func (p *Pool) grade(id int64) {
 		p.logger.Error("load submission job", "id", id, "err", err)
 		return
 	}
-	if err := p.store.MarkSubmissionRunning(ctx, id); err != nil {
-		p.logger.Error("mark running", "id", id, "err", err)
-		return
+	if !job.Claimed {
+		if err := p.store.MarkSubmissionRunning(ctx, id); err != nil {
+			p.logger.Error("mark running", "id", id, "err", err)
+			return
+		}
 	}
 
 	res, err := p.grader.Grade(ctx, Job{Language: job.Language, Code: job.Code, TestCode: job.TestCode})
-	if err != nil {
-		p.logger.Error("grade", "id", id, "err", err)
-		res = Result{Status: StatusError, Output: "grader unavailable; try again later"}
-	}
-	score := scoreFor(job.Points, res)
 
 	// Persist with a fresh context: the job context may have timed out.
 	saveCtx, saveCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer saveCancel()
+
+	if job.Claimed {
+		// Audit of a CLI-claimed verdict. On grader infra failure, save
+		// nothing: the submission stays unaudited and Recover retries it
+		// on the next startup rather than recording a verdict-less audit.
+		if err != nil {
+			p.logger.Error("audit grade", "id", id, "err", err)
+			return
+		}
+		if err := p.store.AuditSubmission(saveCtx, id, res.Status, res.Output); err != nil {
+			p.logger.Error("save audit", "id", id, "err", err)
+		}
+		return
+	}
+
+	if err != nil {
+		p.logger.Error("grade", "id", id, "err", err)
+		res = Result{Status: StatusError, Output: "grader unavailable; try again later"}
+	}
+	score := Score(job.Points, res)
 	if err := p.store.CompleteSubmission(saveCtx, id, res.Status, res.Output, score, res.TestsPassed, res.TestsTotal); err != nil {
 		p.logger.Error("save result", "id", id, "err", err)
 	}
 }
 
-// scoreFor is proportional to tests passed when they could be parsed out of
+// Score is proportional to tests passed when they could be parsed out of
 // the runner's output (full points only on an all-pass run), falling back
 // to all-or-nothing on the exit status when they couldn't.
-func scoreFor(points int, res Result) int {
+func Score(points int, res Result) int {
 	if res.TestsTotal != nil && *res.TestsTotal > 0 {
 		return int(math.Round(float64(points) * float64(*res.TestsPassed) / float64(*res.TestsTotal)))
 	}

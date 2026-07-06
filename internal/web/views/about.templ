@@ -37,16 +37,18 @@ templ About(user *domain.User) {
 				partially passing suites where the language supports it.
 			</p>
 			<p class="mt-3 text-slate-700 dark:text-slate-300">
-				Submissions run in a locked-down sandbox with no network access and
-				tight time limits. In production, a graded run takes a couple of
-				minutes end to end — fine for a final answer, slow for iterating.
-				For a fast edit-test loop, use the CLI.
+				Server-side runs happen in a locked-down sandbox with no network
+				access and tight time limits. Browser submissions are graded there
+				directly, which takes a couple of minutes in production — fine
+				occasionally, slow as a habit. The CLI never makes you wait.
 			</p>
 			@docHeading("Prefer the terminal?")
 			<p class="mt-3 text-slate-700 dark:text-slate-300">
 				The <span class="font-mono">duck</span> CLI pulls a course's challenges
-				to your machine, runs the same tests locally with your own toolchain in
-				seconds, and submits only when you're green.
+				to your machine and runs the same tests locally with your own toolchain
+				in seconds. <span class="font-mono">duck submit</span> reports your
+				local result as the score instantly; the server re-runs your solution
+				in the background and marks the submission verified when it agrees.
 				<a href="/cli" class={ docLink }>Install and usage instructions →</a>
 			</p>
 			@docHeading("Want to publish a course?")
@@ -54,7 +56,8 @@ templ About(user *domain.User) {
 				Courses are plain markdown documents published through a small REST
 				API — designed so AI agents (or humans) can author and maintain them
 				with ordinary pull requests. The document format and API are documented
-				in the <a href={ templ.SafeURL(repoURL) } class={ docLink }>source repository</a>.
+				in the <a href={ templ.SafeURL(repoURL) } class={ docLink }>source repository</a>;
+				publishing requires an <a href="/tokens" class={ docLink }>agent API key</a>.
 			</p>
 		</div>
 	}
@@ -65,11 +68,13 @@ templ CLI(user *domain.User, baseURL string) {
 		<div class="mx-auto max-w-3xl">
 			<h1 class="text-3xl font-bold"><span class="text-emerald-600 dark:text-emerald-400">$</span> duck — the local CLI</h1>
 			<p class="mt-3 text-slate-600 dark:text-slate-400">
-				Server-side grading takes a couple of minutes per run. The
-				<span class="font-mono">duck</span> CLI gives you a seconds-fast loop
-				instead: pull a course's challenges into a local directory, run the
-				same tests with your own toolchain (no Docker needed), and submit for
-				a graded score only when everything passes.
+				The <span class="font-mono">duck</span> CLI is the fast way to work a
+				course: pull its challenges into a local directory, run the same tests
+				with your own toolchain (no Docker needed), and submit without waiting.
+				<span class="font-mono">duck submit</span> runs the tests locally and
+				your result — points included — lands instantly; the server re-runs
+				your solution in the background as an audit and badges the submission
+				“verified” when it agrees (or shows both outputs when it doesn't).
 			</p>
 			@docHeading("Install")
 			<h3 class="mt-4 font-semibold">Prebuilt binary (recommended)</h3>
@@ -105,6 +110,7 @@ templ CLI(user *domain.User, baseURL string) {
 				("Create CLI token") and either export it as
 				<span class="font-mono">DUCK_TOKEN</span> or save it to
 				<span class="font-mono">~/.config/duck/token</span>.
+				<a href="/tokens" class={ docLink }>Everything about tokens →</a>
 			</p>
 			@docHeading("Work a course")
 			@shell(
@@ -114,7 +120,7 @@ templ CLI(user *domain.User, baseURL string) {
 				"# edit <challenge-slug>/solution file with your editor, then:",
 				"duck test concurrent-sum      # run that challenge's tests locally",
 				"duck test                     # or run every challenge's tests",
-				"duck submit concurrent-sum    # submit for points, polls until graded",
+				"duck submit concurrent-sum    # run tests + submit; points land instantly",
 			)
 			<p class="mt-3 text-slate-700 dark:text-slate-300">
 				<span class="font-mono">duck pull</span> scaffolds one directory per
@@ -142,7 +148,7 @@ templ CLI(user *domain.User, baseURL string) {
 					<tbody class="text-slate-700 dark:text-slate-300">
 						@cmdRow("duck pull <course>/<language> [--base URL]", "Scaffold the course's challenges into ./<course>-<language>/. URL defaults to $DUCK_BASE_URL.")
 						@cmdRow("duck test [challenge-slug]", "Run one challenge's tests locally — or every challenge's, with no slug. No submission, no points.")
-						@cmdRow("duck submit <challenge-slug>", "Send your solution to the server for grading and poll until the score comes back.")
+						@cmdRow("duck submit <challenge-slug> [--remote]", "Run the tests locally and submit solution + result; the score is immediate and the server audits in the background. --remote skips the local run and waits for server grading instead (also the automatic fallback when the language toolchain isn't installed).")
 						@cmdRow("duck login [--base URL]", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
 						@cmdRow("duck version", "Print the CLI version.")
 					</tbody>

@@ -5,8 +5,10 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -37,3 +39,26 @@ func run(args []string) error {
 }
 
 var errUsageError = errors.New("usage: duck <pull|test|submit|login|version> [args]")
+
+// parseInterleaved parses fs accepting flags before AND after positional
+// arguments (`duck pull intro-to-go/go --base URL`), which stdlib flag
+// alone doesn't: it stops at the first positional. Returns the positionals
+// in order.
+func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		rest := fs.Args()
+		i := 0
+		for i < len(rest) && (!strings.HasPrefix(rest[i], "-") || rest[i] == "-") {
+			pos = append(pos, rest[i])
+			i++
+		}
+		if i == len(rest) {
+			return pos, nil
+		}
+		args = rest[i:]
+	}
+}

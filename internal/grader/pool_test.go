@@ -25,7 +25,9 @@ type memStore struct {
 		status string
 		score  int
 	}
-	graded chan int64
+	audits  map[int64]string
+	running map[int64]bool
+	graded  chan int64
 }
 
 func newMemStore() *memStore {
@@ -35,7 +37,9 @@ func newMemStore() *memStore {
 			status string
 			score  int
 		}{},
-		graded: make(chan int64, 16),
+		audits:  map[int64]string{},
+		running: map[int64]bool{},
+		graded:  make(chan int64, 16),
 	}
 }
 
@@ -45,7 +49,20 @@ func (m *memStore) SubmissionJob(_ context.Context, id int64) (domain.Submission
 	return m.jobs[id], nil
 }
 
-func (m *memStore) MarkSubmissionRunning(context.Context, int64) error { return nil }
+func (m *memStore) MarkSubmissionRunning(_ context.Context, id int64) error {
+	m.mu.Lock()
+	m.running[id] = true
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *memStore) AuditSubmission(_ context.Context, id int64, status, _ string) error {
+	m.mu.Lock()
+	m.audits[id] = status
+	m.mu.Unlock()
+	m.graded <- id
+	return nil
+}
 
 func (m *memStore) CompleteSubmission(_ context.Context, id int64, status, _ string, score int, _, _ *int) error {
 	m.mu.Lock()
@@ -94,5 +111,52 @@ func TestPoolScoring(t *testing.T) {
 				t.Errorf("got %+v, want status %s score %d", got, c.wantStatus, c.wantScore)
 			}
 		})
+	}
+}
+
+// Claimed submissions take the audit path: the run's verdict lands in the
+// audit columns, the verdict/score are never rewritten, and the submission
+// is never flipped back to "running".
+func TestPoolAuditsClaimedSubmissions(t *testing.T) {
+	store := newMemStore()
+	store.jobs[1] = domain.SubmissionJob{SubmissionID: 1, Language: "go", Points: 10, Claimed: true}
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	pool := NewPool(fakeGrader{Result{Status: StatusFailed}, nil}, store, logger, 1, time.Second)
+
+	pool.Enqueue(1)
+	select {
+	case <-store.graded:
+	case <-time.After(2 * time.Second):
+		t.Fatal("submission never audited")
+	}
+	if got := store.audits[1]; got != StatusFailed {
+		t.Errorf("audit status = %q, want %q", got, StatusFailed)
+	}
+	if _, completed := store.done[1]; completed {
+		t.Error("audit run must not rewrite the claimed verdict via CompleteSubmission")
+	}
+	if store.running[1] {
+		t.Error("audit run must not mark a claimed submission running")
+	}
+}
+
+// A grader infra error during an audit saves nothing, leaving the
+// submission eligible for a retry at the next Recover.
+func TestPoolAuditInfraErrorSavesNothing(t *testing.T) {
+	store := newMemStore()
+	store.jobs[1] = domain.SubmissionJob{SubmissionID: 1, Language: "go", Points: 10, Claimed: true}
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	pool := NewPool(fakeGrader{Result{}, context.DeadlineExceeded}, store, logger, 1, time.Second)
+
+	pool.Enqueue(1)
+	select {
+	case <-store.graded:
+		t.Fatal("infra-errored audit must not persist a result")
+	case <-time.After(200 * time.Millisecond):
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.audits) != 0 || len(store.done) != 0 {
+		t.Errorf("expected no persisted results, got audits=%v done=%v", store.audits, store.done)
 	}
 }
