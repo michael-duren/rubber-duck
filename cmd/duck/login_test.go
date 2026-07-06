@@ -186,10 +186,10 @@ func (f *fakeAuthServer) hasSession(r *http.Request) bool {
 
 func (f *fakeAuthServer) getLogin(w http.ResponseWriter, r *http.Request) {
 	if f.omitLoginCSRF {
-		fmt.Fprint(w, `<html><body><form method="post" action="/login"></form></body></html>`)
+		_, _ = fmt.Fprint(w, `<html><body><form method="post" action="/login"></form></body></html>`)
 		return
 	}
-	fmt.Fprintf(w, `<html><body><form method="post" action="/login">`+
+	_, _ = fmt.Fprintf(w, `<html><body><form method="post" action="/login">`+
 		`<input type="hidden" name="csrf_token" value="%s"/>`+
 		`</form></body></html>`, csrfFromCtx(r))
 }
@@ -199,7 +199,7 @@ func (f *fakeAuthServer) postLogin(w http.ResponseWriter, r *http.Request) {
 		// Mirrors the real handler: wrong credentials re-render the login
 		// page with 200 OK, not an error status — the only reliable signal
 		// of failure is that no session cookie gets set.
-		fmt.Fprint(w, `<html><body>Wrong username or password.</body></html>`)
+		_, _ = fmt.Fprint(w, `<html><body>Wrong username or password.</body></html>`)
 		return
 	}
 	f.mu.Lock()
@@ -221,10 +221,10 @@ func (f *fakeAuthServer) getProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if f.omitProfileCSRF {
-		fmt.Fprint(w, `<html><body>no csrf field here</body></html>`)
+		_, _ = fmt.Fprint(w, `<html><body>no csrf field here</body></html>`)
 		return
 	}
-	fmt.Fprintf(w, `<html><body><form method="post" action="/profile/tokens">`+
+	_, _ = fmt.Fprintf(w, `<html><body><form method="post" action="/profile/tokens">`+
 		`<input type="hidden" name="csrf_token" value="%s"/>`+
 		`</form></body></html>`, csrfFromCtx(r))
 }
@@ -239,10 +239,10 @@ func (f *fakeAuthServer) postToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if f.omitMintedToken {
-		fmt.Fprint(w, `<html><body>Copy this token now — it won't be shown again, but there's no code tag.</body></html>`)
+		_, _ = fmt.Fprint(w, `<html><body>Copy this token now — it won't be shown again, but there's no code tag.</body></html>`)
 		return
 	}
-	fmt.Fprint(w, `<html><body><p>Copy this token now — it won't be shown again.</p>`+
+	_, _ = fmt.Fprint(w, `<html><body><p>Copy this token now — it won't be shown again.</p>`+
 		`<code class="mt-1 block break-all font-mono">gc_u_faketokenvalue1234567890</code></body></html>`)
 }
 
