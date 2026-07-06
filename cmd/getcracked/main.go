@@ -234,7 +234,7 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	out, _ := io.ReadAll(resp.Body)
 	fmt.Printf("%s %s\n%s", resp.Status, url, out)
 	if resp.StatusCode >= 300 {

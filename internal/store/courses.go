@@ -18,7 +18,7 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	reading, err := json.Marshal(course.ExtendedReading)
 	if err != nil {

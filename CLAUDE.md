@@ -65,11 +65,14 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
   ~2m13s of that is the Cloud Run Jobs execution *scheduling/start*
   (`status.conditions[type=Started]`), not image pull (1.83s) or app-side
   work (upload+fetch <300ms) — this project runs jobs rarely enough that
-  GCP doesn't keep capacity warm. Decided acceptable for now rather than
-  standing up an always-on service-based grader pool (recurring cost,
-  needs human sign-off): the gc CLI (m3) already gives instant local
-  iteration, so this latency is paid once per final graded submission,
-  not per edit-test cycle. gc-app's `cpu_idle=false` (infra/run_service.tf)
+  GCP doesn't keep capacity warm. Decided acceptable rather than standing
+  up an always-on grader pool (recurring cost, needs human sign-off),
+  because users no longer wait on it: `duck submit` runs tests locally and
+  claims the verdict instantly, and this Jobs flow runs only as the
+  background audit of that claim (plus synchronous grading for browser
+  and `duck submit --remote` submissions). Audits are informational —
+  they fill `audit_*` columns, never rewrite the claimed status/score.
+  gc-app's `cpu_idle=false` (infra/run_service.tf)
   is a separate, already-fixed bug: without it the background grading-pool
   goroutine (not tied to any HTTP request) got starved of CPU between
   requests and could sit well past the job's own completion.

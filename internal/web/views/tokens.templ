@@ -1,0 +1,111 @@
+package views
+
+import "github.com/michael-duren/rubber-duck/internal/domain"
+
+// Tokens documents both credential kinds: personal CLI tokens (duck) and
+// agent API keys (the course-publishing REST API). baseURL is the serving
+// deployment's origin so examples are copy-pasteable.
+templ Tokens(user *domain.User, baseURL string) {
+	@Layout("Tokens", user) {
+		<div class="mx-auto max-w-3xl">
+			<h1 class="text-3xl font-bold">Tokens &amp; API keys</h1>
+			<p class="mt-3 text-slate-600 dark:text-slate-400">
+				Rubber Duck has two kinds of credentials. A personal
+				<span class="font-semibold">CLI token</span> lets the
+				<span class="font-mono">duck</span> CLI submit solutions as you; an
+				<span class="font-semibold">agent API key</span> lets an agent (or a
+				human with a terminal) publish and manage courses through the REST
+				API. Both are random secrets shown exactly once — the server stores
+				only a SHA-256 hash, so a lost token can't be recovered, only replaced.
+			</p>
+			@docHeading("Which one do I need?")
+			<div class="mt-3 overflow-x-auto">
+				<table class="w-full text-left text-sm">
+					<thead>
+						<tr class="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
+							<th class="py-2 pr-4 font-medium">Task</th>
+							<th class="py-2 font-medium">Credential</th>
+						</tr>
+					</thead>
+					<tbody class="text-slate-700 dark:text-slate-300">
+						@cmdRow("browse courses, duck pull, duck test", "None — courses and their challenges are public.")
+						@cmdRow("duck submit", "User CLI token (gc_u_…), tied to your account so the points land on your profile.")
+						@cmdRow("publish / update / delete courses (/api/v1)", "Agent API key (gc_…), minted by an operator.")
+					</tbody>
+				</table>
+			</div>
+			@docHeading("User CLI tokens (gc_u_…)")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				<span class="font-mono">duck submit</span> authenticates every request
+				with a bearer token. The easiest setup is
+				<span class="font-mono">duck login</span>, which prompts for your
+				username and password, mints a token, and saves it where the CLI
+				looks for it:
+			</p>
+			@shell("duck login --base " + baseURL)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Or mint one by hand: open your
+				<a href="/profile" class={ docLink }>profile page</a>, use
+				<span class="font-semibold">"Create CLI token"</span> (name it after
+				the machine it lives on), copy the token immediately, and put it in
+				one of the two places the CLI checks — the
+				<span class="font-mono">DUCK_TOKEN</span> environment variable wins
+				over the file when both are set:
+			</p>
+			@shell(
+				"export DUCK_TOKEN=gc_u_…                  # this shell only",
+				"",
+				"# or persist it for every shell:",
+				"mkdir -p ~/.config/duck",
+				"echo gc_u_… > ~/.config/duck/token",
+				"chmod 600 ~/.config/duck/token",
+			)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Tokens never expire on their own. Revoke one anytime from the same
+				profile section (lost laptop, leaked shell history) — revocation is
+				immediate, and the CLI will start getting
+				<span class="font-mono">401 unauthorized</span>. Mint one token per
+				machine so you can revoke them individually.
+			</p>
+			@docHeading("Agent API keys (gc_…)")
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Course publishing — the <span class="font-mono">PUT/DELETE</span>
+				endpoints under <span class="font-mono">/api/v1</span> — requires an
+				agent API key. There's deliberately no web UI for minting these:
+				an operator with database access creates them with the server binary,
+				and the raw key is printed exactly once.
+			</p>
+			@shell(
+				"# local dev (compose postgres running):",
+				"go run ./cmd/getcracked apikey create --name writer-1",
+				"",
+				"# production, through the Cloud SQL proxy:",
+				"bin/cloud-sql-proxy <connection-name> --port 5433 &",
+				"go run ./cmd/getcracked apikey create --name writer-1 \\",
+				"  --db \"postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable\"",
+			)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				Agents send the key as a bearer header on every API call:
+			</p>
+			@shell(
+				"curl -X PUT " + baseURL + "/api/v1/courses/<slug>/variants/<language> \\",
+				"  -H \"Authorization: Bearer gc_<40 hex>\" \\",
+				"  -H \"Content-Type: application/json\" \\",
+				"  -d '{\"markdown\": \"…\"}'",
+			)
+			<p class="mt-3 text-slate-700 dark:text-slate-300">
+				The repo's <span class="font-mono">make publish</span> workflow reads
+				the key from the <span class="font-mono">GC_API_KEY</span> environment
+				variable. There's no revoke command yet — rotating means minting a new
+				key and setting the old row's <span class="font-mono">revoked_at</span>
+				directly in the database.
+			</p>
+			@docHeading("Handling secrets")
+			<ul class="mt-3 list-disc space-y-2 pl-5 text-slate-700 dark:text-slate-300">
+				<li>Copy tokens when they're shown — that's the only time the server knows the raw value.</li>
+				<li>Never commit a token; keep it in the environment, the token file, or your secret manager. A <span class="font-mono">gc_u_…</span> token is <em>not</em> an API key — the publish API will reject it.</li>
+				<li>One credential per machine or agent, named after its holder, so revoking one doesn't take the rest down.</li>
+			</ul>
+		</div>
+	}
+}

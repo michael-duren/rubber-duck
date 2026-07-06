@@ -18,7 +18,7 @@ func loginCmd(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default help output
 	baseURL := fs.String("base", "https://gc-app-aauuwonajq-uc.a.run.app", "server base URL")
-	if err := fs.Parse(args); err != nil {
+	if rest, err := parseInterleaved(fs, args); err != nil || len(rest) != 0 {
 		return fmt.Errorf("usage: duck login [--base URL]")
 	}
 
@@ -27,7 +27,9 @@ func loginCmd(args []string) error {
 	// Prompt for credentials
 	fmt.Print("username: ")
 	var username string
-	fmt.Scanln(&username)
+	if _, err := fmt.Scanln(&username); err != nil {
+		return fmt.Errorf("read username: %w", err)
+	}
 	fmt.Print("password: ")
 	password, err := term.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
@@ -54,7 +56,7 @@ func loginCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
 	}
-	defer loginResp.Body.Close()
+	defer func() { _ = loginResp.Body.Close() }()
 	_, _ = io.ReadAll(loginResp.Body)
 
 	if loginResp.StatusCode != http.StatusOK && loginResp.StatusCode != http.StatusSeeOther {
@@ -70,7 +72,7 @@ func loginCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetch profile: %w", err)
 	}
-	defer profileResp.Body.Close()
+	defer func() { _ = profileResp.Body.Close() }()
 
 	if profileResp.StatusCode != http.StatusOK {
 		return fmt.Errorf("fetch profile failed: server said %s", profileResp.Status)
@@ -94,7 +96,7 @@ func loginCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("mint token: %w", err)
 	}
-	defer tokenResp.Body.Close()
+	defer func() { _ = tokenResp.Body.Close() }()
 
 	tokenBody, _ := io.ReadAll(tokenResp.Body)
 	if tokenResp.StatusCode != http.StatusOK {

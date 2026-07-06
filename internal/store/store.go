@@ -49,7 +49,9 @@ func Migrate(databaseURL string, down bool) error {
 	if err != nil {
 		return fmt.Errorf("init migrate: %w", err)
 	}
-	defer m.Close()
+	defer func() {
+		_, _ = m.Close()
+	}()
 	if down {
 		err = m.Down()
 	} else {
