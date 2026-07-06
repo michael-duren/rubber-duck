@@ -124,8 +124,9 @@ A receive can also ask whether the channel is still open:
 v, ok := <-ch // ok is false once ch is closed and drained
 ```
 
-`ok` is `false` only once the channel is both closed *and* every buffered
-value has been received; `v` is the zero value in that case.
+`ok` is `false` only once the channel is both closed *and* drained — every
+value sent before the close has already been received; `v` is the zero
+value in that case.
 
 ### Reading from multiple channels: select
 
