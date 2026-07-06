@@ -143,7 +143,9 @@ func TestPutVariant(t *testing.T) {
 			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
 		}
 		var resp map[string]any
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal first put: %v", err)
+		}
 		if resp["version"].(float64) != 1 || resp["lessons"].(float64) != 2 ||
 			resp["challenges"].(float64) != 3 || resp["total_points"].(float64) != 75 {
 			t.Errorf("summary = %v", resp)
@@ -153,7 +155,7 @@ func TestPutVariant(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("second put = %d", rec.Code)
 		}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 		if resp["version"].(float64) != 2 {
 			t.Errorf("version = %v, want 2", resp["version"])
 		}
@@ -191,7 +193,7 @@ func TestPutVariant(t *testing.T) {
 				}
 			}
 		}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 		if resp.Error.Code != "invalid_course_markdown" || len(resp.Error.Details) == 0 {
 			t.Fatalf("error = %+v", resp.Error)
 		}
@@ -222,7 +224,7 @@ func TestRoundTripAndDelete(t *testing.T) {
 		t.Fatalf("get source = %d", rec.Code)
 	}
 	var got map[string]string
-	json.Unmarshal(rec.Body.Bytes(), &got)
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
 	if got["markdown"] != doc {
 		t.Error("round-tripped markdown differs from submitted document")
 	}

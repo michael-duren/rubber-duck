@@ -25,12 +25,12 @@ type challengeJSON struct {
 func pullCmd(args []string) error {
 	fs := flag.NewFlagSet("pull", flag.ContinueOnError)
 	base := fs.String("base", envOr("DUCK_BASE_URL", "http://localhost:8080"), "server base URL")
-	if err := fs.Parse(args); err != nil {
+	rest, err := parseInterleaved(fs, args)
+	if err != nil {
 		return err
 	}
-	rest := fs.Args()
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: duck pull <course>/<language>")
+		return fmt.Errorf("usage: duck pull <course>/<language> [--base URL]")
 	}
 	course, language, ok := strings.Cut(rest[0], "/")
 	if !ok || course == "" || language == "" {
@@ -46,7 +46,7 @@ func pullCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetch challenges: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)

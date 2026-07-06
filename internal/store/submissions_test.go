@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
@@ -125,6 +126,79 @@ func TestSubmissionRateLimited(t *testing.T) {
 	limited, err = s.SubmissionRateLimited(ctx, u.ID, third)
 	if err != nil || limited {
 		t.Errorf("after grading: limited = %v, %v; want false", limited, err)
+	}
+}
+
+// Claimed submissions land already graded, count as in-flight until their
+// background audit finishes, surface via PendingSubmissionIDs until audited,
+// and keep their claimed verdict after an audit disagrees.
+func TestClaimedSubmissionLifecycle(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	_, ids := seedChallenges(t, s)
+	first := ids[0]
+
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	passed, total := 3, 4
+	id, err := s.CreateClaimedSubmission(ctx, u.ID, first, "package x", "passed", "--- PASS: TestA", 8, &passed, &total)
+	if err != nil {
+		t.Fatalf("create claimed: %v", err)
+	}
+
+	sub, err := s.SubmissionForUser(ctx, id, u.ID)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !sub.Claimed || sub.Status != "passed" || sub.Score != 8 {
+		t.Errorf("claimed submission = %+v, want claimed passed/8", sub)
+	}
+	if sub.AuditState() != domain.AuditPending {
+		t.Errorf("audit state = %q, want pending", sub.AuditState())
+	}
+
+	// The job the pool loads knows it's an audit run.
+	job, err := s.SubmissionJob(ctx, id)
+	if err != nil || !job.Claimed {
+		t.Errorf("job = %+v, %v; want Claimed", job, err)
+	}
+
+	// Unaudited claims are recoverable work and count as in-flight.
+	pending, err := s.PendingSubmissionIDs(ctx)
+	if err != nil || len(pending) != 1 || pending[0] != id {
+		t.Errorf("pending = %v, %v; want [%d]", pending, err, id)
+	}
+	for range maxInFlightSubmissions - 1 {
+		if _, err := s.CreateClaimedSubmission(ctx, u.ID, first, "package x", "passed", "", 10, nil, nil); err != nil {
+			t.Fatalf("create claimed: %v", err)
+		}
+	}
+	limited, err := s.SubmissionRateLimited(ctx, u.ID, ids[1])
+	if err != nil || !limited {
+		t.Errorf("unaudited claims at cap: limited = %v, %v; want true", limited, err)
+	}
+
+	// A disagreeing audit records itself without touching the verdict.
+	if err := s.AuditSubmission(ctx, id, "failed", "--- FAIL: TestA"); err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	sub, err = s.SubmissionForUser(ctx, id, u.ID)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if sub.Status != "passed" || sub.Score != 8 {
+		t.Errorf("verdict after audit = %s/%d, want passed/8 (audits never revoke)", sub.Status, sub.Score)
+	}
+	if sub.AuditStatus != "failed" || sub.AuditState() != domain.AuditMismatch {
+		t.Errorf("audit = %q state %q, want failed/mismatch", sub.AuditStatus, sub.AuditState())
+	}
+
+	pending, err = s.PendingSubmissionIDs(ctx)
+	if err != nil || len(pending) != maxInFlightSubmissions-1 {
+		t.Errorf("pending after audit = %v, %v; want the %d unaudited ones", pending, err, maxInFlightSubmissions-1)
 	}
 }
 

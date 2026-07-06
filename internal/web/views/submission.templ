@@ -54,8 +54,22 @@ templ SubmissionResult(sub domain.Submission) {
 		default:
 			<p data-final class="font-mono text-lg font-bold text-amber-600 dark:text-amber-400">! grading error</p>
 	}
+	switch sub.AuditState() {
+		case domain.AuditPending:
+			<p class="mt-2 font-mono text-xs text-slate-400 dark:text-slate-500">reported by your local test run · server audit pending</p>
+		case domain.AuditVerified:
+			<p class="mt-2 font-mono text-xs text-emerald-700 dark:text-emerald-500">✓ verified by a server run</p>
+		case domain.AuditMismatch:
+			<p class="mt-2 font-mono text-xs text-amber-700 dark:text-amber-500">⚠ the server run got “{ sub.AuditStatus }” — your local result stands, but your environment may differ</p>
+	}
 	if sub.Terminal() && sub.Output != "" {
 		<pre class="mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">{ sub.Output }</pre>
+	}
+	if sub.AuditState() == domain.AuditMismatch && sub.AuditOutput != "" {
+		<details class="mt-2">
+			<summary class="cursor-pointer font-mono text-xs text-amber-700 dark:text-amber-500">server run output</summary>
+			<pre class="mt-2 max-h-96 overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-4 font-mono text-xs text-slate-800 dark:border-amber-900 dark:bg-slate-950 dark:text-slate-200">{ sub.AuditOutput }</pre>
+		</details>
 	}
 }
 
@@ -100,7 +114,7 @@ templ tokenSection(tokens []domain.UserToken, newToken string) {
 
 duck pull &lt;course&gt;/&lt;language&gt;   # scaffold challenges into a local dir
 duck test &lt;challenge-slug&gt;      # run tests locally, no submission
-duck submit &lt;challenge-slug&gt;    # submit for a graded score (needs a token below)</code></pre>
+duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (needs a token below)</code></pre>
 		<p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
 			Set <code>DUCK_TOKEN</code> or save the token to <code>~/.config/duck/token</code>.
 		</p>
