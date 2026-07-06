@@ -12,12 +12,15 @@ extended_reading:
     url: https://docs.python.org/3/library/queue.html
 ---
 
-# Lesson: Goroutines Basics {#goroutines-basics}
+# Lesson: Threads Basics {#goroutines-basics}
 
 A `threading.Thread` is an OS-backed thread managed by the Python runtime.
-The GIL means threads don't run Python bytecode in true parallel, but they do
-overlap I/O and blocking work, and this course uses them to practice
-coordinating concurrent tasks — the coordination patterns are the point.
+In CPython (the runtime almost everyone uses), the Global Interpreter Lock
+(GIL) lets only one thread execute Python bytecode at a time, so threads
+don't run Python bytecode in true parallel — but the GIL is released during
+I/O and by some C-level operations, so threads still overlap I/O and
+blocking work. This course uses threads to practice coordinating concurrent
+tasks — the coordination patterns are the point, not raw CPU speedup.
 
 ```python
 import threading
@@ -29,9 +32,14 @@ threading.Thread(target=worker).start()
 ```
 
 `Thread.start()` begins running `target` in a new thread and returns
-immediately. The program doesn't wait for background threads to finish on
-its own — call `.join()` on a thread to block until it completes, which is
-why synchronization matters.
+immediately — the calling thread keeps going without waiting. Python's
+default (non-daemon) threads do keep the process alive until they finish,
+even if you never call `.join()`, but that isn't the same as your own code
+knowing when a thread is done. Call `.join()` on a thread to block until it
+completes, which is how you safely use a value a thread produced — the
+`sum_nums` challenge below needs both halves' sums before it can add them,
+so it must join both threads first. (A thread started with `daemon=True`
+is the exception: the process kills it outright on exit, unjoined.)
 
 ## Challenge: Run Work Concurrently {#concurrent-sum points=10}
 
@@ -69,7 +77,8 @@ def test_sum_nums():
 Python has no built-in channel type, but `queue.Queue` plays the same role:
 one thread puts values in, another gets them out, and the queue itself
 handles the locking. A `None` put onto the queue is a common convention for
-"no more values" — the receiving side treats it as a close signal.
+"no more values" — a **sentinel** value the receiving side treats as a close
+signal, rather than real data.
 
 ```python
 import queue
