@@ -39,7 +39,8 @@ submit a solution.
 Other commands:
 
 ```sh
-go run ./cmd/getcracked apikey create --name writer-1   # mint an agent API key
+make apikey KEY_NAME=writer-1                           # mint an agent API key (local db)
+make apikey-prod KEY_NAME=writer-1                      # same, against prod via cloud-sql-proxy
 go run ./cmd/getcracked migrate up|down                 # run migrations by hand
 make check                                              # vet + stale-generate check + tests
 make test-integration                                   # store tests against compose postgres
@@ -335,14 +336,17 @@ The `service_url` output is your site; the first visit runs migrations.
 
 ### Seed a course
 
-`apikey create` needs database access; use cloud-sql-proxy locally:
+`apikey create` needs database access; `make apikey-prod` wires up
+cloud-sql-proxy and the tofu outputs for you:
 
 ```sh
-bin/cloud-sql-proxy $(cd infra && tofu output -raw sql_connection_name) --port 5433 &
-DB="postgres://getcracked:$(cd infra && tofu output -raw db_password)@localhost:5433/getcracked?sslmode=disable"
-go run ./cmd/getcracked apikey create --name seed --db "$DB"
+make apikey-prod KEY_NAME=seed
 GC_API_KEY=<printed key> go run ./cmd/getcracked seed --url <service_url> seed/intro-to-go.md
 ```
+
+(The manual equivalent: run `bin/cloud-sql-proxy <connection-name> --port
+5433`, then `apikey create --db "postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable"`,
+with both values from `tofu -chdir=infra output`.)
 
 ### Redeploy
 

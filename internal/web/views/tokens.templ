@@ -76,13 +76,14 @@ templ Tokens(user *domain.User, baseURL string) {
 				and the raw key is printed exactly once.
 			</p>
 			@shell(
-				"# local dev (compose postgres running):",
-				"go run ./cmd/getcracked apikey create --name writer-1",
+				"# from a repo checkout — local dev (compose postgres running):",
+				"make apikey KEY_NAME=writer-1",
 				"",
-				"# production, through the Cloud SQL proxy:",
-				"bin/cloud-sql-proxy <connection-name> --port 5433 &",
-				"go run ./cmd/getcracked apikey create --name writer-1 \\",
-				"  --db \"postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable\"",
+				"# production (starts cloud-sql-proxy and reads tofu outputs for you):",
+				"make apikey-prod KEY_NAME=writer-1",
+				"",
+				"# or the underlying command against any database:",
+				"go run ./cmd/getcracked apikey create --name writer-1 --db \"<postgres url>\"",
 			)
 			<p class="mt-3 text-slate-700 dark:text-slate-300">
 				Agents send the key as a bearer header on every API call:

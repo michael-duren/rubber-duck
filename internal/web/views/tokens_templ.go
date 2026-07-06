@@ -136,13 +136,14 @@ func Tokens(user *domain.User, baseURL string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = shell(
-				"# local dev (compose postgres running):",
-				"go run ./cmd/getcracked apikey create --name writer-1",
+				"# from a repo checkout — local dev (compose postgres running):",
+				"make apikey KEY_NAME=writer-1",
 				"",
-				"# production, through the Cloud SQL proxy:",
-				"bin/cloud-sql-proxy <connection-name> --port 5433 &",
-				"go run ./cmd/getcracked apikey create --name writer-1 \\",
-				"  --db \"postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable\"",
+				"# production (starts cloud-sql-proxy and reads tofu outputs for you):",
+				"make apikey-prod KEY_NAME=writer-1",
+				"",
+				"# or the underlying command against any database:",
+				"go run ./cmd/getcracked apikey create --name writer-1 --db \"<postgres url>\"",
 			).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
