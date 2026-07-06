@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish check clean
+.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -49,6 +49,24 @@ seed:
 	go run ./cmd/getcracked seed seed/intro-to-go.md
 	go run ./cmd/getcracked seed courses/embedded-pico-c.md
 	go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
+
+# Mint an agent API key (the gc_ kind that authenticates /api/v1 course
+# publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
+# prints once; store it (e.g. as the GC_API_KEY repo secret for CD).
+KEY_NAME ?= writer-1
+
+apikey:   ## mint against the local compose postgres
+	go run ./cmd/getcracked apikey create --name $(KEY_NAME)
+
+apikey-prod: $(SQL_PROXY)   ## mint against prod via cloud-sql-proxy (needs gcloud ADC + tofu state)
+	@set -e; \
+	conn=$$(tofu -chdir=infra output -raw sql_connection_name); \
+	pass=$$(tofu -chdir=infra output -raw db_password); \
+	$(SQL_PROXY) "$$conn" --port 5433 & proxy=$$!; \
+	trap 'kill $$proxy 2>/dev/null' EXIT; \
+	sleep 3; \
+	go run ./cmd/getcracked apikey create --name $(KEY_NAME) \
+		--db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable"
 
 # GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
 # target a local `make dev` server; override both for prod.
