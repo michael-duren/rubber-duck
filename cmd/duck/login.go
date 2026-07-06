@@ -18,7 +18,7 @@ func loginCmd(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default help output
 	baseURL := fs.String("base", "https://gc-app-aauuwonajq-uc.a.run.app", "server base URL")
-	if err := fs.Parse(args); err != nil {
+	if rest, err := parseInterleaved(fs, args); err != nil || len(rest) != 0 {
 		return fmt.Errorf("usage: duck login [--base URL]")
 	}
 

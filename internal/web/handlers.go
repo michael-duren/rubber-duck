@@ -31,6 +31,7 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("GET /{$}", h.catalog)
 	pages.HandleFunc("GET /about", h.aboutPage)
 	pages.HandleFunc("GET /cli", h.cliPage)
+	pages.HandleFunc("GET /tokens", h.tokensPage)
 	pages.HandleFunc("GET /courses/{slug}", h.coursePage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}", h.variantPage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}/lessons/{lesson}", h.lessonPage)
@@ -57,15 +58,23 @@ func (h *handlers) aboutPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, views.About(currentUser(r)))
 }
 
-// cliPage passes the request's own origin into the view so the duck
-// command examples are copy-pasteable against whichever deployment
+// cliPage and tokensPage pass the request's own origin into the view so
+// the command examples are copy-pasteable against whichever deployment
 // (localhost, prod) is serving the page.
 func (h *handlers) cliPage(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, views.CLI(currentUser(r), requestOrigin(r)))
+}
+
+func (h *handlers) tokensPage(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, views.Tokens(currentUser(r), requestOrigin(r)))
+}
+
+func requestOrigin(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
-	h.render(w, r, views.CLI(currentUser(r), scheme+"://"+r.Host))
+	return scheme + "://" + r.Host
 }
 
 func (h *handlers) render(w http.ResponseWriter, r *http.Request, c templ.Component) {

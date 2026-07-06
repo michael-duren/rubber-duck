@@ -24,13 +24,14 @@ import (
 func submitCmd(args []string) error {
 	fs := flag.NewFlagSet("submit", flag.ContinueOnError)
 	remote := fs.Bool("remote", false, "skip the local test run; grade on the server and wait for it")
-	if err := fs.Parse(args); err != nil {
+	rest, err := parseInterleaved(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: duck submit [--remote] <challenge-slug>")
+	if len(rest) != 1 {
+		return fmt.Errorf("usage: duck submit <challenge-slug> [--remote]")
 	}
-	slug := fs.Arg(0)
+	slug := rest[0]
 
 	cwd, err := os.Getwd()
 	if err != nil {
