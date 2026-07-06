@@ -993,7 +993,10 @@ Rules:
   these).
 - `shift`, `ctrl`, `alt` come from the state bitmask (`ShiftMask`,
   `ControlMask`, `Mod1Mask`). Other bits — Caps Lock, NumLock — must be
-  ignored, not rejected: state `0x12` is still just Shift.
+  ignored, not rejected: state `0x12` (Lock plus a NumLock-like bit, with
+  none of the three masks above set) still decodes as an *unmodified* key
+  — those extra bits are noise, not grounds for rejecting the event or
+  spuriously setting `shift`/`ctrl`/`alt`.
 
 ### Starter
 
@@ -1316,7 +1319,7 @@ A framebuffer is a width, a height, and `w * h` 32-bit pixels in
 **row-major** order: pixel (x, y) lives at index `y * w + x`. Rows are
 contiguous; walking x is cache-friendly, walking y strides by `w`. The
 32-bit value packs the color. We'll use the byte order X11, Windows, and
-macOS all natively like for little-endian machines: `0xAARRGGBB` — blue in
+macOS all natively use on little-endian machines: `0xAARRGGBB` — blue in
 the low byte. White is `0xFFFFFFFF`, a pleasant editor-background off-white
 is `0xFFFAF8F0`, black text is `0xFF000000`.
 
@@ -3775,9 +3778,15 @@ int main() {
     {   // Carry-over remeasure: after a space break, the tail may still
         // overflow and must hard-break correctly.
         auto r = wrap_line("aa bbbbbb", adv, 40);
-        // row1 "aa " (30) — 'b' would make 40? no: 30+10=40 fits; "aa b"=40.
-        // At second b: 40+10 > 40 -> break at space (idx 3): {0,3}.
-        // Carry "b" (10), then bbbbb: hard-break when width would pass 40.
+        // After "aa " (width 30), the next 'b' (idx 3) makes 40: exact
+        // fit, not overflow, so it stays on row 0. The 'b' after THAT
+        // (idx 4) would make 50: overflow, so break at the last
+        // opportunity, the space at idx 3 -> row 0 = {0,3}.
+        // Carry "b" (idx 3, width 10) down to row 1, no space in the
+        // carry so the break-opportunity tracker resets; row 1 fills
+        // to idx 7 (width 40) and the next 'b' would overflow with no
+        // opportunity to break at -> hard-break at idx 7 -> row 1 =
+        // {3,7}. The remaining "bb" fits in row 2 = {7,9}.
         check(rows_are(r, {{0, 3}, {3, 7}, {7, 9}}), "test_carry_over");
     }
 
@@ -5292,9 +5301,10 @@ Two consequences of this design, now explicable:
 
 One more protocol wrinkle you should recognize by name: server
 properties have practical size limits, so for large transfers the owner
-answers with target **INCR** — "this will arrive in chunks" — and the
-two clients then ping-pong property writes and deletions until a
-zero-length write says done. We model the *decision* (small enough to
+writes the property with type **INCR** instead of the requested target —
+"this will arrive in chunks" — and the two clients then ping-pong
+property writes and deletions until a zero-length write says done. We
+model the *decision* (small enough to
 send directly, or INCR?) without the chunk loop.
 
 The seam stays honest through all of this: the editor core calls
@@ -6004,7 +6014,12 @@ with `shift` move only the focus by one UTF-8 boundary (clamped at the
 document ends); without `shift`, a non-empty selection *collapses* to its
 begin/end (no extra movement), and an empty one moves one boundary.
 `home`/`end_key` go to the start/end of the *logical* line containing the
-focus (end = before the `'\n'`); with `shift` they move the focus only.
+focus (end = before the `'\n'`); with `shift` they move the focus only,
+extending or shrinking the selection. Without `shift` they collapse both
+anchor and focus to that line boundary outright — unlike plain
+`left`/`right`, which spend their first press collapsing an existing
+selection to its nearer edge, `home`/`end_key` always jump all the way to
+the line start/end even if a selection was active.
 
 **Editing & undo.** `insert_text(s)` (empty `s`: total no-op) replaces
 the selection (possibly empty) with `s`; caret lands after `s`,
@@ -6029,9 +6044,12 @@ resets. Damage accrues as full-width bands of rows, unioned together:
   inclusive, i.e. `y` from `min_row * line_height` through `(max_row +
   1) * line_height`. Events that leave anchor and focus unchanged add
   no damage.
-- *Text change* (insert, backspace, delete, undo, redo): let `L` be the
-  logical line containing the edit position and `first` the displaying
-  row of `L`'s first offset *after* the edit; the band runs from
+- *Text change* (insert, backspace, delete, undo, redo): re-layout first,
+  then compute damage against the *new* text — let `L` be the logical
+  line containing the edit position as the document now reads (inserting
+  or deleting a `'\n'` changes where line boundaries fall, so `L` must be
+  found post-edit, not looked up in the old layout), and `first` the
+  displaying row of `L`'s first offset. The band runs from
   `first * line_height` to `max(row_count_before, row_count_after) *
   line_height`. (Everything from the edited line to the bottom of the
   taller layout — reflow can move every row below the edit.)
@@ -6258,7 +6276,7 @@ int main() {
         check(ed.caret() == 0, "test_click_left_half");
         check(ed.take_damage().empty(), "test_unmoved_click_no_damage");
         ed.click(5, 0);
-        check(ed.caret() == 1, "test_click_half_advance_tie_right");
+        check(ed.caret() == 1, "test_click_past_midpoint_advances");
         check(rect_is(ed.take_damage(), 0, 0, 80, 16),
               "test_caret_move_damage_band");
         ed.click(16, 20);
