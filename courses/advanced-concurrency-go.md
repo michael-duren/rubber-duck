@@ -237,11 +237,14 @@ each encoding a specific access pattern.
 
 **RWMutex** splits lockers into readers and writers: any number of
 readers may hold `RLock` simultaneously, while `Lock` waits for
-exclusivity. It only pays off when reads vastly outnumber writes *and*
-the critical section is long enough to amortize the more expensive
-bookkeeping — a read-mostly map of config values, not a counter
-increment. Benchmark before reaching for it; under short critical
-sections a plain Mutex is often faster.
+exclusivity. Tracking "how many readers are in" costs more than a
+`Mutex`'s single bit of state — a fixed cost paid whether or not any
+real parallelism comes of it. The payoff comes from concurrent reader
+traffic, not from the size of the critical section: four goroutines
+genuinely overlapping on `RLock` around a single map lookup already
+beat a plain Mutex, while the same lookup made by one or two goroutines
+rarely does, however much work sits inside the lock. Benchmark at your
+actual concurrency level before reaching for it.
 
 **Cond** lets goroutines sleep until some condition over shared state
 *might* have changed. The non-negotiable idiom is checking the condition
@@ -884,9 +887,11 @@ is memory visibility: `Wait` reads the stored error *after*
 `wg.Wait()`, and the failing goroutine wrote it *before* `wg.Done()`,
 so the WaitGroup edge — not luck — is what makes the read safe.
 
-The real errgroup also derives a context that is canceled on first
-failure; you built that muscle in `ParallelMap`, so here we focus on
-the group itself.
+The real errgroup also has `errgroup.WithContext(ctx)`, which returns a
+`*Group` paired with a derived context that is canceled the moment any
+task returns an error — the plain zero-value `Group` above has no
+context of its own. That cancel-on-first-error shape is the same muscle
+you built in `ParallelMap`, so here we focus on just the group.
 
 ## Challenge: Build the Group {#group-from-scratch points=30}
 
