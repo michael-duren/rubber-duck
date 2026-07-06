@@ -6276,7 +6276,7 @@ int main() {
         check(ed.caret() == 0, "test_click_left_half");
         check(ed.take_damage().empty(), "test_unmoved_click_no_damage");
         ed.click(5, 0);
-        check(ed.caret() == 1, "test_click_half_advance_tie_right");
+        check(ed.caret() == 1, "test_click_past_midpoint_advances");
         check(rect_is(ed.take_damage(), 0, 0, 80, 16),
               "test_caret_move_damage_band");
         ed.click(16, 20);
