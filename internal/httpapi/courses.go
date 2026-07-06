@@ -28,10 +28,26 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		Markdown string `json:"markdown"`
+		// ExpectedVersion enables optimistic concurrency for human
+		// (gc_u_ user-token) callers only — see currentUser handling
+		// below. An agent-key caller may send it too; it's simply
+		// ignored, matching that path's existing unversioned behavior.
+		ExpectedVersion *int `json:"expected_version,omitempty"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDocumentBytes))
-	if err := dec.Decode(&body); err != nil || body.Markdown == "" {
+	if err := dec.Decode(&body); err != nil {
+		// A valid-but-huge body hits MaxBytesReader's limit and would
+		// otherwise surface as a baffling "must be JSON" 400.
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeError(w, http.StatusRequestEntityTooLarge, "document_too_large",
+				fmt.Sprintf("document exceeds the %d-byte limit", maxDocumentBytes), nil)
+			return
+		}
 		writeError(w, http.StatusBadRequest, "bad_request", `body must be JSON: {"markdown": "..."}`, nil)
+		return
+	}
+	if body.Markdown == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", `missing or empty "markdown" field`, nil)
 		return
 	}
 
@@ -63,9 +79,24 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	// Agent-authored write: no human editor to attribute, and no version
-	// check — agent publishes aren't versioned (see issue #36's scope).
-	version, err := h.store.UpsertVariant(r.Context(), course, variant, nil, nil)
+	// A human editor (authenticated via a gc_u_ user token, see
+	// requireKey) is attributed and may opt into the same optimistic
+	// concurrency check the web editor uses. An agent-key caller has no
+	// currentUser and stays unattributed and unversioned (see issue #36's
+	// scope) — any expected_version it sent is ignored, not validated.
+	var editedBy *int64
+	var expectedVersion *int
+	if user := currentUser(r); user != nil {
+		editedBy = &user.ID
+		expectedVersion = body.ExpectedVersion
+	}
+
+	version, err := h.store.UpsertVariant(r.Context(), course, variant, editedBy, expectedVersion)
+	if errors.Is(err, domain.ErrVersionConflict) {
+		writeError(w, http.StatusConflict, "version_conflict",
+			"the variant has changed since your expected_version — re-fetch it and reapply your changes before pushing", nil)
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return
@@ -132,10 +163,10 @@ func (h *handlers) getCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
-	// Version is deliberately ignored: the documented response shape is
-	// markdown-only (see README's Agent API table); only the web editor's
-	// hidden form field round-trips it.
-	src, _, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
+	// version lets a human caller round-trip it back as expected_version
+	// on a subsequent PUT (see putVariant), the same optimistic-concurrency
+	// pattern the web editor's hidden form field already uses.
+	src, version, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "no such course variant", nil)
 		return
@@ -144,7 +175,7 @@ func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"markdown": src})
+	writeJSON(w, http.StatusOK, map[string]any{"markdown": src, "version": version})
 }
 
 type challengeJSON struct {

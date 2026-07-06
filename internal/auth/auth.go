@@ -29,9 +29,15 @@ func NewAPIKey() (key string, hash []byte) {
 	return newToken("gc_")
 }
 
-// NewUserToken returns a user CLI token ("gc_u_" prefix) and its storage hash.
+// UserTokenPrefix distinguishes a human CLI token from an agent API key
+// ("gc_" + hex). It lives here next to NewUserToken — rather than as a
+// duplicated literal in consumers like httpapi's requireKey — so the minted
+// prefix and the dispatch check can never drift apart.
+const UserTokenPrefix = "gc_u_"
+
+// NewUserToken returns a user CLI token (UserTokenPrefix) and its storage hash.
 func NewUserToken() (token string, hash []byte) {
-	return newToken("gc_u_")
+	return newToken(UserTokenPrefix)
 }
 
 func newToken(prefix string) (string, []byte) {
