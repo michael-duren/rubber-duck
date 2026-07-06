@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish check clean
+.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish check clean psql psql-prod
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -60,6 +60,25 @@ publish:
 		echo "publishing $$f"; \
 		go run ./cmd/getcracked seed --url $(GC_URL) "$$f" || exit 1; \
 	done
+
+# Interactive SQL shells. psql: the compose Postgres from `make dev`.
+# psql-prod: fetches the app's DATABASE_URL from Secret Manager (needs
+# `gcloud auth login` first), opens a Cloud SQL proxy on :5433, and tears
+# it down when psql exits.
+psql:
+	psql "postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable"
+
+psql-prod: $(SQL_PROXY)
+	@test -n "$(PROJECT)" || (echo "set PROJECT=<gcp-project-id>" && exit 1)
+	@set -e; \
+	url=$$(gcloud secrets versions access latest --secret=gc-database-url --project=$(PROJECT)); \
+	conn=$${url##*host=/cloudsql/}; \
+	$(SQL_PROXY) "$$conn" --port 5433 --quiet & pid=$$!; \
+	trap "kill $$pid 2>/dev/null || true" EXIT INT TERM; \
+	i=0; until pg_isready -h localhost -p 5433 -q 2>/dev/null; do \
+		i=$$((i+1)); test $$i -lt 30 || (echo "cloud-sql-proxy didn't come up" && exit 1); sleep 0.3; \
+	done; \
+	psql "$$(echo "$$url" | sed 's#@/#@localhost:5433/#; s#?host=.*##')"
 
 check: generate css
 	@git diff --exit-code -- '**/*_templ.go' || (echo "stale templ output: run make generate and commit" && exit 1)

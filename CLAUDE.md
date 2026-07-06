@@ -33,6 +33,9 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
   SHA), tofu apply. Prod: https://gc-app-aauuwonajq-uc.a.run.app
 - `go run ./cmd/getcracked apikey create --name <n> [--db <url>]` — mint
   agent API keys (prod DB via `bin/cloud-sql-proxy <conn-name> --port 5433`)
+- `make psql` / `make psql-prod PROJECT=<id>` — interactive SQL shell
+  against local compose Postgres / prod Cloud SQL (auto-starts and tears
+  down the proxy; prod needs `gcloud auth login`)
 
 ## Conventions
 
