@@ -75,10 +75,16 @@ go func() {
 The recursive shape is the one worth internalizing: each layer only ever
 looks at 2 or 3 concrete channels plus one recursive call, so the select
 statement stays a fixed size no matter how many inputs you started with —
-the tradeoff is roughly N/3 nested goroutines for N inputs. The flat shape
-uses exactly one goroutine regardless of N, at the cost of building a
-`reflect.SelectCase` slice and paying reflection overhead on every call —
-worth it only if goroutine count matters more than that overhead.
+but the goroutine count that buys you is roughly N/2, not N/3. Only the
+top layer's three slots are all fresh inputs; every layer below it is
+also carrying an ancestor's `out` down through the recursion (that's what
+lets a close at the top retire every idle layer underneath), and that
+passenger occupies one of the three slots at each subsequent layer. Run
+the numbers and it lands exactly on `N/2` for the inputs this lesson
+cares about: 6 inputs cost 3 goroutines, 30 cost 15, 100 cost 50. The flat
+shape uses exactly one goroutine regardless of N, at the cost of building
+a `reflect.SelectCase` slice and paying reflection overhead on every
+call — worth it only if goroutine count matters more than that overhead.
 
 The trap is the obvious third shape: one goroutine per input channel. It works
 — and leaks a goroutine for every input that never closes. In a server that
