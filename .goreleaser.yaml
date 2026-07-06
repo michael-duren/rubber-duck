@@ -1,0 +1,85 @@
+# goreleaser config for the duck CLI. Driven by the `goreleaser` job in
+# .github/workflows/cd.yml, which tags v0.1.<run_number> on the deployed
+# commit first. Docs: https://goreleaser.com
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+project_name: duck
+
+builds:
+  - main: ./cmd/duck
+    binary: duck
+    env:
+      - CGO_ENABLED=0
+    # Explicit ldflags to keep the `v` prefix: goreleaser's default stamps
+    # {{ .Version }} (no `v`), but go-installed builds report the full tag
+    # via ReadBuildInfo (see cmd/duck/version.go) — keep them identical.
+    ldflags:
+      - -s -w -X main.version=v{{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  # Raw binaries, named exactly as the /cli page's curl instructions
+  # expect (duck-linux-amd64, duck-windows-amd64.exe, ... — see
+  # internal/web/views/about.templ).
+  - id: binaries
+    formats: [binary]
+    name_template: "duck-{{ .Os }}-{{ .Arch }}"
+  # tar.gz/zip for the Homebrew cask and archive-preferring users.
+  - id: archives
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+# Publishes a cask to the tap repo; users then:
+#   brew install michael-duren/tap/duck
+# Casks (not the deprecated `brews` formulas) are goreleaser's current
+# Homebrew mechanism. Note casks are macOS-only — Linux brew users fall
+# back to the curl or go-install routes on /cli.
+homebrew_casks:
+  - name: duck
+    ids: [archives]
+    repository:
+      owner: michael-duren
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/michael-duren/rubber-duck
+    description: Rubber Duck CLI — pull course lessons, run challenge tests locally, submit solutions
+    # The binaries are unsigned/un-notarized; without this Gatekeeper
+    # quarantines the download and macOS reports it as "damaged".
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/duck"]
+          end
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  footer: >-
+
+    ---
+
+    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
