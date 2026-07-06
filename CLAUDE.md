@@ -26,12 +26,12 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
   (needed for dockergrader e2e tests, which skip if images are missing)
 - `make seed` — publish seed/intro-to-go.md through the local agent API
   (quickstart fixture only — see `make publish` for real course content)
-- `make publish` — loop `getcracked seed` over `courses/*.md` (the
+- `make publish` — loop `duckserver seed` over `courses/*.md` (the
   canonical, PR-reviewed course content); `GC_API_KEY=... [GC_URL=...]
   make publish`
 - `make deploy PROJECT=getcracked-touch-grass` — build, push (tag = git
-  SHA), tofu apply. Prod: https://gc-app-aauuwonajq-uc.a.run.app
-- `go run ./cmd/getcracked apikey create --name <n> [--db <url>]` — mint
+  SHA), tofu apply. Prod: https://duckgc.com
+- `go run ./cmd/duckserver apikey create --name <n> [--db <url>]` — mint
   agent API keys (prod DB via `bin/cloud-sql-proxy <conn-name> --port 5433`)
 - `make psql` / `make psql-prod PROJECT=<id>` — interactive SQL shell
   against local compose Postgres / prod Cloud SQL (auto-starts and tears
@@ -54,7 +54,7 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 
 ## Gotchas
 
-- Killing `go run` can orphan the server on :8080 — `pkill -f getcracked`.
+- Killing `go run` can orphan the server on :8080 — `pkill -f duckserver`.
 - Grading containers: killing the docker CLI doesn't kill the container;
   dockergrader force-removes by name (don't regress this).
 - Re-publishing a course variant deletes its lessons/challenges (cascade:

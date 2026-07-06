@@ -25,14 +25,14 @@ css: $(TAILWIND)
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --minify
 
 build: generate css
-	go build -o getcracked ./cmd/getcracked
+	go build -o duckserver ./cmd/duckserver
 
 db:
 	docker compose up -d --wait postgres
 
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
-	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/getcracked serve"
+	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/duckserver serve"
 
 runner-images:
 	docker build -t gc-runner-go internal/grader/runners/go
@@ -46,9 +46,9 @@ test-integration: db
 	TEST_DATABASE_URL=postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable go test ./...
 
 seed:
-	go run ./cmd/getcracked seed seed/intro-to-go.md
-	go run ./cmd/getcracked seed courses/embedded-pico-c.md
-	go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
+	go run ./cmd/duckserver seed seed/intro-to-go.md
+	go run ./cmd/duckserver seed courses/embedded-pico-c.md
+	go run ./cmd/duckserver seed courses/build-a-hashmap-c.md
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
 # publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
@@ -56,7 +56,7 @@ seed:
 KEY_NAME ?= writer-1
 
 apikey:   ## mint against the local compose postgres
-	go run ./cmd/getcracked apikey create --name $(KEY_NAME)
+	go run ./cmd/duckserver apikey create --name $(KEY_NAME)
 
 apikey-prod: $(SQL_PROXY)   ## mint against prod via cloud-sql-proxy (needs gcloud ADC + tofu state)
 	@set -e; \
@@ -65,7 +65,7 @@ apikey-prod: $(SQL_PROXY)   ## mint against prod via cloud-sql-proxy (needs gclo
 	$(SQL_PROXY) "$$conn" --port 5433 & proxy=$$!; \
 	trap 'kill $$proxy 2>/dev/null' EXIT; \
 	sleep 3; \
-	go run ./cmd/getcracked apikey create --name $(KEY_NAME) \
+	go run ./cmd/duckserver apikey create --name $(KEY_NAME) \
 		--db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable"
 
 # GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
@@ -76,7 +76,7 @@ publish:
 	@test -n "$$GC_API_KEY" || (echo "set GC_API_KEY=<key>" && exit 1)
 	@for f in courses/*.md; do \
 		echo "publishing $$f"; \
-		go run ./cmd/getcracked seed --url $(GC_URL) "$$f" || exit 1; \
+		go run ./cmd/duckserver seed --url $(GC_URL) "$$f" || exit 1; \
 	done
 
 # Interactive SQL shells. psql: the compose Postgres from `make dev`.
@@ -128,7 +128,7 @@ infra-validate:
 	cd infra && tofu fmt -check && tofu validate
 
 clean:
-	rm -f getcracked internal/web/static/app.css
+	rm -f duckserver internal/web/static/app.css
 
 lint: ## run golangci-lint (same version config as CI)
 	golangci-lint run ./...

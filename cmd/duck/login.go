@@ -33,7 +33,7 @@ var (
 func loginCmd(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default help output
-	baseURL := fs.String("base", "https://gc-app-aauuwonajq-uc.a.run.app", "server base URL")
+	baseURL := fs.String("base", "https://duckgc.com", "server base URL")
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
