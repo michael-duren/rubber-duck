@@ -27,6 +27,38 @@ The `go` keyword starts the function in a new goroutine and returns
 immediately. The program exits when `main` returns — it does **not** wait for
 other goroutines, which is why synchronization matters.
 
+### Waiting for goroutines: sync.WaitGroup
+
+Since the program won't wait for goroutines on its own, you need something
+that will. `sync.WaitGroup` is a counter built for exactly that: call
+`Add(n)` before starting `n` goroutines, have each one call `Done()` when it
+finishes (usually via `defer`), and call `Wait()` to block until every
+`Done()` has landed.
+
+```go
+var wg sync.WaitGroup
+results := make([]int, 2)
+
+wg.Add(2)
+go func() {
+	defer wg.Done()
+	results[0] = workA()
+}()
+go func() {
+	defer wg.Done()
+	results[1] = workB()
+}()
+
+wg.Wait()
+fmt.Println(results[0] + results[1])
+```
+
+Each goroutine writes to its own slot in `results`, so there's no data race
+even though both run at the same time — two goroutines writing to the
+*same* variable without synchronization is a race, and `go test -race`
+would catch it. Read `results` only after `Wait()` returns, once every
+goroutine is guaranteed to have finished writing.
+
 ## Challenge: Run Work Concurrently {#concurrent-sum points=10}
 
 Implement `Sum(nums []int) int` so that it splits the slice in half and sums
@@ -83,7 +115,49 @@ fmt.Println(<-ch) // 42
 ```
 
 Close a channel to signal "no more values". Receivers can range over a
-channel until it is closed.
+channel until it is closed. Only the sending side should close a channel —
+closing an already-closed channel, or sending on a closed one, panics.
+
+A receive can also ask whether the channel is still open:
+
+```go
+v, ok := <-ch // ok is false once ch is closed and drained
+```
+
+`ok` is `false` only once the channel is both closed *and* drained — every
+value sent before the close has already been received; `v` is the zero
+value in that case.
+
+### Reading from multiple channels: select
+
+`select` lets a goroutine wait on more than one channel operation at once.
+It blocks until one case is ready, then runs that case; if several are
+ready at the same time, it picks one at random. Combined with the
+comma-ok form above, `select` can read from two channels until both are
+drained, retiring whichever one closes first:
+
+```go
+for a != nil || b != nil {
+	select {
+	case v, ok := <-a:
+		if !ok {
+			a = nil // never selects again — a nil channel blocks forever
+			continue
+		}
+		fmt.Println("from a:", v)
+	case v, ok := <-b:
+		if !ok {
+			b = nil
+			continue
+		}
+		fmt.Println("from b:", v)
+	}
+}
+```
+
+Setting a drained channel variable to `nil` is the trick that retires it:
+a receive on a `nil` channel never becomes ready, so `select` simply stops
+considering that case and keeps servicing the other one.
 
 ## Challenge: Fan In {#fan-in points=15}
 
