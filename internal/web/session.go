@@ -11,6 +11,9 @@ import (
 )
 
 const (
+	// sessionCookie is mirrored in cmd/duck/login.go (sessionCookieName):
+	// the CLI detects login success by this cookie's presence. Renaming it
+	// silently breaks `duck login`.
 	sessionCookie = "gc_session"
 	sessionTTL    = 30 * 24 * time.Hour
 )
