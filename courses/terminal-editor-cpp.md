@@ -869,7 +869,7 @@ ESC [ 2 J        erase the whole screen
 ESC [ K          erase from the cursor to the end of the line
 ESC [ H          cursor to row 1, column 1 (home)
 ESC [ 12 ; 40 H  cursor to row 12, column 40  — 1-BASED, row;col
-ESC [ 7 m        SGR: inverted video (swap fg/bg)
+ESC [ 7 m        SGR (Select Graphic Rendition): inverted video (swap fg/bg)
 ESC [ m          SGR: reset all attributes
 ESC [ ? 25 l     hide the cursor        (l = reset a private mode)
 ESC [ ? 25 h     show the cursor        (h = set a private mode)
