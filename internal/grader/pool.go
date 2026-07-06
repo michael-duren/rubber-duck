@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 // SubmissionStore is the persistence the pool needs around a grading run.

@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/auth"
 )
 
 func TestSubmissionRateLimitReturns429(t *testing.T) {
@@ -14,7 +14,9 @@ func TestSubmissionRateLimitReturns429(t *testing.T) {
 	fs.rateLimit = func(userID, challengeID int64) bool { return true }
 
 	token, hash := auth.NewUserToken()
-	fs.CreateUserToken(t.Context(), 1, "cli", hash)
+	if _, err := fs.CreateUserToken(t.Context(), 1, "cli", hash); err != nil {
+		t.Fatalf("CreateUserToken: %v", err)
+	}
 
 	rec := bearerPost(mux, "/challenges/1/submissions", token, url.Values{"code": {"package x"}})
 	if rec.Code != http.StatusTooManyRequests {

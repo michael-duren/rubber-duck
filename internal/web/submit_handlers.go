@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/grader"
-	"github.com/mduren/getcracked/internal/web/views"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 // SubmissionStore is the store slice for the submission flow.
@@ -220,5 +220,5 @@ func (h *handlers) submissionStatus(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }

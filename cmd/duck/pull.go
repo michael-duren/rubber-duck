@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
 type challengeJSON struct {
@@ -46,7 +46,7 @@ func pullCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetch challenges: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)

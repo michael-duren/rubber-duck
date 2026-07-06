@@ -238,7 +238,7 @@ func validate(res *Result) []Problem {
 
 func nodeText(n ast.Node, src []byte) string {
 	var b bytes.Buffer
-	ast.Walk(n, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(n, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering {
 			if t, ok := node.(*ast.Text); ok {
 				b.Write(t.Segment.Value(src))

@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 // seedChallenges publishes the seed course and returns its variant ID and

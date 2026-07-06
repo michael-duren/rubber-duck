@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 func TestUpsertVariant(t *testing.T) {

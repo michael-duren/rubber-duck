@@ -65,7 +65,7 @@ type gcsStore struct {
 func (g *gcsStore) Put(ctx context.Context, key string, data []byte) error {
 	w := g.bucket.Object(key).NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
-		w.Close()
+		_ = w.Close()
 		return err
 	}
 	return w.Close()
@@ -76,7 +76,7 @@ func (g *gcsStore) Get(ctx context.Context, key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	return io.ReadAll(r)
 }
 

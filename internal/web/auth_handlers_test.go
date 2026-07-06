@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 // fakeStore is an in-memory AuthStore.

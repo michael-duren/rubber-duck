@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 func bearerPost(mux *http.ServeMux, path, token string, form url.Values) *httptest.ResponseRecorder {
@@ -71,7 +71,9 @@ func TestSubmitBySlugAndPollStatus(t *testing.T) {
 	fs.variantSlug = "intro-to-concurrency"
 
 	token, hash := auth.NewUserToken()
-	fs.CreateUserToken(context.Background(), 1, "cli", hash)
+	if _, err := fs.CreateUserToken(context.Background(), 1, "cli", hash); err != nil {
+		t.Fatalf("CreateUserToken: %v", err)
+	}
 
 	rec := bearerPost(mux, "/courses/intro-to-concurrency/go/challenges/concurrent-sum/submissions", token, url.Values{"code": {"package challenge"}})
 	if rec.Code != http.StatusCreated {
@@ -99,7 +101,7 @@ func TestSubmitBySlugAndPollStatus(t *testing.T) {
 		Status string `json:"status"`
 		Score  int    `json:"score"`
 	}
-	json.Unmarshal(statusRec.Body.Bytes(), &status)
+	_ = json.Unmarshal(statusRec.Body.Bytes(), &status)
 	if status.Status != "passed" || status.Score != 10 {
 		t.Errorf("status = %+v, want passed/10", status)
 	}

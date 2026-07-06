@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/grader"
-	"github.com/mduren/getcracked/internal/grader/cloudrungrader"
-	"github.com/mduren/getcracked/internal/grader/dockergrader"
-	"github.com/mduren/getcracked/internal/httpapi"
-	"github.com/mduren/getcracked/internal/ingest"
-	"github.com/mduren/getcracked/internal/store"
-	"github.com/mduren/getcracked/internal/web"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader/cloudrungrader"
+	"github.com/michael-duren/rubber-duck/internal/grader/dockergrader"
+	"github.com/michael-duren/rubber-duck/internal/httpapi"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/store"
+	"github.com/michael-duren/rubber-duck/internal/web"
 )
 
 func main() {
@@ -234,7 +234,7 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	out, _ := io.ReadAll(resp.Body)
 	fmt.Printf("%s %s\n%s", resp.Status, url, out)
 	if resp.StatusCode >= 300 {
