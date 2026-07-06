@@ -806,14 +806,21 @@ subtle heart of Raft's safety argument.
 
 ### Why majority replication is not enough (§5.4.2, Figure 8)
 
-Figure 8 of the paper shows the trap. A leader in term 2 replicates an entry at
-index 2 to a *majority* of a five-server cluster, then crashes before
-committing it. Later, after more crashes and elections, a leader in term 4
-finds that same term-2 entry still uncommitted in its log. May it count
-replicas and commit it? **No.** A server that missed the entry could still win
-an election in the meantime (its log can be "up-to-date" by §5.4.1 thanks to a
-*later* term), become leader, and overwrite index 2 — after it was declared
-committed. That is a lost write, the one unforgivable sin of a consensus
+Figure 8 of the paper walks through the trap on a five-server cluster,
+S1–S5. In (a), S1 — leader in term 2 — appends an entry at index 2 but
+replicates it to only one other server (S2) before crashing: a *minority*.
+In (b), S5 wins the next election (term 3, with votes from S3, S4, and
+itself) and writes a *different* entry at index 2. S5 crashes too; in (c),
+S1 restarts, wins election again as leader of term 4, and resumes normal
+replication. As a side effect of replicating its own term-4 entries, S1's
+old term-2 entry at index 2 now happens to sit on a majority of the cluster
+(S1, S2, and S3) — but nobody ever committed it. May a leader now count
+those replicas and consider index 2 committed? **No.** In (d), S5 — whose
+log still ends in the higher term 3, so it looks "up-to-date" by §5.4.1 even
+though it is missing S1's index-2 entry entirely — wins a later election
+from S2, S3, and S4, and overwrites index 2 with its own term-3 entry. If
+counting replicas had been enough to call index 2 committed back in (c),
+this would be a lost write: the one unforgivable sin of a consensus
 algorithm.
 
 The fix: a leader only ever commits by counting replicas for entries **from its
@@ -959,9 +966,9 @@ func TestAdvanceCommit(t *testing.T) {
 
 # Lesson: Election Timing in a Deterministic World {#election-timing}
 
-Raft's liveness hinges on timing (§5.2, §9.3). Followers expect a heartbeat
-from the leader well before their election timeout expires; the paper's rule of
-thumb is
+Raft's liveness hinges on timing (§5.6, "Timing and availability"). Followers
+expect a heartbeat from the leader well before their election timeout expires;
+the paper's rule of thumb is
 
 ```go
 // broadcastTime << electionTimeout << MTBF
@@ -971,7 +978,14 @@ If every server used the *same* election timeout, they would all time out
 together, all become candidates together, split the vote, and repeat forever.
 Raft's fix is charmingly low-tech: **randomized election timeouts** (e.g.
 150–300 ms). Whoever draws the shortest timeout usually wins the election
-before anyone else even wakes up.
+before anyone else even wakes up. The paper's own experiments (§9.3,
+"Performance") back this recommendation: shrinking the timeout range brings
+faster failover, but push it too low (well under the broadcast time) and
+leaders start missing their own heartbeat deadline before followers'
+timeouts fire, causing unnecessary elections and *lower* availability — which
+is exactly the `broadcastTime << electionTimeout` half of the inequality
+above. 150–300 ms is the paper's own conservative recommendation, chosen to
+avoid that failure mode while still detecting a crashed leader quickly.
 
 ### Time as data
 
