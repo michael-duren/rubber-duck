@@ -14,6 +14,20 @@ import (
 	"golang.org/x/term"
 )
 
+// sessionCookieName mirrors internal/web's gc_session cookie: its presence
+// after POSTing /login is how we tell a real login success (which sets it)
+// apart from the server re-rendering the login page with a "wrong
+// username or password" message (which also answers 200 OK).
+const sessionCookieName = "gc_session"
+
+// loginStdin and loginReadPassword make the credential prompt swappable in
+// tests: term.ReadPassword needs a real terminal fd, so tests substitute a
+// fake reader instead of driving a pty.
+var (
+	loginStdin       io.Reader = os.Stdin
+	loginReadPassword           = func() ([]byte, error) { return term.ReadPassword(int(os.Stdin.Fd())) }
+)
+
 func loginCmd(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default help output
@@ -22,94 +36,29 @@ func loginCmd(args []string) error {
 		return fmt.Errorf("usage: duck login [--base URL]")
 	}
 
-	*baseURL = strings.TrimRight(*baseURL, "/")
-
-	// Prompt for credentials
 	fmt.Print("username: ")
 	var username string
-	if _, err := fmt.Scanln(&username); err != nil {
+	if _, err := fmt.Fscanln(loginStdin, &username); err != nil {
 		return fmt.Errorf("read username: %w", err)
 	}
 	fmt.Print("password: ")
-	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	password, err := loginReadPassword()
 	if err != nil {
 		return fmt.Errorf("read password: %w", err)
 	}
 	fmt.Println() // newline after password prompt
 
-	// Create HTTP client with cookie jar
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return err
 	}
 	client := &http.Client{Jar: jar}
 
-	// POST to /login
-	loginReq, err := http.NewRequest("POST", *baseURL+"/login", strings.NewReader(
-		url.Values{"username": {username}, "password": {string(password)}}.Encode(),
-	))
+	token, err := fetchCLIToken(client, *baseURL, username, string(password))
 	if err != nil {
 		return err
 	}
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	loginResp, err := client.Do(loginReq)
-	if err != nil {
-		return fmt.Errorf("login: %w", err)
-	}
-	defer func() { _ = loginResp.Body.Close() }()
-	_, _ = io.ReadAll(loginResp.Body)
 
-	if loginResp.StatusCode != http.StatusOK && loginResp.StatusCode != http.StatusSeeOther {
-		return fmt.Errorf("login failed: server said %s", loginResp.Status)
-	}
-
-	// GET /profile to fetch CSRF token from HTML
-	profileReq, err := http.NewRequest("GET", *baseURL+"/profile", nil)
-	if err != nil {
-		return err
-	}
-	profileResp, err := client.Do(profileReq)
-	if err != nil {
-		return fmt.Errorf("fetch profile: %w", err)
-	}
-	defer func() { _ = profileResp.Body.Close() }()
-
-	if profileResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch profile failed: server said %s", profileResp.Status)
-	}
-
-	profileBody, _ := io.ReadAll(profileResp.Body)
-	csrfToken := extractCSRFToken(string(profileBody))
-	if csrfToken == "" {
-		return fmt.Errorf("couldn't find CSRF token in profile page")
-	}
-
-	// POST to /profile/tokens to mint a token
-	tokenReq, err := http.NewRequest("POST", *baseURL+"/profile/tokens", strings.NewReader(
-		url.Values{"name": {"duck login"}, "csrf_token": {csrfToken}}.Encode(),
-	))
-	if err != nil {
-		return err
-	}
-	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	tokenResp, err := client.Do(tokenReq)
-	if err != nil {
-		return fmt.Errorf("mint token: %w", err)
-	}
-	defer func() { _ = tokenResp.Body.Close() }()
-
-	tokenBody, _ := io.ReadAll(tokenResp.Body)
-	if tokenResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("mint token failed: server said %s", tokenResp.Status)
-	}
-
-	// Extract the minted token from the response HTML
-	token := extractToken(string(tokenBody))
-	if token == "" {
-		return fmt.Errorf("couldn't find token in response")
-	}
-
-	// Save token to ~/.config/duck/token
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("find home dir: %w", err)
@@ -128,7 +77,111 @@ func loginCmd(args []string) error {
 	return nil
 }
 
-// extractCSRFToken parses the CSRF token from the profile page HTML.
+// fetchCLIToken drives the browser-equivalent login + token-mint flow with
+// client (which must carry a cookie jar). The server's CSRF check is a
+// double-submit cookie: every unsafe POST needs a token lifted from a GET
+// of the same page first, so login and token-minting are each a GET-then-POST
+// pair rather than a bare POST.
+func fetchCLIToken(client *http.Client, base, username, password string) (string, error) {
+	base = strings.TrimRight(base, "/")
+
+	loginPage, err := getBody(client, base+"/login")
+	if err != nil {
+		return "", fmt.Errorf("fetch login page: %w", err)
+	}
+	csrfToken := extractCSRFToken(loginPage)
+	if csrfToken == "" {
+		return "", fmt.Errorf("couldn't find CSRF token on login page")
+	}
+
+	loginReq, err := http.NewRequest("POST", base+"/login", strings.NewReader(
+		url.Values{"username": {username}, "password": {password}, "csrf_token": {csrfToken}}.Encode(),
+	))
+	if err != nil {
+		return "", err
+	}
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResp, err := client.Do(loginReq)
+	if err != nil {
+		return "", fmt.Errorf("login: %w", err)
+	}
+	defer func() { _ = loginResp.Body.Close() }()
+	_, _ = io.ReadAll(loginResp.Body)
+
+	if !hasCookie(client, base, sessionCookieName) {
+		return "", fmt.Errorf("login failed: check your username and password")
+	}
+
+	profilePage, err := getBody(client, base+"/profile")
+	if err != nil {
+		return "", fmt.Errorf("fetch profile: %w", err)
+	}
+	csrfToken = extractCSRFToken(profilePage)
+	if csrfToken == "" {
+		return "", fmt.Errorf("couldn't find CSRF token in profile page")
+	}
+
+	tokenReq, err := http.NewRequest("POST", base+"/profile/tokens", strings.NewReader(
+		url.Values{"name": {"duck login"}, "csrf_token": {csrfToken}}.Encode(),
+	))
+	if err != nil {
+		return "", err
+	}
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	tokenResp, err := client.Do(tokenReq)
+	if err != nil {
+		return "", fmt.Errorf("mint token: %w", err)
+	}
+	defer func() { _ = tokenResp.Body.Close() }()
+
+	tokenBody, err := io.ReadAll(tokenResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read mint-token response: %w", err)
+	}
+	if tokenResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("mint token failed: server said %s", tokenResp.Status)
+	}
+
+	token := extractToken(string(tokenBody))
+	if token == "" {
+		return "", fmt.Errorf("couldn't find token in response")
+	}
+	return token, nil
+}
+
+// getBody GETs url with client and returns the response body as a string,
+// erroring on a non-200 status.
+func getBody(client *http.Client, url string) (string, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server said %s", resp.Status)
+	}
+	return string(body), nil
+}
+
+// hasCookie reports whether client's jar holds a cookie named name for base.
+func hasCookie(client *http.Client, base, name string) bool {
+	u, err := url.Parse(base)
+	if err != nil {
+		return false
+	}
+	for _, c := range client.Jar.Cookies(u) {
+		if c.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// extractCSRFToken parses the CSRF token from a page's HTML.
 // Looks for an input with name="csrf_token" and extracts its value.
 func extractCSRFToken(html string) string {
 	// Simple extraction: look for name="csrf_token" value="..."
