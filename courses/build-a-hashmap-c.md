@@ -125,8 +125,20 @@ Two C details make or break the implementation:
   overflow wraps around by definition — that's the "modulo 2^32" for free.
   Signed overflow would be undefined behavior.
 - **Byte values, not char values.** `char` may be signed, so a byte like
-  0xE9 (é in Latin-1) could XOR in as a *negative* value and corrupt the
-  hash. Read bytes through `unsigned char`.
+  0xE9 (é in Latin-1) could XOR in as a *negative* value — and the damage
+  isn't confined to the one byte the loop nominally touches. Before the
+  XOR, `char` promotes to `int`; a signed 0xE9 promotes to -23, which as a
+  32-bit pattern is 0xFFFFFFE9 — the sign bit has smeared across all 32
+  bits. Hashing that single byte from the offset basis:
+
+  ```
+  (unsigned char)0xe9, correct:    0x811c9d2c
+  (char)0xe9, sign-extended bug:   0x7ee3622c
+  ```
+
+  Far more than the low byte changed. Read bytes through `unsigned char`
+  and the promotion zero-extends instead, leaving only the intended byte
+  disturbed.
 
 ## Challenge: FNV-1a {#fnv1a points=10}
 
