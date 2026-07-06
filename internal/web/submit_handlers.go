@@ -9,12 +9,14 @@ import (
 	"strings"
 
 	"github.com/mduren/getcracked/internal/domain"
+	"github.com/mduren/getcracked/internal/grader"
 	"github.com/mduren/getcracked/internal/web/views"
 )
 
 // SubmissionStore is the store slice for the submission flow.
 type SubmissionStore interface {
 	CreateSubmission(ctx context.Context, userID, challengeID int64, code string) (int64, error)
+	CreateClaimedSubmission(ctx context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error)
 	SubmissionForUser(ctx context.Context, id, userID int64) (domain.Submission, error)
 	UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error)
 	SubmissionRateLimited(ctx context.Context, userID, challengeID int64) (bool, error)
@@ -107,6 +109,11 @@ func (h *handlers) profile(w http.ResponseWriter, r *http.Request) {
 // submitBySlug is the CLI-facing counterpart to submit: challenges are
 // addressed by slug (stable across re-publishes) rather than the internal
 // numeric ID a browser form embeds, so `duck submit` never needs to know it.
+//
+// When the CLI ran the tests locally it sends claimed_status/claimed_output
+// alongside the code: the claim becomes the verdict immediately (scored from
+// the claimed output) and the enqueued grading run becomes a background
+// audit instead of the thing the user waits on.
 func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	_, variant, err := h.courses.VariantDetail(r.Context(), r.PathValue("slug"), r.PathValue("lang"))
@@ -118,7 +125,7 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	challengeID, ok := findChallengeID(variant, r.PathValue("challenge"))
+	challenge, ok := findChallenge(variant, r.PathValue("challenge"))
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -129,7 +136,13 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "solution must be non-empty and under 128 KiB", http.StatusBadRequest)
 		return
 	}
-	limited, err := h.submissions.SubmissionRateLimited(r.Context(), user.ID, challengeID)
+	claimedStatus := r.FormValue("claimed_status")
+	if claimedStatus != "" && claimedStatus != grader.StatusPassed && claimedStatus != grader.StatusFailed {
+		http.Error(w, "claimed_status must be \"passed\" or \"failed\"", http.StatusBadRequest)
+		return
+	}
+
+	limited, err := h.submissions.SubmissionRateLimited(r.Context(), user.ID, challenge.ID)
 	if err != nil {
 		h.serverError(w, r, err)
 		return
@@ -139,30 +152,53 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.submissions.CreateSubmission(r.Context(), user.ID, challengeID, code)
+	if claimedStatus == "" {
+		id, err := h.submissions.CreateSubmission(r.Context(), user.ID, challenge.ID, code)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		h.enqueuer.Enqueue(id)
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"id":  id,
+			"url": "/submissions/" + strconv.FormatInt(id, 10),
+		})
+		return
+	}
+
+	output := grader.TruncateOutput(r.FormValue("claimed_output"))
+	passed, total := grader.ParseTestCounts(variant.Language, output)
+	score := grader.Score(challenge.Points, grader.Result{
+		Status: claimedStatus, TestsPassed: passed, TestsTotal: total,
+	})
+	id, err := h.submissions.CreateClaimedSubmission(r.Context(), user.ID, challenge.ID, code, claimedStatus, output, score, passed, total)
 	if err != nil {
 		h.serverError(w, r, err)
 		return
 	}
-	h.enqueuer.Enqueue(id)
+	h.enqueuer.Enqueue(id) // background audit, nobody waits on it
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":  id,
-		"url": "/submissions/" + strconv.FormatInt(id, 10),
+		"id":           id,
+		"url":          "/submissions/" + strconv.FormatInt(id, 10),
+		"status":       claimedStatus,
+		"score":        score,
+		"tests_passed": passed,
+		"tests_total":  total,
 	})
 }
 
-func findChallengeID(v domain.Variant, slug string) (int64, bool) {
+func findChallenge(v domain.Variant, slug string) (domain.Challenge, bool) {
 	for _, l := range v.Lessons {
 		for _, c := range l.Challenges {
 			if c.Slug == slug {
-				return c.ID, true
+				return c, true
 			}
 		}
 	}
 	if v.Final.Slug == slug {
-		return v.Final.ID, true
+		return v.Final, true
 	}
-	return 0, false
+	return domain.Challenge{}, false
 }
 
 // submissionStatus is the polled JSON counterpart to submissionFragment,

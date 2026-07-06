@@ -177,6 +177,16 @@ func (f *fakeStore) CreateSubmission(_ context.Context, userID, challengeID int6
 	return f.nextSub, nil
 }
 
+func (f *fakeStore) CreateClaimedSubmission(_ context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error) {
+	f.nextSub++
+	f.submissions[f.nextSub] = domain.Submission{
+		ID: f.nextSub, UserID: userID, ChallengeID: challengeID, Code: code,
+		Status: status, Output: output, Score: score,
+		TestsPassed: testsPassed, TestsTotal: testsTotal, Claimed: true,
+	}
+	return f.nextSub, nil
+}
+
 func (f *fakeStore) SubmissionForUser(_ context.Context, id, userID int64) (domain.Submission, error) {
 	sub, ok := f.submissions[id]
 	if !ok || sub.UserID != userID {
