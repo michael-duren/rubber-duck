@@ -10,7 +10,7 @@ import (
 
 // CourseStore is the slice of the store the agent API needs.
 type CourseStore interface {
-	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant) (int, error)
+	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error)
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
 	VariantSource(ctx context.Context, slug, language string) (string, error)

@@ -12,8 +12,10 @@ import (
 
 // UpsertVariant atomically stores a course and one language variant.
 // Re-submitting replaces the variant's lessons and challenges (cascading
-// their submissions) and bumps its version. Returns the new version.
-func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant) (int, error) {
+// their submissions) and bumps its version. editedBy records which human
+// user made the change, if any; nil means the write is agent-authored
+// (e.g. the /api/v1 markdown-publish path). Returns the new version.
+func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -64,14 +66,15 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 	var variantID int64
 	var version int
 	err = tx.QueryRow(ctx, `
-		INSERT INTO course_variants (course_id, language, source_md)
-		VALUES ($1, $2, $3)
+		INSERT INTO course_variants (course_id, language, source_md, edited_by)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (course_id, language) DO UPDATE SET
 			source_md = EXCLUDED.source_md,
 			version = course_variants.version + 1,
-			updated_at = now()
+			updated_at = now(),
+			edited_by = EXCLUDED.edited_by
 		RETURNING id, version`,
-		courseID, variant.Language, variant.SourceMD,
+		courseID, variant.Language, variant.SourceMD, editedBy,
 	).Scan(&variantID, &version)
 	if err != nil {
 		return 0, fmt.Errorf("upsert variant: %w", err)

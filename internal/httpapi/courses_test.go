@@ -42,7 +42,7 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 	return c, v, nil
 }
 
-func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant) (int, error) {
+func (f *fakeStore) UpsertVariant(_ context.Context, c domain.Course, v domain.Variant, _ *int64) (int, error) {
 	k := f.key(c.Slug, v.Language)
 	f.variants[k] = v
 	f.versions[k]++

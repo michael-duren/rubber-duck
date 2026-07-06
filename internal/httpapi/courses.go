@@ -63,7 +63,8 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	version, err := h.store.UpsertVariant(r.Context(), course, variant)
+	// Agent-authored write: no human editor to attribute.
+	version, err := h.store.UpsertVariant(r.Context(), course, variant, nil)
 	if err != nil {
 		h.serverError(w, r, err)
 		return
