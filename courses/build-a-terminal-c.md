@@ -162,6 +162,20 @@ do {
 } while (r < 0 && errno == EINTR);
 ```
 
+One wrinkle worth knowing before you write that loop for real: a
+`read`/`write` that gets interrupted *after* it has already
+transferred some bytes does not return -1 at all — it returns
+however many bytes it moved before the signal landed, exactly like
+an ordinary short read/write. `-1`/`EINTR` only happens when the
+call is interrupted with **zero** bytes transferred so far. In
+practice this means the short-read/short-write loop you're about to
+write already absorbs most interruptions for free (`off += n` just
+keeps going); the explicit `errno == EINTR` check only earns its
+keep at the narrower zero-progress moment — which is also why a test
+that wants to *prove* your retry logic works has to go out of its
+way to catch a syscall stuck at exactly zero bytes, rather than just
+firing a timer at some arbitrary point mid-transfer.
+
 You will write `write_all` and `read_full` exactly once, in the next
 challenge, and then use them for the rest of the course.
 
@@ -368,12 +382,21 @@ The tests are adversarial in exactly the ways the real world is:
 1. A child process reads your 256 KiB `write_all` through a pipe in
    awkward 777-byte sips, so the pipe backs up and your write cannot
    complete in one call.
-2. A `SIGALRM` handler installed *without* `SA_RESTART` fires while
-   your `write_all` is blocked on a full pipe — so `write` returns
-   `EINTR` mid-transfer and your loop must carry on.
+2. The pipe is filled to capacity *before* `write_all` is even
+   called, and the reader stays silent for over a second: `write()`
+   blocks with **zero** bytes queued, and a non-restarting `SIGALRM`
+   fires right there. That's the case that actually produces
+   `-1`/`EINTR` (see the previous lesson's wrinkle) — the test has to
+   engineer a truly-stuck-at-zero write on purpose, because an
+   interrupt after any partial progress would just look like an
+   ordinary short write.
 3. A child drips 64 KiB to your `read_full` in tiny bursts, so single
    `read` calls return short over and over.
-4. The writer closes early, and `read_full` must return the short
+4. The same zero-progress trick, mirrored for `read_full`: an empty
+   pipe with no writer yet, so `read()` is blocked on nothing at all
+   when the alarm fires — the one case where `read` interrupts into
+   `-1`/`EINTR` instead of a short count.
+5. The writer closes early, and `read_full` must return the short
    byte count rather than hanging or erroring.
 
 ### Starter
@@ -417,6 +440,8 @@ ssize_t read_full(int fd, void *buf, size_t n) {
 #include <stdlib.h>
 #include <errno.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <time.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 
@@ -485,15 +510,74 @@ int main(void) {
             _exit(ok && total == N ? 0 : 1);
         }
         close(pfd[0]);
-        alarm(1); /* fires mid-transfer: write() gets EINTR */
         ssize_t w = write_all(pfd[1], out, N);
-        alarm(30);
         close(pfd[1]);
         int st;
         waitpid(pid, &st, 0);
         check(w == (ssize_t)N, "test_write_all_returns_n");
         check(WIFEXITED(st) && WEXITSTATUS(st) == 0,
               "test_write_all_bytes_intact");
+        free(out);
+    }
+
+    /* --- write_all must retry a write() interrupted at ZERO progress ---
+     * Per the previous lesson's wrinkle: an interrupted write() that
+     * already queued some bytes returns that short count, not -1 —
+     * only a write() stuck with NOTHING queued yet returns -1/EINTR.
+     * So: saturate the pipe completely (nobody draining it) before
+     * write_all is even called, then fire the alarm once it's
+     * genuinely wedged at zero bytes written. */
+    {
+        int pfd[2];
+        pipe(pfd);
+        int flags = fcntl(pfd[1], F_GETFL);
+        fcntl(pfd[1], F_SETFL, flags | O_NONBLOCK);
+        unsigned char filler[4096];
+        memset(filler, 'f', sizeof(filler));
+        size_t filled = 0;
+        for (;;) {
+            ssize_t w = write(pfd[1], filler, sizeof(filler));
+            if (w <= 0) break; /* EAGAIN: pipe is completely full now */
+            filled += (size_t)w;
+        }
+        fcntl(pfd[1], F_SETFL, flags); /* back to blocking for write_all */
+
+        enum { N = 4096 };
+        unsigned char *out = malloc(N);
+        pattern(out, N, 9);
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            /* stay silent well past the alarm, then drain everything */
+            close(pfd[1]);
+            struct timespec ts = { 1, 500000000L };
+            nanosleep(&ts, NULL);
+            unsigned char sip[4096];
+            size_t total = 0;
+            int ok = 1;
+            ssize_t r;
+            while ((r = read(pfd[0], sip, sizeof(sip))) > 0) {
+                for (ssize_t i = 0; i < r; i++) {
+                    size_t idx = total + (size_t)i;
+                    if (idx >= filled &&
+                        sip[i] != (unsigned char)(((idx - filled) * 131 + 9) & 0xff))
+                        ok = 0;
+                }
+                total += (size_t)r;
+                if (total >= filled + N) break;
+            }
+            _exit(ok && total == filled + (size_t)N ? 0 : 1);
+        }
+        close(pfd[0]);
+        alarm(1); /* write_all is blocked with 0 bytes queued: real EINTR */
+        ssize_t w = write_all(pfd[1], out, N);
+        alarm(30);
+        close(pfd[1]);
+        int st;
+        waitpid(pid, &st, 0);
+        check(w == (ssize_t)N, "test_write_all_survives_eintr");
+        check(WIFEXITED(st) && WEXITSTATUS(st) == 0,
+              "test_write_all_eintr_bytes_intact");
         free(out);
     }
 
@@ -549,6 +633,38 @@ int main(void) {
         ssize_t r = read_full(pfd[0], buf, 100);
         check(r == 20, "test_read_full_short_at_eof");
         check(memcmp(buf, msg, 20) == 0, "test_read_full_eof_content");
+        close(pfd[0]);
+    }
+
+    /* --- read_full must retry a read() interrupted at ZERO progress ---
+     * An empty pipe with no writer yet blocks with nothing available:
+     * there's no such thing as a "partial" read from nothing, so the
+     * alarm is guaranteed to land on a genuine -1/EINTR here. */
+    {
+        const char *msg = "eintr-safe-read";
+        size_t mlen = strlen(msg);
+        int pfd[2];
+        pipe(pfd);
+        pid_t pid = fork();
+        if (pid == 0) {
+            close(pfd[0]);
+            struct timespec ts = { 1, 500000000L };
+            nanosleep(&ts, NULL); /* stay silent past the alarm */
+            write(pfd[1], msg, mlen);
+            close(pfd[1]);
+            _exit(0);
+        }
+        close(pfd[1]);
+        alarm(1); /* read_full is blocked on an empty pipe: real EINTR */
+        char buf[32];
+        memset(buf, 0, sizeof(buf));
+        ssize_t r = read_full(pfd[0], buf, mlen);
+        alarm(30);
+        int st;
+        waitpid(pid, &st, 0);
+        check(r == (ssize_t)mlen, "test_read_full_survives_eintr");
+        check(memcmp(buf, msg, mlen) == 0,
+              "test_read_full_eintr_content_intact");
         close(pfd[0]);
     }
 
@@ -971,8 +1087,10 @@ The four quadrants:
 `VMIN=1, VTIME=0` is the sane default for interactive programs: block
 until there's *something*, deliver it immediately. `VMIN=0, VTIME=1`
 (return within 0.1 s no matter what) is the poor-man's event loop —
-the kilo editor uses it. We'll use `VMIN=1` and get our timeouts a
-better way, with `poll()`, in the next lesson.
+**kilo** (antirez's ~1000-line C text editor, the tutorial in this
+course's extended reading, and a name that will keep coming up)
+uses it. We'll use `VMIN=1` and get our timeouts a better way, with
+`poll()`, in the next lesson.
 
 ## Applying settings: the third argument
 
@@ -1434,7 +1552,9 @@ Two functions that will sit at the heart of your event loop:
 
 Tests: data already waiting returns immediately; a writer that shows
 up 150 ms in is caught within the deadline; an empty fd times out in
-roughly the right amount of time (not instantly, not forever).
+roughly the right amount of time (not instantly, not forever); and a
+single interrupting signal partway through a wait must not restart
+the full timeout — the original deadline is honored, not reset.
 
 ### Starter
 
@@ -1483,6 +1603,7 @@ int read_byte_timeout(int fd, unsigned char *out, int timeout_ms) {
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 
 int wait_readable(int fd, int timeout_ms);
@@ -1510,8 +1631,18 @@ static void sleep_ms(int ms) {
     nanosleep(&ts, NULL);
 }
 
+static void on_alarm(int sig) { (void)sig; /* just interrupt poll() */ }
+
 int main(void) {
     alarm(20);
+
+    /* A non-restarting handler: the EINTR test below needs poll() to
+     * actually be interrupted rather than transparently resumed. */
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = on_alarm;
+    sa.sa_flags = 0; /* no SA_RESTART, on purpose */
+    sigaction(SIGALRM, &sa, NULL);
 
     /* data already waiting -> immediate 1 */
     {
@@ -1577,6 +1708,29 @@ int main(void) {
         int r = read_byte_timeout(pfd[0], &c, 1000);
         check(r == -1, "test_eof_is_error");
         close(pfd[0]);
+    }
+
+    /* EINTR must not restart the full timeout. Fire exactly one
+     * SIGALRM 400ms into a 1000ms wait on an fd that never becomes
+     * readable: a correct wait_readable recomputes the ~600ms left
+     * and still times out around the 1000ms mark; the classic bug
+     * -- restarting a fresh 1000ms wait after EINTR -- pushes the
+     * total past 1.3s. */
+    {
+        int pfd[2];
+        pipe(pfd);
+        struct itimerval it;
+        memset(&it, 0, sizeof(it));
+        it.it_value.tv_usec = 400000; /* one-shot, 400ms */
+        setitimer(ITIMER_REAL, &it, NULL);
+        double t0 = now_s();
+        int r = wait_readable(pfd[0], 1000);
+        double dt = now_s() - t0;
+        check(r == 0, "test_eintr_still_times_out");
+        check(dt >= 0.8, "test_eintr_honors_requested_timeout");
+        check(dt < 1.3, "test_eintr_does_not_restart_full_timeout");
+        close(pfd[0]);
+        close(pfd[1]);
     }
 
     return failed;
@@ -2205,10 +2359,12 @@ GROUND ──ESC──► ESC_SEEN ──'['──► CSI ──final byte──
 State by state:
 
 - **GROUND** — the resting state. Bytes ≥ 0x20 (and, for now, bytes
-  ≥ 0x80 — that's UTF-8, next lesson's problem) are **PRINT** events.
-  Bytes below 0x20 are C0 controls: ESC (0x1B) changes state; the
-  rest (`\n`, `\r`, `\b`, `\t`, BEL…) are **CTRL** events for the
-  screen layer to interpret.
+  ≥ 0x80 — that's UTF-8, next lesson's problem) are **PRINT** events,
+  with one carve-out: 0x7F (DEL) is neither printable nor a C0
+  control — real terminals just swallow it, so the parser absorbs it
+  silently and emits nothing. Bytes below 0x20 are C0 controls: ESC
+  (0x1B) changes state; the rest (`\n`, `\r`, `\b`, `\t`, BEL…) are
+  **CTRL** events for the screen layer to interpret.
 - **ESC_SEEN** — one byte of lookahead decides everything: `[` opens
   a control sequence, `]` opens an OSC string, `(` / `)` are the old
   charset-designation sequences (consume one more byte, ignore — you
@@ -2468,6 +2624,15 @@ int main(void) {
           evs[2].type == VT_CTRL && evs[2].ch == '\t',
           "test_c0_controls");
 
+    /* DEL (0x7F) is absorbed silently: neither PRINT nor CTRL.
+     * (Note the split literal: "\x7f" run into a following hex
+     * digit like 'b' would be read as one out-of-range escape.) */
+    vt_parser_init(p);
+    n = feed_str(p, "a\x7f" "b", evs, 64);
+    check(n == 2 && evs[0].type == VT_PRINT && evs[0].ch == 'a' &&
+          evs[1].type == VT_PRINT && evs[1].ch == 'b',
+          "test_del_absorbed_silently");
+
     /* ESC[2J */
     vt_parser_init(p);
     n = feed_str(p, "\x1b[2J", evs, 64);
@@ -2589,11 +2754,13 @@ int main(void) {
             struct vt_event ev;
             vt_feed(p, (unsigned char)(x >> 16), &ev);
         }
-        /* force back to a known state: end any OSC, complete a CSI */
+        /* force back to a known state: end any OSC, complete a CSI.
+         * No re-init here on purpose — the whole point is proving
+         * THIS parser (the one that just ate 4 KiB of garbage)
+         * recovers, not that a fresh one works. */
         struct vt_event ev;
         vt_feed(p, 0x07, &ev);      /* BEL: terminates OSC if in one */
         feed_str(p, "\x1b[m", evs, 64);
-        vt_parser_init(p);
         n = feed_str(p, "\x1b[5;6H", evs, 64);
         check(n == 1 && evs[0].final == 'H' && evs[0].params[0] == 5 &&
               evs[0].params[1] == 6,
