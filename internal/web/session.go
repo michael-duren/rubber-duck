@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 const maxDocumentBytes = 2 << 20 // 2 MiB per course document

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mduren/getcracked/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
 // fakeStore is an in-memory AuthStore.
@@ -174,6 +174,16 @@ func (f *fakeStore) VariantDetail(_ context.Context, slug, lang string) (domain.
 func (f *fakeStore) CreateSubmission(_ context.Context, userID, challengeID int64, code string) (int64, error) {
 	f.nextSub++
 	f.submissions[f.nextSub] = domain.Submission{ID: f.nextSub, UserID: userID, ChallengeID: challengeID, Code: code, Status: "passed", Score: 10}
+	return f.nextSub, nil
+}
+
+func (f *fakeStore) CreateClaimedSubmission(_ context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error) {
+	f.nextSub++
+	f.submissions[f.nextSub] = domain.Submission{
+		ID: f.nextSub, UserID: userID, ChallengeID: challengeID, Code: code,
+		Status: status, Output: output, Score: score,
+		TestsPassed: testsPassed, TestsTotal: testsTotal, Claimed: true,
+	}
 	return f.nextSub, nil
 }
 

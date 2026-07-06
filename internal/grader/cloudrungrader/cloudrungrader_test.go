@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mduren/getcracked/internal/grader"
+	"github.com/michael-duren/rubber-duck/internal/grader"
 )
 
 type fakeJobs struct {
@@ -104,7 +104,9 @@ func TestGrade(t *testing.T) {
 			jobs := &fakeJobs{err: c.jobErr}
 			if c.result != "" {
 				jobs.writeFn = func(env map[string]string) {
-					store.Put(context.Background(), outKeyFromEnv(env), []byte(c.result))
+					if err := store.Put(context.Background(), outKeyFromEnv(env), []byte(c.result)); err != nil {
+						t.Errorf("store.Put: %v", err)
+					}
 				}
 			}
 			g := &Grader{jobs: jobs, store: store}

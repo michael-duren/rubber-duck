@@ -39,7 +39,8 @@ submit a solution.
 Other commands:
 
 ```sh
-go run ./cmd/getcracked apikey create --name writer-1   # mint an agent API key
+make apikey KEY_NAME=writer-1                           # mint an agent API key (local db)
+make apikey-prod KEY_NAME=writer-1                      # same, against prod via cloud-sql-proxy
 go run ./cmd/getcracked migrate up|down                 # run migrations by hand
 make check                                              # vet + stale-generate check + tests
 make test-integration                                   # store tests against compose postgres
@@ -194,21 +195,40 @@ stable (see "Course document format" above).
 
 ## Local testing with `duck`
 
-Server-side grading (a Cloud Run Job cold start) takes 30-60s in production.
-`duck` lets you iterate locally with your own toolchain — no Docker — and
-submit only when a solution is green:
+`duck` runs a course's tests locally with your own toolchain — no Docker —
+and never makes you wait on the server. `duck submit` runs the tests, sends
+the solution together with the local verdict, and the score lands instantly;
+the server re-grades in the background as an **audit** (informational only —
+it badges the submission "verified" on agreement or shows both outputs on a
+mismatch, but never rewrites the score). Server-side grading — a Cloud Run
+Job execution taking minutes in production — is still what browser
+submissions and `duck submit --remote` wait on, and what every audit runs
+through.
+
+Prebuilt binaries (linux/darwin/windows, amd64/arm64) are published to
+[GitHub Releases](https://github.com/michael-duren/rubber-duck/releases/latest)
+by CD's `release-cli` job on every deploy; `duck version` reports the release
+tag (or the module version for `go install` builds):
 
 ```sh
+go install github.com/michael-duren/rubber-duck/cmd/duck@latest
+# or, from a checkout:
 go install ./cmd/duck   # or: go build -o duck ./cmd/duck
 
 duck pull intro-to-concurrency/go   # scaffolds ./intro-to-concurrency-go/<slug>/
 duck test concurrent-sum            # go test ./... / pytest / cc, no submission
-duck submit concurrent-sum          # POSTs the solution, polls until graded
+duck submit concurrent-sum          # runs tests + submits; score is immediate
+duck submit concurrent-sum --remote # skip the local run; wait for server grading
 ```
 
-`duck submit` needs a user token, not an agent API key: mint one from your
-profile page ("Create CLI token") and either set `DUCK_TOKEN` or save it to
-`~/.config/duck/token`. `duck pull` defaults to `http://localhost:8080`;
+If the course language's toolchain isn't installed, `duck submit` falls back
+to `--remote` behavior automatically.
+
+`duck submit` needs a user token, not an agent API key: run `duck login`, or
+mint one from your profile page ("Create CLI token") and either set
+`DUCK_TOKEN` or save it to `~/.config/duck/token`. The `/tokens` page on any
+deployment documents both credential kinds (user CLI tokens vs agent API
+keys) end to end. `duck pull` defaults to `http://localhost:8080`;
 override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
 the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
 
@@ -278,7 +298,9 @@ the job to read) and signed PUT (for its result), and starts a
 `gc-grader-{lang}` job execution with those URLs as env overrides. The job
 fetches, runs the tests, and uploads a result file (first line = exit code).
 `gc-app` polls the execution via `run.viewer` until it completes, reads the
-result back from GCS, and updates the submission.
+result back from GCS, and updates the submission. Browser submissions wait
+on this flow; CLI-claimed submissions run it as a background audit that
+fills the `audit_*` columns without touching the claimed verdict.
 
 `infra/network.tf` adds a VPC + Serverless VPC Access connector + private
 DNS override + firewall so grader-job egress is locked to GCS only — see
@@ -314,14 +336,17 @@ The `service_url` output is your site; the first visit runs migrations.
 
 ### Seed a course
 
-`apikey create` needs database access; use cloud-sql-proxy locally:
+`apikey create` needs database access; `make apikey-prod` wires up
+cloud-sql-proxy and the tofu outputs for you:
 
 ```sh
-bin/cloud-sql-proxy $(cd infra && tofu output -raw sql_connection_name) --port 5433 &
-DB="postgres://getcracked:$(cd infra && tofu output -raw db_password)@localhost:5433/getcracked?sslmode=disable"
-go run ./cmd/getcracked apikey create --name seed --db "$DB"
+make apikey-prod KEY_NAME=seed
 GC_API_KEY=<printed key> go run ./cmd/getcracked seed --url <service_url> seed/intro-to-go.md
 ```
+
+(The manual equivalent: run `bin/cloud-sql-proxy <connection-name> --port
+5433`, then `apikey create --db "postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable"`,
+with both values from `tofu -chdir=infra output`.)
 
 ### Redeploy
 

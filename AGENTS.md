@@ -16,8 +16,9 @@ repo facts. One issue per iteration, fully finished, then loop.
 4. **Verify**: `make check` green, plus the issue's own "Done when"
    criteria, exercised for real (run the server, curl the flow, run the
    grader — not just unit tests).
-5. **Close**: commit the work (reference the issue path in the message,
-   end with the Co-Authored-By line), then delete the issue file. issues/
+5. **Close**: commit the work (reference the issue path in the message;
+   NO Co-Authored-By or other AI-attribution trailers — ever), then
+   delete the issue file. issues/
    is gitignored — deletion is the local record; the commit is the durable
    one.
 6. Loop to 1.

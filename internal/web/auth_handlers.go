@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mduren/getcracked/internal/auth"
-	"github.com/mduren/getcracked/internal/domain"
-	"github.com/mduren/getcracked/internal/web/views"
+	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 func (h *handlers) signupPage(w http.ResponseWriter, r *http.Request) {
