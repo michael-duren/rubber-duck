@@ -135,8 +135,12 @@ reg ^=  mask;   /* flip  every bit that is 1 in mask */
 ```
 
 A mask for a single pin is built by shifting: `1u << pin`. Note the `u` —
-shifting a plain (signed) `int` left into bit 31 is undefined behavior, and
-pin 31 is a perfectly real pin.
+shifting a plain (signed) `int` left into bit 31 is undefined behavior. The
+RP2040's GPIO pins only go up to 29, so `GPIO_OUT` never actually needs bit
+31, but plenty of other 32-bit registers use every bit: the SIO has 32
+hardware spinlocks, and `SIO_SPINLOCK_ST` reports all of them as a bitmap,
+one bit per spinlock, straight through to bit 31. Use `1u`, not `1`, and
+which register you're shifting into stops mattering.
 
 Each of those compound assignments is really three steps: **read** the
 register, **modify** the copy, **write** it back. Keep that shape in mind —
@@ -240,10 +244,13 @@ registers sit at these offsets (datasheet §2.3.1.7):
 
 Why the SET/CLR/XOR aliases when last lesson's read-modify-write already
 works? Because RMW is **three** operations, and between your read and your
-write an interrupt handler (or the second core) may also touch GPIO_OUT —
-its update gets silently overwritten. Writing a mask to `GPIO_OUT_SET` is
-**one** store; the hardware does the modify atomically. This pattern is all
-over the RP2040, so drivers barely ever RMW the SIO.
+write an interrupt handler — or the RP2040's *second* core; it's a dual-core
+chip, and both cores can drive GPIO through the same SIO block — may also
+touch GPIO_OUT. Do a plain RMW and that other write can land in the gap
+between your read and your write, and gets silently overwritten. Writing a
+mask to `GPIO_OUT_SET` is **one** store; the hardware does the modify
+atomically. This pattern is all over the RP2040, so drivers barely ever RMW
+the SIO.
 
 Instead of casting raw offsets one at a time, real drivers describe a whole
 register block as a struct whose field layout mirrors the datasheet, then
@@ -390,6 +397,9 @@ int main(void) {
 	gpio_set_low(&sio, 7);
 	check(sio.gpio_out_clr == (1u << 7), "test_set_low_uses_out_clr");
 
+	/* Pin 31 isn't a real RP2040 GPIO (the user bank stops at 29) — it's used
+	   here only to prove your shift math reaches the top bit cleanly, same
+	   reason the masks lesson picked SIO_SPINLOCK_ST over GPIO_OUT. */
 	memset((void *)&sio, 0, sizeof sio);
 	gpio_toggle(&sio, 31);
 	check(sio.gpio_out_xor == (1u << 31), "test_toggle_pin31_uses_out_xor");
@@ -409,9 +419,18 @@ controls this pin". Until you select it, all the GPIO_OUT writing in the
 world does nothing visible.
 
 FUNCSEL is where last lesson's warning bites: `GPIO_CTRL` packs *other*
-fields into the same word (output overrides, interrupt config), and IO_BANK0
-has no SET/CLR aliases at simple offsets like the SIO does. So here you must
-do a careful read-modify-write of just the field:
+fields into the same word (output overrides, interrupt config). Most RP2040
+peripherals — IO_BANK0 included — actually do get atomic bit manipulation for
+free: every register is given a 4KB address slot, and writing to its address
+plus `0x1000`/`0x2000`/`0x3000` atomically XORs/sets/clears bits with no
+read-modify-write at all (datasheet §2.1.2). The SIO you just used is the
+*exception* — it's wired straight to the cores off the normal bus, so it
+can't do that trick, which is exactly why it needed its own hand-built
+SET/CLR/XOR registers. That alias mechanism is one more address computation
+on top of what this lesson is really after, though: the field-update shape
+below — mask, or, store — which the tests exercise directly on a plain
+register variable, and which you need to understand regardless of which
+write mechanism eventually lands the bits. So here you'll do it by hand:
 
 ```c
 uint32_t v = *ctrl;
