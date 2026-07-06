@@ -143,7 +143,7 @@ func Tokens(user *domain.User, baseURL string) templ.Component {
 				"make apikey-prod KEY_NAME=writer-1",
 				"",
 				"# or the underlying command against any database:",
-				"go run ./cmd/getcracked apikey create --name writer-1 --db \"<postgres url>\"",
+				"go run ./cmd/duckserver apikey create --name writer-1 --db \"<postgres url>\"",
 			).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
