@@ -18,3 +18,11 @@ output "db_password" {
   value       = random_password.db.result
   sensitive   = true
 }
+
+output "domain_dns_records" {
+  description = "DNS records to enter at the registrar (apex A/AAAA, www CNAME)"
+  value = {
+    for domain, mapping in google_cloud_run_domain_mapping.app :
+    domain => try(mapping.status[0].resource_records, [])
+  }
+}

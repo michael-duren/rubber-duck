@@ -91,7 +91,7 @@ func serve(args []string) error {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           mux,
+		Handler:           web.CanonicalHost(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errc := make(chan error, 1)
