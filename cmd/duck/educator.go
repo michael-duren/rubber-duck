@@ -170,7 +170,7 @@ func printProblems(path string, probs []lintProblem) {
 // and writes it to a single local file plus its version sidecar.
 func educatorPullCmd(args []string) error {
 	fs := flag.NewFlagSet("educator pull", flag.ContinueOnError)
-	base := fs.String("base", envOr("DUCK_BASE_URL", "http://localhost:8080"), "server base URL")
+	base := fs.String("base", envOr("DUCK_BASE_URL", "https://duckgc.com"), "server base URL")
 	force := fs.Bool("force", false, "overwrite a local file whose content differs from the server's")
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {

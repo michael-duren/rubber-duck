@@ -18,6 +18,10 @@ import (
 // point at its releases and clone URL.
 const repoURL = "https://github.com/michael-duren/rubber-duck"
 
+// prodURL is the canonical deployment the CLI talks to by default; the
+// command examples hard-code it so they're copy-pasteable as-is.
+const prodURL = "https://duckgc.com"
+
 func About(user *domain.User) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -165,7 +169,7 @@ func About(user *domain.User) templ.Component {
 			var templ_7745c5c3_Var10 templ.SafeURL
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(repoURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 59, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 63, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -220,7 +224,7 @@ func About(user *domain.User) templ.Component {
 	})
 }
 
-func CLI(user *domain.User, baseURL string) templ.Component {
+func CLI(user *domain.User) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -277,7 +281,7 @@ func CLI(user *domain.User, baseURL string) templ.Component {
 			var templ_7745c5c3_Var17 templ.SafeURL
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(repoURL + "/releases/latest"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 83, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 87, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -390,7 +394,7 @@ func CLI(user *domain.User, baseURL string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = shell(
-				"duck pull intro-to-concurrency/go --base "+baseURL,
+				"duck pull intro-to-concurrency/go",
 				"cd intro-to-concurrency-go",
 				"",
 				"# edit <challenge-slug>/solution file with your editor, then:",
@@ -413,7 +417,7 @@ func CLI(user *domain.User, baseURL string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = cmdRow("duck pull <course>/<language> [--base URL]", "Scaffold the course's challenges into ./<course>-<language>/. URL defaults to $DUCK_BASE_URL.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = cmdRow("duck pull <course>/<language>", "Scaffold the course's challenges into ./<course>-<language>/ from "+prodURL+".").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -425,7 +429,7 @@ func CLI(user *domain.User, baseURL string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = cmdRow("duck login [--base URL]", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = cmdRow("duck login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -477,7 +481,7 @@ func docHeading(title string) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 164, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 168, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -520,7 +524,7 @@ func shell(lines ...string) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(lines, "\n"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 169, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 173, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -562,7 +566,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(cmd)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 174, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 178, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -575,7 +579,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 175, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 179, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {

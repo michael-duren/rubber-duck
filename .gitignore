@@ -9,3 +9,4 @@ infra/*.tfvars
 issues/
 # Added by goreleaser init:
 dist/
+duck

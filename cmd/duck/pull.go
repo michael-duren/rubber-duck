@@ -24,7 +24,7 @@ type challengeJSON struct {
 
 func pullCmd(args []string) error {
 	fs := flag.NewFlagSet("pull", flag.ContinueOnError)
-	base := fs.String("base", envOr("DUCK_BASE_URL", "http://localhost:8080"), "server base URL")
+	base := fs.String("base", envOr("DUCK_BASE_URL", "https://duckgc.com"), "server base URL")
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err

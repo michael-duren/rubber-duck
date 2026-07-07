@@ -9,6 +9,7 @@ templ Layout(title string, user *domain.User) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · Rubber Duck</title>
+			<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 			<link rel="stylesheet" href="/static/app.css"/>
 			<script>
 				if (localStorage.getItem("theme") === "light") {

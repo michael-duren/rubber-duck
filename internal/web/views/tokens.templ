@@ -3,9 +3,9 @@ package views
 import "github.com/michael-duren/rubber-duck/internal/domain"
 
 // Tokens documents both credential kinds: personal CLI tokens (duck) and
-// agent API keys (the course-publishing REST API). baseURL is the serving
-// deployment's origin so examples are copy-pasteable.
-templ Tokens(user *domain.User, baseURL string) {
+// agent API keys (the course-publishing REST API). Examples hard-code the
+// canonical deployment (prodURL) so they're copy-pasteable as-is.
+templ Tokens(user *domain.User) {
 	@Layout("Tokens", user) {
 		<div class="mx-auto max-w-3xl">
 			<h1 class="text-3xl font-bold">Tokens &amp; API keys</h1>
@@ -89,7 +89,7 @@ templ Tokens(user *domain.User, baseURL string) {
 				Agents send the key as a bearer header on every API call:
 			</p>
 			@shell(
-				"curl -X PUT " + baseURL + "/api/v1/courses/<slug>/variants/<language> \\",
+				"curl -X PUT " + prodURL + "/api/v1/courses/<slug>/variants/<language> \\",
 				"  -H \"Authorization: Bearer gc_<40 hex>\" \\",
 				"  -H \"Content-Type: application/json\" \\",
 				"  -d '{\"markdown\": \"…\"}'",

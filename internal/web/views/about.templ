@@ -10,6 +10,10 @@ import (
 // point at its releases and clone URL.
 const repoURL = "https://github.com/michael-duren/rubber-duck"
 
+// prodURL is the canonical deployment the CLI talks to by default; the
+// command examples hard-code it so they're copy-pasteable as-is.
+const prodURL = "https://duckgc.com"
+
 templ About(user *domain.User) {
 	@Layout("About", user) {
 		<div class="mx-auto max-w-3xl">
@@ -63,7 +67,7 @@ templ About(user *domain.User) {
 	}
 }
 
-templ CLI(user *domain.User, baseURL string) {
+templ CLI(user *domain.User) {
 	@Layout("CLI", user) {
 		<div class="mx-auto max-w-3xl">
 			<h1 class="text-3xl font-bold"><span class="text-emerald-600 dark:text-emerald-400">$</span> duck — the local CLI</h1>
@@ -114,7 +118,7 @@ templ CLI(user *domain.User, baseURL string) {
 			</p>
 			@docHeading("Work a course")
 			@shell(
-				"duck pull intro-to-concurrency/go --base "+baseURL,
+				"duck pull intro-to-concurrency/go",
 				"cd intro-to-concurrency-go",
 				"",
 				"# edit <challenge-slug>/solution file with your editor, then:",
@@ -146,10 +150,10 @@ templ CLI(user *domain.User, baseURL string) {
 						</tr>
 					</thead>
 					<tbody class="text-slate-700 dark:text-slate-300">
-						@cmdRow("duck pull <course>/<language> [--base URL]", "Scaffold the course's challenges into ./<course>-<language>/. URL defaults to $DUCK_BASE_URL.")
+						@cmdRow("duck pull <course>/<language>", "Scaffold the course's challenges into ./<course>-<language>/ from "+prodURL+".")
 						@cmdRow("duck test [challenge-slug]", "Run one challenge's tests locally — or every challenge's, with no slug. No submission, no points.")
 						@cmdRow("duck submit <challenge-slug> [--remote]", "Run the tests locally and submit solution + result; the score is immediate and the server audits in the background. --remote skips the local run and waits for server grading instead (also the automatic fallback when the language toolchain isn't installed).")
-						@cmdRow("duck login [--base URL]", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
+						@cmdRow("duck login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
 						@cmdRow("duck version", "Print the CLI version.")
 					</tbody>
 				</table>

@@ -11,9 +11,9 @@ import templruntime "github.com/a-h/templ/runtime"
 import "github.com/michael-duren/rubber-duck/internal/domain"
 
 // Tokens documents both credential kinds: personal CLI tokens (duck) and
-// agent API keys (the course-publishing REST API). baseURL is the serving
-// deployment's origin so examples are copy-pasteable.
-func Tokens(user *domain.User, baseURL string) templ.Component {
+// agent API keys (the course-publishing REST API). Examples hard-code the
+// canonical deployment (prodURL) so they're copy-pasteable as-is.
+func Tokens(user *domain.User) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -153,7 +153,7 @@ func Tokens(user *domain.User, baseURL string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = shell(
-				"curl -X PUT "+baseURL+"/api/v1/courses/<slug>/variants/<language> \\",
+				"curl -X PUT "+prodURL+"/api/v1/courses/<slug>/variants/<language> \\",
 				"  -H \"Authorization: Bearer gc_<40 hex>\" \\",
 				"  -H \"Content-Type: application/json\" \\",
 				"  -d '{\"markdown\": \"…\"}'",

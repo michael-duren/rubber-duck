@@ -79,23 +79,15 @@ func (h *handlers) aboutPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, views.About(currentUser(r)))
 }
 
-// cliPage and tokensPage pass the request's own origin into the view so
-// the command examples are copy-pasteable against whichever deployment
-// (localhost, prod) is serving the page.
+// cliPage and tokensPage render the CLI and token docs; the command
+// examples hard-code the canonical deployment (https://duckgc.com), which
+// is also what the duck CLI targets by default.
 func (h *handlers) cliPage(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, views.CLI(currentUser(r), requestOrigin(r)))
+	h.render(w, r, views.CLI(currentUser(r)))
 }
 
 func (h *handlers) tokensPage(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, views.Tokens(currentUser(r), requestOrigin(r)))
-}
-
-func requestOrigin(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return scheme + "://" + r.Host
+	h.render(w, r, views.Tokens(currentUser(r)))
 }
 
 func (h *handlers) render(w http.ResponseWriter, r *http.Request, c templ.Component) {
