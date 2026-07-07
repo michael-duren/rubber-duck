@@ -5,24 +5,24 @@ templ Settings(errMsg, okMsg string) {
 		<div class="mx-auto mt-12 max-w-sm">
 			<h1 class="text-2xl font-bold">Change password</h1>
 			if errMsg != "" {
-				<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+				<p class="mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
 			}
 			if okMsg != "" {
-				<p class="mt-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{ okMsg }</p>
+				<p class="mt-4 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{ okMsg }</p>
 			}
 			<form method="post" action="/settings" class="mt-6 flex flex-col gap-4">
 				@csrfField()
 				<label class="flex flex-col gap-1 text-sm font-medium">
 					Current password
 					<input type="password" name="current_password" required autocomplete="current-password"
-						class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
+						class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
 				</label>
 				<label class="flex flex-col gap-1 text-sm font-medium">
 					New password
 					<input type="password" name="new_password" required minlength="8" autocomplete="new-password"
-						class="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
+						class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
 				</label>
-				<button type="submit" class="rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Change password</button>
+				<button type="submit" class="bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Change password</button>
 			</form>
 		</div>
 	}

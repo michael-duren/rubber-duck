@@ -299,14 +299,14 @@ func SubmissionResult(sub domain.Submission) templ.Component {
 			}
 		}
 		if sub.Terminal() && sub.Output != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<pre class=\"mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<pre class=\"mt-4 max-h-96 overflow-auto border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(sub.Output)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 66, Col: 199}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 66, Col: 188}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -318,14 +318,14 @@ func SubmissionResult(sub domain.Submission) templ.Component {
 			}
 		}
 		if sub.AuditState() == domain.AuditMismatch && sub.AuditOutput != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<details class=\"mt-2\"><summary class=\"cursor-pointer font-mono text-xs text-amber-700 dark:text-amber-500\">server run output</summary><pre class=\"mt-2 max-h-96 overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-4 font-mono text-xs text-slate-800 dark:border-amber-900 dark:bg-slate-950 dark:text-slate-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<details class=\"mt-2\"><summary class=\"cursor-pointer font-mono text-xs text-amber-700 dark:text-amber-500\">server run output</summary><pre class=\"mt-2 max-h-96 overflow-auto border border-amber-200 bg-amber-50 p-4 font-mono text-xs text-slate-800 dark:border-amber-900 dark:bg-slate-950 dark:text-slate-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(sub.AuditOutput)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 71, Col: 205}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 71, Col: 194}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -414,7 +414,7 @@ func Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.Use
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" class=\"group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600\"><div class=\"flex flex-wrap items-center justify-between gap-3\"><span class=\"flex items-center gap-3\"><span class=\"font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" class=\"group border border-slate-200 bg-white p-5 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600\"><div class=\"flex flex-wrap items-center justify-between gap-3\"><span class=\"flex items-center gap-3\"><span class=\"font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -448,14 +448,14 @@ func Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.Use
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span></div><div class=\"mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800\"><div class=\"h-full rounded-full bg-emerald-500\" style=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span></div><div class=\"mt-3 h-2 overflow-hidden bg-slate-200 dark:bg-slate-800\"><div class=\"h-full bg-emerald-500\" style=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var21 string
 					templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("width: %d%%", percent(s.Earned, s.Possible)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 99, Col: 120}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/submission.templ`, Line: 99, Col: 107}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
@@ -510,12 +510,12 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<section class=\"mt-12\"><h2 class=\"text-xl font-bold\">CLI tokens</h2><p class=\"mt-1 text-sm text-slate-500 dark:text-slate-400\">Authenticate the <code>duck</code> CLI without a browser session.</p><pre class=\"mt-3 overflow-x-auto rounded-md bg-slate-900 px-3 py-2 text-sm text-slate-100\"><code>go install ./cmd/duck duck pull &lt;course&gt;/&lt;language&gt;   # scaffold challenges into a local dir duck test &lt;challenge-slug&gt;      # run tests locally, no submission duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (needs a token below)</code></pre><p class=\"mt-2 text-sm text-slate-500 dark:text-slate-400\">Set <code>DUCK_TOKEN</code> or save the token to <code>~/.config/duck/token</code>.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<section class=\"mt-12\"><h2 class=\"text-xl font-bold\">CLI tokens</h2><p class=\"mt-1 text-sm text-slate-500 dark:text-slate-400\">Authenticate the <code>duck</code> CLI without a browser session.</p><pre class=\"mt-3 overflow-x-auto bg-slate-900 px-3 py-2 text-sm text-slate-100\"><code>go install ./cmd/duck duck pull &lt;course&gt;/&lt;language&gt;   # scaffold challenges into a local dir duck test &lt;challenge-slug&gt;      # run tests locally, no submission duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (needs a token below)</code></pre><p class=\"mt-2 text-sm text-slate-500 dark:text-slate-400\">Set <code>DUCK_TOKEN</code> or save the token to <code>~/.config/duck/token</code>.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if newToken != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"mt-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-800 dark:bg-emerald-950\"><p class=\"font-medium text-emerald-800 dark:text-emerald-300\">Copy this token now — it won't be shown again.</p><code class=\"mt-1 block break-all font-mono text-emerald-900 dark:text-emerald-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"mt-4 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-800 dark:bg-emerald-950\"><p class=\"font-medium text-emerald-800 dark:text-emerald-300\">Copy this token now — it won't be shown again.</p><code class=\"mt-1 block break-all font-mono text-emerald-900 dark:text-emerald-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -539,7 +539,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, t := range tokens {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800\"><span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"flex items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-sm dark:border-slate-800\"><span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -611,7 +611,7 @@ func tokenSection(tokens []domain.UserToken, newToken string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<label class=\"flex flex-col gap-1 text-sm font-medium\">Name <input type=\"text\" name=\"name\" required maxlength=\"64\" placeholder=\"my laptop\" class=\"rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"rounded-md bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Create CLI token</button></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<label class=\"flex flex-col gap-1 text-sm font-medium\">Name <input type=\"text\" name=\"name\" required maxlength=\"64\" placeholder=\"my laptop\" class=\"border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Create CLI token</button></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

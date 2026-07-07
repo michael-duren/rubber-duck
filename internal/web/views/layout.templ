@@ -15,25 +15,30 @@ templ Layout(title string, user *domain.User) {
 					document.documentElement.classList.remove("dark");
 				}
 			</script>
+			<script src="/static/htmx.min.js"></script>
+			<script defer src="/static/alpine.min.js"></script>
 		</head>
-		<body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-			<header class="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+		<body class="crt min-h-screen bg-[#f1f7f2] text-slate-900 dark:bg-[#0b0f0d] dark:text-slate-100">
+			// Every page opens with the ANSI rainbow rule — see .ansi-rule.
+			<div class="ansi-rule" aria-hidden="true"></div>
+			<header class="border-b border-slate-200 bg-white dark:border-emerald-900/50 dark:bg-[#0b0f0d]">
 				<nav class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
 					<div class="flex items-center gap-6">
 						<a href="/" class="font-mono text-lg font-bold tracking-tight">
 							<span class="text-emerald-600 dark:text-emerald-400">$</span> rubber-duck <span aria-hidden="true">🦆</span>
 						</a>
+						// Each nav link hovers into its own ANSI color.
 						<div class="flex items-center gap-4 text-sm">
-							<a href="/" class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Courses</a>
-							<a href="/about" class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">About</a>
-							<a href="/cli" class="font-mono text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">CLI</a>
+							<a href="/" class="text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400">Courses</a>
+							<a href="/about" class="text-slate-600 hover:text-violet-600 dark:text-slate-300 dark:hover:text-violet-400">About</a>
+							<a href="/cli" class="font-mono text-slate-600 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-400">CLI</a>
 						</div>
 					</div>
 					<div class="flex items-center gap-4 text-sm">
 						<button
 							type="button"
 							aria-label="Toggle theme"
-							class="rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+							class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
 							onclick="document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')"
 						>
 							dark/light
@@ -46,7 +51,7 @@ templ Layout(title string, user *domain.User) {
 							</form>
 						} else {
 							<a href="/login" class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Log in</a>
-							<a href="/signup" class="rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500">Sign up</a>
+							<a href="/signup" class="bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500">Sign up</a>
 						}
 					</div>
 				</nav>
@@ -65,17 +70,18 @@ templ csrfField() {
 	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 }
 
-// tagChip renders one course tag as a terminal-style token.
+// tagChip renders one course tag as a terminal-style token. Tags own the
+// violet slot of the ANSI palette (langs are cyan, points amber).
 templ tagChip(tag string) {
-	<span class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">#{ tag }</span>
+	<span class="bg-violet-100 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">#{ tag }</span>
 }
 
 // langChip marks a programming-language variant.
 templ langChip(lang string) {
-	<span class="rounded border border-sky-300 px-1.5 py-0.5 font-mono text-xs text-sky-700 dark:border-sky-800 dark:text-sky-300">{ lang }</span>
+	<span class="border border-cyan-400 px-1.5 py-0.5 font-mono text-xs text-cyan-700 dark:border-cyan-800 dark:text-cyan-300">{ lang }</span>
 }
 
 // pointsBadge shows challenge/course points, the platform's XP currency.
 templ pointsBadge(points int) {
-	<span class="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400">{ points } pts</span>
+	<span class="bg-amber-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400">{ points } pts</span>
 }

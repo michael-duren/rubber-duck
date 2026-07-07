@@ -32,7 +32,14 @@ db:
 
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
-	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/duckserver serve"
+# First boot of a fresh database: once the server answers (it runs
+# migrations on start), publish the quickstart courses. Skipped whenever any
+# course exists — re-seeding would cascade-delete lessons/submissions.
+	( i=0; until curl -sf -o /dev/null http://localhost:8080/; do \
+	    i=$$((i+1)); test $$i -lt 120 || exit 0; sleep 0.5; done; \
+	  n="$$(docker compose exec -T postgres psql -U getcracked -d getcracked -tAc 'select count(*) from courses' 2>/dev/null)"; \
+	  if [ "$$n" = "0" ]; then echo "dev: empty database, seeding quickstart courses"; $(MAKE) seed; fi ) &
+	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/getcracked serve"
 
 runner-images:
 	docker build -t gc-runner-go internal/grader/runners/go
@@ -45,10 +52,13 @@ test:
 test-integration: db
 	TEST_DATABASE_URL=postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable go test ./...
 
+# GC_API_KEY/GC_URL are cleared so a key exported in the developer's shell
+# profile can't leak in: make seed always mints a throwaway local key and
+# targets localhost (real content goes through make publish).
 seed:
-	go run ./cmd/duckserver seed seed/intro-to-go.md
-	go run ./cmd/duckserver seed courses/embedded-pico-c.md
-	go run ./cmd/duckserver seed courses/build-a-hashmap-c.md
+	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed seed/intro-to-go.md
+	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed courses/embedded-pico-c.md
+	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
 # publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
