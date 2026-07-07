@@ -28,6 +28,66 @@
 	}
 }
 
+/* The ANSI rainbow rule — the old internet's rainbow <hr>, reborn as the
+   site's top border. Hard stops, terminal-palette colors, both themes.
+   The gradient is shared with lesson-content <hr>s below. */
+:root {
+	--ansi-gradient: linear-gradient(
+		90deg,
+		var(--color-red-500) 0 16.7%,
+		var(--color-amber-400) 0 33.3%,
+		var(--color-emerald-500) 0 50%,
+		var(--color-cyan-400) 0 66.7%,
+		var(--color-violet-500) 0 83.3%,
+		var(--color-fuchsia-500) 0 100%
+	);
+}
+.ansi-rule {
+	height: 6px;
+	background: var(--ansi-gradient);
+}
+
+/* Lesson prose: the markdown is the source of truth here, so let it show —
+   headings carry their ## markers, hrs are rainbow rules, links are
+   underlined cyan (as links once were), lists use the old square bullet. */
+.prose :where(h1, h2, h3, h4) {
+	font-family: var(--font-mono);
+}
+.prose :where(h2)::before {
+	content: "## ";
+	color: var(--color-emerald-600);
+}
+.prose :where(h3)::before {
+	content: "### ";
+	color: var(--color-emerald-600);
+}
+.prose :where(h4)::before {
+	content: "#### ";
+	color: var(--color-emerald-600);
+}
+.dark .prose :where(h2, h3, h4)::before {
+	color: var(--color-emerald-400);
+}
+.prose :where(a) {
+	color: var(--color-cyan-700);
+	text-decoration-line: underline;
+	text-underline-offset: 3px;
+}
+.dark .prose :where(a) {
+	color: var(--color-cyan-300);
+}
+.prose :where(ul) {
+	list-style-type: square;
+}
+.prose :where(blockquote) {
+	border-left-color: var(--color-emerald-500);
+}
+.prose :where(hr) {
+	border: 0;
+	height: 3px;
+	background: var(--ansi-gradient);
+}
+
 /* Static CRT scanlines, dark mode only. Kept faint enough to register as
    texture, not an effect — effective darkening is ~4%. */
 .dark .crt::after {
