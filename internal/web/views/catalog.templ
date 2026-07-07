@@ -1,39 +1,103 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
-templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLangs []string, activeTag, activeLang string) {
+templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLangs []string, activeTags []string, activeLang, query string) {
 	@Layout("Courses", user) {
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-3xl font-bold">Courses</h1>
+				<h1 class="text-3xl font-bold tracking-tight">Courses</h1>
 				<p class="mt-1 text-slate-600 dark:text-slate-400">Pick a course, work the challenges, collect the points.</p>
 			</div>
 			if user != nil {
-				<a href="/courses/new" class="rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ New course</a>
+				<a href="/courses/new" class="border border-slate-300 px-3 py-2 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ New course</a>
 			}
 		</div>
-		if len(allTags) > 0 || len(allLangs) > 0 {
-			<div class="mt-6 flex flex-wrap items-center gap-2">
-				@filterChip("all", "/", activeTag == "" && activeLang == "")
-				for _, t := range allTags {
-					@filterChip("#"+t, "/?tag="+t, activeTag == t)
-				}
-				for _, l := range allLangs {
-					@filterChip(l, "/?lang="+l, activeLang == l)
-				}
+		// One GET form drives all filtering. htmx swaps only #catalog-results
+		// (the handler returns that fragment for HX-Request); Alpine holds the
+		// filter state so the flag dropdowns and reset button stay live after
+		// swaps. Without JS it degrades to a plain form submit (search only —
+		// the dropdowns need Alpine; noscript inputs keep URL filters sticky).
+		<form
+			method="get"
+			action="/"
+			hx-get="/"
+			hx-trigger="submit, input changed delay:300ms from:find input[name='q']"
+			hx-target="#catalog-results"
+			hx-swap="outerHTML"
+			hx-push-url="true"
+			x-data={ filterState(query, activeTags, activeLang) }
+			@keydown.escape="menu = null"
+			class="mt-6"
+		>
+			<div class="tui-frame flex items-center gap-2 border border-slate-300 bg-white px-3 py-2 focus-within:border-emerald-500 dark:border-slate-700 dark:bg-[#0e1410] dark:focus-within:border-emerald-500">
+				<label for="course-search" class="shrink-0 select-none font-mono text-sm text-emerald-600 dark:text-emerald-400">$ duck search</label>
+				<div class="relative flex-1">
+					<input
+						id="course-search"
+						type="search"
+						name="q"
+						x-model="q"
+						value={ query }
+						placeholder=" "
+						autocomplete="off"
+						class="peer w-full bg-transparent font-mono text-sm caret-emerald-500 outline-none"
+					/>
+					// Idle block cursor: visible only while the input is empty
+					// and unfocused, like a terminal waiting for input.
+					<span aria-hidden="true" class="tui-cursor pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 font-mono text-sm text-emerald-500 peer-focus:hidden peer-[:not(:placeholder-shown)]:hidden">▊</span>
+				</div>
 			</div>
-		}
+			<div class="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs">
+				if len(allTags) > 0 {
+					@tagDropdown(allTags)
+				}
+				if len(allLangs) > 0 {
+					@langDropdown(allLangs)
+				}
+				<button
+					type="button"
+					x-cloak
+					x-show="q || tags.length || lang"
+					@click="q = ''; tags = []; lang = ''; $nextTick(() => $root.requestSubmit())"
+					class="px-2 py-1 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400"
+				>[reset]</button>
+			</div>
+			// Disabled-when-empty keeps blank params out of the pushed URL;
+			// x-for emits one tag input per selection. The noscript copies
+			// carry the active filters through a JS-less search submit.
+			<template x-for="t in tags"><input type="hidden" name="tag" :value="t"/></template>
+			<input type="hidden" name="lang" :value="lang" :disabled="!lang" disabled?={ activeLang == "" } value={ activeLang }/>
+			<noscript>
+				for _, t := range activeTags {
+					<input type="hidden" name="tag" value={ t }/>
+				}
+			</noscript>
+		</form>
+		@CatalogResults(courses, query, activeTags, activeLang)
+	}
+}
+
+// CatalogResults is the htmx swap target: result count plus the course grid.
+templ CatalogResults(courses []domain.CourseSummary, query string, activeTags []string, activeLang string) {
+	<div id="catalog-results" class="mt-6">
+		// Styled like a code comment — it is one, syntactically.
+		<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ resultLine(len(courses), query, activeTags, activeLang) }</p>
 		if len(courses) == 0 {
-			<p class="mt-12 text-slate-500 dark:text-slate-400">No courses match. Clear the filter, or publish one through the agent API.</p>
+			<div class="mt-4 border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+				<p class="font-mono text-sm text-amber-600 dark:text-amber-400">no matches</p>
+				<p class="mt-2 text-xs text-slate-500 dark:text-slate-500">Clear the search, reset the flags, or publish a course through the agent API.</p>
+			</div>
 		} else {
-			<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			<div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				for _, c := range courses {
-					<a href={ templ.SafeURL("/courses/" + c.Slug) } class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600">
+					<a href={ templ.SafeURL("/courses/" + c.Slug) } class="tui-frame group border border-slate-300 bg-white p-5 transition hover:border-emerald-500 dark:border-slate-800 dark:bg-[#0e1410] dark:hover:border-emerald-500">
 						<h2 class="text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400">{ c.Title }</h2>
 						<div class="mt-3 flex flex-wrap gap-1.5">
 							for _, t := range c.Tags {
@@ -54,13 +118,115 @@ templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLan
 				}
 			</div>
 		}
-	}
+	</div>
 }
 
-templ filterChip(label, href string, active bool) {
-	if active {
-		<a href={ templ.SafeURL(href) } class="rounded-full bg-emerald-600 px-3 py-1 font-mono text-xs font-medium text-white">{ label }</a>
-	} else {
-		<a href={ templ.SafeURL(href) } class="rounded-full border border-slate-300 px-3 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600">{ label }</a>
+// tagDropdown is the multi-select --tag filter: options toggle like
+// old-school checkboxes ([x]/[ ]) and the menu stays open so several can be
+// picked; each toggle re-submits, narrowing to courses with every tag.
+templ tagDropdown(options []string) {
+	<div class="relative">
+		<button
+			type="button"
+			@click="menu = menu === 'tag' ? null : 'tag'"
+			:aria-expanded="menu === 'tag'"
+			aria-haspopup="listbox"
+			class="border border-slate-300 px-2 py-1 text-slate-600 hover:border-emerald-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600"
+		>
+			<span class="text-cyan-600 dark:text-cyan-400">--tag=</span><span x-text="tags.length ? tags.join(',') : '*'"></span>
+			<span aria-hidden="true" class="text-slate-400 dark:text-slate-500">▾</span>
+		</button>
+		<div
+			x-cloak
+			x-show="menu === 'tag'"
+			@click.outside="if (menu === 'tag') menu = null"
+			role="listbox"
+			aria-multiselectable="true"
+			class="absolute left-0 z-10 mt-1 min-w-32 border border-slate-300 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-[#0e1410]"
+		>
+			<button
+				type="button"
+				role="option"
+				@click="tags = []; menu = null; $nextTick(() => $root.requestSubmit())"
+				class="block w-full px-3 py-1 text-left text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-300 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300"
+			>*</button>
+			for _, o := range options {
+				<button
+					type="button"
+					role="option"
+					:aria-selected={ fmt.Sprintf("tags.includes(%q)", o) }
+					@click={ fmt.Sprintf("tags = tags.includes(%q) ? tags.filter(t => t !== %q) : [...tags, %q]; $nextTick(() => $root.requestSubmit())", o, o, o) }
+					class="block w-full px-3 py-1 text-left text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-300 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300"
+				>
+					<span class="text-emerald-600 dark:text-emerald-400" x-text={ fmt.Sprintf("tags.includes(%q) ? '[x]' : '[ ]'", o) }></span> { o }
+				</button>
+			}
+		</div>
+	</div>
+}
+
+// langDropdown is the single-select --lang filter: picking an option closes
+// the menu (a course is worked in one language at a time).
+templ langDropdown(options []string) {
+	<div class="relative">
+		<button
+			type="button"
+			@click="menu = menu === 'lang' ? null : 'lang'"
+			:aria-expanded="menu === 'lang'"
+			aria-haspopup="listbox"
+			class="border border-slate-300 px-2 py-1 text-slate-600 hover:border-emerald-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600"
+		>
+			<span class="text-cyan-600 dark:text-cyan-400">--lang=</span><span x-text="lang || '*'"></span>
+			<span aria-hidden="true" class="text-slate-400 dark:text-slate-500">▾</span>
+		</button>
+		<div
+			x-cloak
+			x-show="menu === 'lang'"
+			@click.outside="if (menu === 'lang') menu = null"
+			role="listbox"
+			class="absolute left-0 z-10 mt-1 min-w-32 border border-slate-300 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-[#0e1410]"
+		>
+			@langOption("", "*")
+			for _, o := range options {
+				@langOption(o, o)
+			}
+		</div>
+	</div>
+}
+
+templ langOption(value, label string) {
+	<button
+		type="button"
+		role="option"
+		@click={ fmt.Sprintf("lang = %q; menu = null; $nextTick(() => $root.requestSubmit())", value) }
+		class="block w-full px-3 py-1 text-left text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-300 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300"
+	>{ label }</button>
+}
+
+// filterState seeds the form's Alpine scope from the request's filters.
+func filterState(q string, tags []string, lang string) string {
+	if tags == nil {
+		tags = []string{} // marshal as [], not null — Alpine needs an array
 	}
+	b, _ := json.Marshal(map[string]any{"q": q, "tags": tags, "lang": lang, "menu": nil})
+	return string(b)
+}
+
+// resultLine reports the match count in the voice of a CLI, echoing the
+// active flags: `// 3 courses --tag=web,api matching "test"`.
+func resultLine(n int, q string, tags []string, lang string) string {
+	line := fmt.Sprintf("// %d course", n)
+	if n != 1 {
+		line += "s"
+	}
+	if len(tags) > 0 {
+		line += " --tag=" + strings.Join(tags, ",")
+	}
+	if lang != "" {
+		line += " --lang=" + lang
+	}
+	if q != "" {
+		line += fmt.Sprintf(" matching %q", q)
+	}
+	return line
 }

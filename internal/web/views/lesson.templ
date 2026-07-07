@@ -9,12 +9,14 @@ import (
 templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain.Lesson, next *domain.Lesson, latestCodeByChallenge map[int64]string, submissionsByChallenge map[int64][]domain.Submission) {
 	@Layout(l.Title, user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<span class="text-emerald-600 dark:text-emerald-400">~</span>/
 			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / { l.Slug }
 		</nav>
 		<article class="mx-auto mt-6 max-w-3xl">
-			<h1 class="text-3xl font-bold">{ l.Title }</h1>
+			<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ "// lesson: " + l.Slug }</p>
+			<h1 class="mt-1 text-3xl font-bold">{ l.Title }</h1>
 			<div class="prose prose-slate mt-6 max-w-none dark:prose-invert">
 				@templ.Raw(l.ContentHTML)
 			</div>
@@ -22,11 +24,11 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 				@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID])
 			}
 			<div class="mt-10 flex justify-between border-t border-slate-200 pt-6 dark:border-slate-800">
-				<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
+				<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="font-mono text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
 				if next != nil {
-					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/lessons/%s", course.Slug, v.Language, next.Slug)) } class="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Next: { next.Title } →</a>
+					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/lessons/%s", course.Slug, v.Language, next.Slug)) } class="font-mono text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Next: { next.Title } →</a>
 				} else {
-					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/final", course.Slug, v.Language)) } class="text-sm font-medium text-amber-600 hover:underline dark:text-amber-400">Final challenge →</a>
+					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/final", course.Slug, v.Language)) } class="font-mono text-sm font-medium text-amber-600 hover:underline dark:text-amber-400">Final challenge →</a>
 				}
 			</div>
 		</article>
@@ -36,6 +38,7 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 templ Final(user *domain.User, course domain.Course, v domain.Variant, latestCode string, submissions []domain.Submission) {
 	@Layout("Final Challenge · "+course.Title, user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<span class="text-emerald-600 dark:text-emerald-400">~</span>/
 			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / final
@@ -47,9 +50,27 @@ templ Final(user *domain.User, course domain.Course, v domain.Variant, latestCod
 	}
 }
 
+// statusChip colors a submission status by its ANSI-palette slot: passed
+// green, failed red, error amber, in-flight cyan. (Replaces the old inline
+// hex styles, which also never adapted to dark mode.)
+templ statusChip(status string) {
+	switch status {
+		case "passed":
+			<span class="ml-2 inline-block bg-emerald-100 px-2 py-1 font-mono text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✓ { status }</span>
+		case "failed":
+			<span class="ml-2 inline-block bg-rose-100 px-2 py-1 font-mono text-xs font-medium text-rose-800 dark:bg-rose-950 dark:text-rose-300">✗ { status }</span>
+		case "error":
+			<span class="ml-2 inline-block bg-amber-100 px-2 py-1 font-mono text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">! { status }</span>
+		case "pending", "running":
+			<span class="ml-2 inline-block bg-cyan-100 px-2 py-1 font-mono text-xs font-medium text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300">… { status }</span>
+		default:
+			<span class="ml-2 inline-block bg-slate-100 px-2 py-1 font-mono text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{ status }</span>
+	}
+}
+
 // ChallengeCard shows a challenge prompt with the code submission form.
 templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, submissions []domain.Submission) {
-	<section class="mt-8 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+	<section class="tui-frame mt-8 border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-[#0e1410]">
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-xl font-semibold">
 				<span class="font-mono text-emerald-600 dark:text-emerald-400">›</span> { c.Title }
@@ -63,13 +84,14 @@ templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, su
 			<form method="post" action={ templ.SafeURL(fmt.Sprintf("/challenges/%d/submissions", c.ID)) } class="mt-4">
 				@csrfField()
 				<label class="text-sm font-medium" for={ fmt.Sprintf("code-%d", c.ID) }>Your solution</label>
+				// The editor is a terminal: dark phosphor in both themes.
 				if latestCode != "" {
 					<textarea
 						id={ fmt.Sprintf("code-%d", c.ID) }
 						name="code"
 						rows="14"
 						spellcheck="false"
-						class="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+						class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
 					>{ latestCode }</textarea>
 				} else {
 					<textarea
@@ -77,30 +99,20 @@ templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, su
 						name="code"
 						rows="14"
 						spellcheck="false"
-						class="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+						class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
 					>{ c.StarterCode }</textarea>
 				}
-				<button type="submit" class="mt-3 rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500">Run tests</button>
+				<button type="submit" class="mt-3 bg-emerald-600 px-4 py-2 font-mono font-medium text-white hover:bg-emerald-500">▶ Run tests</button>
 			</form>
 			if len(submissions) > 0 {
-				<details class="mt-6 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+				<details class="mt-6 border border-slate-200 p-4 dark:border-slate-800">
 					<summary class="cursor-pointer font-medium text-slate-700 dark:text-slate-300">Your attempts ({ len(submissions) })</summary>
 					<div class="mt-4 space-y-2">
 						for _, sub := range submissions {
-							<a href={ templ.SafeURL(fmt.Sprintf("/submissions/%d", sub.ID)) } class="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800">
+							<a href={ templ.SafeURL(fmt.Sprintf("/submissions/%d", sub.ID)) } class="flex items-center justify-between bg-slate-50 px-3 py-2 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800">
 								<div class="text-sm">
 									<span class="font-mono text-slate-600 dark:text-slate-400">{ sub.CreatedAt.Format("Jan 2 15:04") }</span>
-									if sub.Status == "passed" {
-										<span class="ml-2 inline-block rounded px-2 py-1 text-xs font-medium" style="background-color: #d1fae5; color: #065f46;">{ sub.Status }</span>
-									} else if sub.Status == "failed" {
-										<span class="ml-2 inline-block rounded px-2 py-1 text-xs font-medium" style="background-color: #fee2e2; color: #7f1d1d;">{ sub.Status }</span>
-									} else if sub.Status == "error" {
-										<span class="ml-2 inline-block rounded px-2 py-1 text-xs font-medium" style="background-color: #fef3c7; color: #78350f;">{ sub.Status }</span>
-									} else if sub.Status == "pending" || sub.Status == "running" {
-										<span class="ml-2 inline-block rounded px-2 py-1 text-xs font-medium" style="background-color: #dbeafe; color: #1e40af;">{ sub.Status }</span>
-									} else {
-										<span class="ml-2 inline-block rounded px-2 py-1 text-xs font-medium" style="background-color: #f3f4f6; color: #374151;">{ sub.Status }</span>
-									}
+									@statusChip(sub.Status)
 									if sub.TestsTotal != nil {
 										<span class="ml-2 text-slate-600 dark:text-slate-400">{ sub.TestSummary() }</span>
 									}
@@ -112,7 +124,7 @@ templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, su
 				</details>
 			}
 		} else {
-			<p class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+			<p class="mt-4 border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
 				<a href="/login" class="font-medium text-emerald-600 hover:underline dark:text-emerald-400">Log in</a> to submit a solution and earn points.
 			</p>
 		}

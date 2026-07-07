@@ -35,12 +35,12 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 				<div class="mt-10 flex items-center justify-between gap-3">
 					<h2 class="text-xl font-semibold">Pick your language</h2>
 					if user != nil {
-						<a href={ templ.SafeURL(newVariantLink(course)) } class="rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ Add language variant</a>
+						<a href={ templ.SafeURL(newVariantLink(course)) } class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ Add language variant</a>
 					}
 				</div>
 				<div class="mt-4 flex flex-col gap-3">
 					for _, v := range variants {
-						<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600">
+						<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="group flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-white p-4 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600">
 							<span class="flex items-center gap-3">
 								@langChip(v.Language)
 								<span class="text-sm text-slate-600 dark:text-slate-300">
@@ -58,7 +58,7 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 					}
 				</div>
 			</div>
-			<aside class="h-fit rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+			<aside class="h-fit border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
 				if course.DurationHours > 0 {
 					<div class="flex justify-between text-sm">
 						<span class="text-slate-500 dark:text-slate-400">Estimated time</span>
