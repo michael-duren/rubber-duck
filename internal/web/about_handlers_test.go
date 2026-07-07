@@ -17,7 +17,7 @@ func TestDocPages(t *testing.T) {
 		{"/about", []string{"About Rubber Duck", "/cli"}},
 		// The CLI page embeds the request origin in its command examples
 		// so they're copy-pasteable against this deployment.
-		{"/cli", []string{"duck login --base http://example.com", "duck pull", "releases/latest"}},
+		{"/cli", []string{"duck login", "duck pull intro-to-concurrency/go --base http://example.com", "releases/latest"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestCLIPageForwardedProto(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /cli = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "duck login --base https://example.com") {
+	if !strings.Contains(rec.Body.String(), "duck pull intro-to-concurrency/go --base https://example.com") {
 		t.Error("CLI page should use https origin behind a proxy")
 	}
 }
