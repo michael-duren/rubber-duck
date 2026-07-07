@@ -65,7 +65,7 @@ jobs:
       # course variant cascades (lessons/challenges/submissions are
       # replaced) — that's the documented agent contract; slugs stay
       # stable in courses/*.md. GC_API_KEY is a repo secret minted with
-      # `getcracked apikey create` against the prod DB.
+      # `duckserver apikey create` against the prod DB.
       - name: Sync courses to prod
         env:
           GC_API_KEY: ${{ secrets.GC_API_KEY }}

@@ -30,7 +30,7 @@ Or fully containerized:
 ```sh
 make runner-images
 docker compose up --build
-go run ./cmd/getcracked seed seed/intro-to-go.md
+go run ./cmd/duckserver seed seed/intro-to-go.md
 ```
 
 Sign up at http://localhost:8080 (any username, no email), open the course,
@@ -41,7 +41,7 @@ Other commands:
 ```sh
 make apikey KEY_NAME=writer-1                           # mint an agent API key (local db)
 make apikey-prod KEY_NAME=writer-1                      # same, against prod via cloud-sql-proxy
-go run ./cmd/getcracked migrate up|down                 # run migrations by hand
+go run ./cmd/duckserver migrate up|down                 # run migrations by hand
 make check                                              # vet + stale-generate check + tests
 make test-integration                                   # store tests against compose postgres
 ```
@@ -49,7 +49,7 @@ make test-integration                                   # store tests against co
 ## Architecture
 
 ```
-cmd/getcracked        wiring + subcommands (serve, migrate, apikey, seed)
+cmd/duckserver        wiring + subcommands (serve, migrate, apikey, seed)
 internal/domain       pure types + scoring; no I/O
 internal/ingest       markdown -> course parser + validation (the agent contract)
 internal/markdown     goldmark + chroma renderer (HTML cached at ingest time)
@@ -77,7 +77,7 @@ sandbox — milestone 2 swaps in a stronger isolate (e.g. gVisor) behind the
 
 All endpoints live under `/api/v1` and — except the public challenges
 listing, see the table — require a bearer key minted with
-`getcracked apikey create`, **or** a human's `gc_u_...` user CLI token (same
+`duckserver apikey create`, **or** a human's `gc_u_...` user CLI token (same
 one `duck submit`/`duck test` use):
 
 ```
@@ -204,7 +204,7 @@ GC_API_KEY=<agent key> make publish                       # local server
 GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
 ```
 
-`make publish` loops `getcracked seed --url $GC_URL <file>` over every
+`make publish` loops `duckserver seed --url $GC_URL <file>` over every
 `courses/*.md`, bumping each variant's version. Re-publishing **replaces**
 a variant's lessons/challenges and resets submissions for it — keep slugs
 stable (see "Course document format" above).
@@ -525,7 +525,7 @@ cloud-sql-proxy and the tofu outputs for you:
 
 ```sh
 make apikey-prod KEY_NAME=seed
-GC_API_KEY=<printed key> go run ./cmd/getcracked seed --url <service_url> seed/intro-to-go.md
+GC_API_KEY=<printed key> go run ./cmd/duckserver seed --url <service_url> seed/intro-to-go.md
 ```
 
 (The manual equivalent: run `bin/cloud-sql-proxy <connection-name> --port
@@ -540,5 +540,3 @@ make deploy PROJECT=<project-id>    # builds, pushes (tag = git SHA), tofu apply
 
 Cloud Run only rolls a new revision when the image *string* changes, so
 deploys use a unique tag per commit rather than `latest`.
-
-TMP_URL: https://gc-app-55059163933.us-central1.run.app/

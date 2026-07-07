@@ -14,3 +14,9 @@ variable "image_tag" {
   type        = string
   default     = "v1"
 }
+
+variable "domain" {
+  description = "Apex domain for the app; apex + www are both mapped to Cloud Run"
+  type        = string
+  default     = "duckgc.com"
+}

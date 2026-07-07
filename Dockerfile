@@ -13,13 +13,13 @@ RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
 COPY . .
 RUN templ generate \
     && tailwindcss -i assets/input.css -o internal/web/static/app.css --minify \
-    && CGO_ENABLED=0 go build -o /getcracked ./cmd/getcracked
+    && CGO_ENABLED=0 go build -o /duckserver ./cmd/duckserver
 
 # Runtime needs the docker CLI: the M1 grader shells out to the host daemon
 # through the mounted socket.
 FROM alpine:3.22
 RUN apk add --no-cache docker-cli ca-certificates
-COPY --from=build /getcracked /usr/local/bin/getcracked
+COPY --from=build /duckserver /usr/local/bin/duckserver
 EXPOSE 8080
-ENTRYPOINT ["getcracked"]
+ENTRYPOINT ["duckserver"]
 CMD ["serve"]

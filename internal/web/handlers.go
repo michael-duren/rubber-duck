@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/a-h/templ"
 
@@ -12,6 +13,21 @@ import (
 
 //go:embed static
 var staticFS embed.FS
+
+// CanonicalHost redirects any request whose host carries a "www." prefix to
+// the same path on the bare apex. It uses 308 (not 301) so non-GET methods
+// keep their method and body — this wraps the agent API too. Requests to the
+// apex, localhost, or the *.run.app URL fall straight through, so it's safe
+// to mount in front of the whole mux in every environment.
+func CanonicalHost(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if apex, ok := strings.CutPrefix(r.Host, "www."); ok {
+			http.Redirect(w, r, "https://"+apex+r.RequestURI, http.StatusPermanentRedirect)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 type handlers struct {
 	store       AuthStore

@@ -26,14 +26,14 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "getcracked:", err)
+		fmt.Fprintln(os.Stderr, "duckserver:", err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: getcracked <serve|migrate|apikey> [flags]")
+		return fmt.Errorf("usage: duckserver <serve|migrate|apikey> [flags]")
 	}
 	switch args[0] {
 	case "serve":
@@ -91,7 +91,7 @@ func serve(args []string) error {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           mux,
+		Handler:           web.CanonicalHost(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errc := make(chan error, 1)
@@ -148,13 +148,13 @@ func migrateCmd(args []string) error {
 	case "down":
 		return store.Migrate(*dbURL, true)
 	default:
-		return fmt.Errorf("usage: getcracked migrate [up|down]")
+		return fmt.Errorf("usage: duckserver migrate [up|down]")
 	}
 }
 
 func apikeyCmd(args []string) error {
 	if len(args) < 1 || args[0] != "create" {
-		return fmt.Errorf("usage: getcracked apikey create --name <name>")
+		return fmt.Errorf("usage: duckserver apikey create --name <name>")
 	}
 	fs := flag.NewFlagSet("apikey create", flag.ContinueOnError)
 	name := fs.String("name", "", "key name, e.g. writer-1")
@@ -163,7 +163,7 @@ func apikeyCmd(args []string) error {
 		return err
 	}
 	if *name == "" {
-		return fmt.Errorf("usage: getcracked apikey create --name <name>")
+		return fmt.Errorf("usage: duckserver apikey create --name <name>")
 	}
 
 	ctx := context.Background()
@@ -191,7 +191,7 @@ func seedCmd(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: getcracked seed <course.md>")
+		return fmt.Errorf("usage: duckserver seed <course.md>")
 	}
 
 	src, err := os.ReadFile(fs.Arg(0))
