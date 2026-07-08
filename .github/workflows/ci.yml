@@ -1,9 +1,10 @@
 name: CI
 
+# PRs only. Pushes to main are covered by cd.yml, whose `test` job (the
+# deploy gate) is the same reusable test.yml — running it here too would
+# just double-run tests on every merge.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 jobs:

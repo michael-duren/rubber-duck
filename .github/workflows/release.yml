@@ -1,0 +1,58 @@
+name: cli-release
+
+# Publishes the duck CLI on a version tag. Deliberately decoupled from cd.yml:
+# deploys happen on every push to main, but cutting a release is a manual act —
+# push a semver tag by hand to trigger this:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag MUST be pushed by a human (or any non-GITHUB_TOKEN identity): GitHub
+# will not trigger a workflow from a ref pushed with the default GITHUB_TOKEN,
+# so an automated tag from another workflow would leave this one dormant.
+#
+# Plain semver tags (not e.g. duck-v0.1.N) on purpose: the Go toolchain only
+# recognizes vX.Y.Z, so this is what makes `go install .../cmd/duck@latest`
+# resolve to the tagged commit, and `duck version` report the same tag for
+# go-installed builds (via ReadBuildInfo) as for the goreleaser-stamped ones.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # Same reusable gate as CI/CD — a manual tag can point at any commit, so
+  # don't ship a release built from one that doesn't pass tests.
+  test:
+    uses: ./.github/workflows/test.yml
+
+  # GitHub Release with raw binaries (named as the /cli page's curl
+  # instructions expect) + archives, and push the Homebrew cask to
+  # michael-duren/homebrew-tap. See .goreleaser.yaml.
+  goreleaser:
+    name: "Release"
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

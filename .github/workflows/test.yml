@@ -1,4 +1,4 @@
-name: test
+name: Test
 
 # Reusable: called by ci.yml (every PR/push) and cd.yml (gate before deploy)
 # so there's one definition of "the code is good" for both.
