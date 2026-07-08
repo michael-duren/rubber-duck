@@ -227,6 +227,27 @@ struct hm_entry {
 };
 ```
 
+Each bucket is a chain head; colliding keys queue up behind each other. Here
+`"ada"` and `"ken"` both landed in bucket 1, so bucket 1's chain holds both:
+
+```d2
+direction: right
+buckets: buckets {
+  shape: sql_table
+  "0"
+  "1"
+  "2"
+  "3"
+}
+n1: "\"ada\" = 0"
+n2: "\"ken\" = 6"
+n3: "\"alan\" = 3"
+buckets."1" -> n1 -> n2 -> x1
+buckets."3" -> n3 -> x2
+x1: "∅" { shape: text }
+x2: "∅" { shape: text }
+```
+
 Finding a key inside a bucket is a plain list walk. One subtlety: keys are
 strings, so the comparison is `strcmp(...) == 0` — comparing `char *`
 pointers with `==` asks "is this the same memory?", not "is this the same
@@ -333,7 +354,19 @@ struct hashmap {
 ```
 
 `hm_get` is the two helpers from last lesson glued together: hash, index,
-walk the chain. `hm_put` has more decisions in it:
+walk the chain — the whole lookup is just this pipeline:
+
+```d2
+direction: down
+get: "hm_get(m, \"ada\")" { shape: oval }
+h: "fnv1a(\"ada\") → 0x…"
+i: "% nbuckets → bucket index"
+w: "walk chain, strcmp each key"
+out: "&entry.value  (NULL if absent)" { shape: oval }
+get -> h -> i -> w -> out
+```
+
+`hm_put` has more decisions in it:
 
 - **Overwrite, don't duplicate.** If the key already exists, replace its
   value in place; `len` doesn't change. Only a genuinely new key allocates
@@ -351,9 +384,10 @@ update a value through the pointer without a second lookup.
 
 ## Challenge: The Core API {#hm-put-get points=15}
 
-Implement `hm_put` and `hm_get`. The starter gives you working `fnv1a` and
-`hm_new` so the earlier building blocks don't need re-typing; new entries
-may go at the head of their chain (it's the easy spot).
+Implement `hm_put` and `hm_get`. The starter gives you working `fnv1a`,
+`hm_new`, `bucket_index`, and `chain_find` so the earlier building blocks
+don't need re-typing; new entries may go at the head of their chain (it's
+the easy spot).
 
 ### Starter
 
@@ -396,6 +430,19 @@ struct hashmap *hm_new(size_t nbuckets) {
 	m->nbuckets = nbuckets;
 	m->len = 0;
 	return m;
+}
+
+/* The bucket a hash falls into. nbuckets is always >= 1. */
+size_t bucket_index(uint32_t hash, size_t nbuckets) {
+	return hash % nbuckets;
+}
+
+/* The entry with the given key, or NULL if the chain doesn't have it. */
+struct hm_entry *chain_find(struct hm_entry *head, const char *key) {
+	for (struct hm_entry *e = head; e; e = e->next)
+		if (strcmp(e->key, key) == 0)
+			return e;
+	return NULL;
 }
 
 /* Insert key=value, or overwrite the value if key is already present.
@@ -509,6 +556,23 @@ while (*pp && strcmp((*pp)->key, key) != 0)
 Now `pp` points at either the bucket head or someone's `next` field — it
 doesn't matter which. Unlinking is uniform: save `*pp`, redirect `*pp` to
 the doomed node's `next`, free the node. One code path, no special cases.
+
+`pp` holds the address of a *link* (the bucket head or some node's `next`
+field), and `*pp` is the node that link points to — the one to remove. The
+**solid** arrow is `*pp` now; the **dashed** arrow is where `*pp` points
+after `*pp = (*pp)->next` swings the link past the doomed node:
+
+```d2
+direction: right
+pp: pp { shape: oval; style.stroke: "#d97706"; style.stroke-width: 2 }
+front: front { shape: sql_table; key: "\"front\""; next: next }
+mid: "\"middle\"" { style.stroke: "#dc2626"; style.stroke-width: 3 }
+back: "\"back\""
+pp -> front.next: "*pp"
+front.next -> mid
+mid -> back
+front.next -> back: "*pp = (*pp)->next" { style.stroke: "#dc2626"; style.stroke-dash: 4 }
+```
 
 And because the map allocated the key copy and the node in `hm_put`, the
 map must free them here — every `malloc` needs exactly one `free`, and the
@@ -637,7 +701,35 @@ nbuckets`, so changing `nbuckets` moves entries; each one must be relinked
 into its new bucket. Existing nodes and key copies can be reused — resizing
 moves entries, it doesn't recreate them.
 
-Assemble the complete map. `hm_new` is given; implement the rest:
+```d2
+direction: right
+before: "before  (nbuckets = 4)" {
+  t: buckets {
+    shape: sql_table
+    "0"
+    "1"
+    "2"
+    "3"
+  }
+}
+after: "after  (nbuckets = 8)" {
+  t: buckets {
+    shape: sql_table
+    "0"
+    "1"
+    "2"
+    "3"
+    "4"
+    "5"
+    "6"
+    "7"
+  }
+}
+before -> after: "double + rehash\nhash % new nbuckets"
+```
+
+Assemble the complete map. `hm_new`, `bucket_index`, and `chain_find` are
+given; implement the rest:
 
 - `hm_put` — as in lesson 3, but *before* inserting a new key, if
   `len >= nbuckets` double the bucket count. Overwrites never trigger a
@@ -691,6 +783,19 @@ struct hashmap *hm_new(size_t nbuckets) {
 	m->nbuckets = nbuckets;
 	m->len = 0;
 	return m;
+}
+
+/* The bucket a hash falls into. nbuckets is always >= 1. */
+size_t bucket_index(uint32_t hash, size_t nbuckets) {
+	return hash % nbuckets;
+}
+
+/* The entry with the given key, or NULL if the chain doesn't have it. */
+struct hm_entry *chain_find(struct hm_entry *head, const char *key) {
+	for (struct hm_entry *e = head; e; e = e->next)
+		if (strcmp(e->key, key) == 0)
+			return e;
+	return NULL;
 }
 
 /* Move every entry into a fresh array of nbuckets buckets.

@@ -30,6 +30,10 @@ build: generate css
 db:
 	docker compose up -d --wait postgres
 
+# WARN: USE WITH CAUTION
+prune:
+	docker volume rm $(docker volume list --quiet | grep -i "_pgdata")
+
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
 # First boot of a fresh database: once the server answers (it runs
@@ -37,7 +41,7 @@ dev: db generate css
 # course exists — re-seeding would cascade-delete lessons/submissions.
 	( i=0; until curl -sf -o /dev/null http://localhost:8080/; do \
 	    i=$$((i+1)); test $$i -lt 120 || exit 0; sleep 0.5; done; \
-	  n="$$(docker compose exec -T postgres psql -U getcracked -d getcracked -tAc 'select count(*) from courses' 2>/dev/null)"; \
+	  n="$$(docker compose exec -T postgres psql -U duckserver -d duckserver -tAc 'select count(*) from courses' 2>/dev/null)"; \
 	  if [ "$$n" = "0" ]; then echo "dev: empty database, seeding quickstart courses"; $(MAKE) seed; fi ) &
 	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/duckserver serve"
 
@@ -50,15 +54,15 @@ test:
 	go test ./...
 
 test-integration: db
-	TEST_DATABASE_URL=postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable go test ./...
+	TEST_DATABASE_URL=postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable go test ./...
 
 # GC_API_KEY/GC_URL are cleared so a key exported in the developer's shell
 # profile can't leak in: make seed always mints a throwaway local key and
 # targets localhost (real content goes through make publish).
 seed:
-	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed seed/intro-to-go.md
-	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed courses/embedded-pico-c.md
-	GC_API_KEY= GC_URL= go run ./cmd/getcracked seed courses/build-a-hashmap-c.md
+	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed seed/intro-to-go.md
+	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/embedded-pico-c.md
+	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/build-a-hashmap-c.md
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
 # publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
@@ -94,7 +98,7 @@ publish:
 # `gcloud auth login` first), opens a Cloud SQL proxy on :5433, and tears
 # it down when psql exits.
 psql:
-	psql "postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable"
+	psql "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable"
 
 psql-prod: $(SQL_PROXY)
 	@test -n "$(PROJECT)" || (echo "set PROJECT=<gcp-project-id>" && exit 1)
