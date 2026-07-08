@@ -1,0 +1,293 @@
+.\" Manpage for duck, the Rubber Duck companion CLI.
+.\" Regenerate/review alongside cmd/duck; install with `make install`.
+.TH DUCK 1 "2026-07-08" "duck" "Rubber Duck Manual"
+.SH NAME
+duck \- local companion CLI for Rubber Duck courses
+.SH SYNOPSIS
+.B duck
+.I command
+.RI [ arguments ]
+.br
+.B duck help
+.RI [ command ]
+.br
+.B duck
+.I command
+.B \-\-help
+.SH DESCRIPTION
+.B duck
+is the local command\-line tool for Rubber Duck courses
+.RB ( https://duckgc.com ).
+It serves two audiences from one binary.
+.PP
+.B Learners
+pull a course's coding challenges to their machine, run the tests with their
+own toolchain, and submit graded solutions.
+.B Educators
+(authors) pull a course's markdown, edit it locally, validate it, and push it
+back \(en the whole course is a single markdown document.
+.PP
+Run
+.B duck
+with no arguments, or
+.BR "duck help" ,
+to list every command. Any command invoked without a required argument prints
+its own detailed help.
+.SS Concepts
+.TP
+.B Course and variant
+A course has a slug such as
+.BR intro\-to\-go .
+Each course has one variant per language. A variant is addressed as
+.IR course / language ,
+for example
+.BR intro\-to\-go/go .
+Supported languages are
+.BR go ,
+.BR python ,
+and
+.BR c .
+.TP
+.B Challenge
+A single graded exercise within a course, addressed by its slug (e.g.
+.BR hello\-world ).
+.TP
+.B Token
+Your API credential.
+.B duck login
+mints and saves one; commands that write to the server
+.RB ( submit ", all of " educator )
+require it.
+.TP
+.B Local\-first grading
+.B duck submit
+runs the tests on your machine and records the verdict immediately. The server
+re\-grades in the background as an audit you do not wait on.
+.SH COMMANDS
+.TP
+.BI "duck pull " "course/language"
+Scaffold a course variant into
+.IR ./course\-language/ ,
+one subdirectory per challenge holding the starter code and its test file
+(plus a
+.I go.mod
+for Go). A
+.I .duck\-course.json
+is written at the root so
+.B duck test
+and
+.B duck submit
+work from anywhere in the tree. Challenges that already exist locally are
+skipped, so pulling again never clobbers work in progress.
+.TP
+.BI "duck test " [ challenge\-slug ]
+Run a challenge's tests locally with the native toolchain \(en no Docker, no
+network. Run from inside a pulled course tree. With no slug it runs every
+challenge; with a slug it runs just that one. Each run is bounded by a 30\ s
+timeout and reports
+.BR PASS ,
+.BR FAIL ,
+or
+.BR TIMEOUT .
+.TP
+.BI "duck submit " challenge\-slug
+Grade a solution and record the score. Runs the tests locally, submits the
+code together with the claimed verdict, and prints the result immediately; the
+server audits in the background. Requires a token. If the language's toolchain
+is not installed, submit falls back to synchronous server grading.
+.TP
+.B "duck login"
+Prompt for credentials, mint an API token, and save it to
+.I ~/.config/duck/token
+(mode 0600). Used by
+.B submit
+and the
+.B educator
+commands. Alternatively set
+.BR DUCK_TOKEN .
+.TP
+.B "duck version"
+Print the CLI version.
+.TP
+.BI "duck help " [ command ]
+With no argument, list every command. With a command name, print its detailed
+help \(en the same as
+.BR "duck " command " \-\-help" .
+Supports subcommands, e.g.
+.BR "duck help educator pull" .
+.SS Educator subcommands
+.B duck educator
+(alias
+.BR "duck ed" )
+round\-trips a course variant's markdown with the server. All three
+subcommands require a token.
+.TP
+.BI "duck educator pull " "course/language"
+Fetch the variant's markdown to
+.I ./course\-language.md
+and write a
+.I <file>.meta.json
+sidecar recording the server URL, course, language, and version. To protect
+unpushed work, pull refuses to overwrite a local file whose contents differ
+from the server's unless
+.B \-\-force
+is given.
+.TP
+.BI "duck educator lint " [ file ]
+Validate a course markdown file locally, running the same checks the server
+would with no network round trip, and print any problems with line numbers.
+With no file argument it acts on the single sidecar\-tracked file in the
+current directory.
+.TP
+.BI "duck educator push " [ file ]
+Lint, then upload the file back using the sidecar's recorded version for
+optimistic concurrency. If someone changed the variant since you pulled, the
+push is rejected and duck explains how to reconcile. On success the sidecar's
+version is bumped. With no file argument it acts on the single sidecar\-tracked
+file in the current directory.
+.SH OPTIONS
+.TP
+.BI \-\-base " URL"
+Server base URL. Defaults to
+.BR $DUCK_BASE_URL ,
+else
+.BR https://duckgc.com .
+Accepted by
+.BR pull ,
+.BR login ,
+and
+.BR "educator pull" .
+.TP
+.B \-\-remote
+.RB ( submit )
+Skip the local test run; grade on the server and wait for the result.
+.TP
+.B \-\-force
+.RB ( "educator pull" )
+Overwrite a local file that differs from the server's copy.
+.TP
+.BR \-h ", " \-\-help
+Print help for the command and exit.
+.SH EXAMPLES
+.SS Learner workflow: pull, edit, test, submit
+Pull a course variant into a local directory:
+.PP
+.RS 4
+.nf
+$ duck pull intro-to-go/go
+pulled intro-to-go-go/hello-world (10 pts)
+pulled intro-to-go-go/fizzbuzz (20 pts)
+.fi
+.RE
+.PP
+Edit
+.I solution.go
+in a challenge directory, then run its tests with your own toolchain:
+.PP
+.RS 4
+.nf
+$ cd intro-to-go-go
+$ duck test hello-world
+=== hello-world: PASS ===
+.fi
+.RE
+.PP
+Omit the slug to run every challenge. When the tests pass, submit for a score:
+.PP
+.RS 4
+.nf
+$ duck submit hello-world
+submission: https://duckgc.com/submissions/1234
+passed \(en +10 pts (server audit runs in the background)
+.fi
+.RE
+.PP
+Force the authoritative server verdict instead of grading locally:
+.PP
+.RS 4
+.nf
+$ duck submit hello-world --remote
+.fi
+.RE
+.SS Educator workflow: pull, edit, lint, push
+Fetch a variant's markdown plus its version sidecar:
+.PP
+.RS 4
+.nf
+$ duck educator pull intro-to-go/go
+pulled intro-to-go-go.md (version 7)
+.fi
+.RE
+.PP
+Edit the markdown, validate it offline, then push it back:
+.PP
+.RS 4
+.nf
+$ duck ed lint
+intro-to-go-go.md: no problems found
+$ duck ed push
+pushed intro-to-go-go.md \(en version 8 (3 lessons, 5 challenges, 60 pts)
+.fi
+.RE
+.PP
+If the variant changed on the server since you pulled, save your edits, then:
+.PP
+.RS 4
+.nf
+$ duck educator pull intro-to-go/go --force
+.fi
+.RE
+.SH ENVIRONMENT
+.TP
+.B DUCK_BASE_URL
+Default server base URL for
+.B pull
+and
+.B educator
+commands. A
+.B \-\-base
+flag overrides it.
+.TP
+.B DUCK_TOKEN
+API token; takes precedence over
+.IR ~/.config/duck/token .
+Ideal for CI.
+.SH FILES
+.TP
+.I ~/.config/duck/token
+Saved API token (mode 0600), written by
+.BR "duck login" .
+.TP
+.I <course>-<language>/.duck-course.json
+Written by
+.BR "duck pull" ;
+lets
+.B test
+and
+.B submit
+find the server, course, and language.
+.TP
+.I <course>-<language>.md
+The course source, written by
+.BR "duck educator pull" .
+.TP
+.I <file>.md.meta.json
+Sidecar recording server URL, course, language, and version for
+.BR "duck educator push" .
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A command failed (network error, failing tests, server rejection).
+.TP
+.B 2
+Usage error: an unknown command, or a required argument was missing. The
+relevant help is printed.
+.SH SEE ALSO
+Project documentation and course sources live in the Rubber Duck repository.
+The web application is at
+.BR https://duckgc.com .
+.SH AUTHORS
+The Rubber Duck project.

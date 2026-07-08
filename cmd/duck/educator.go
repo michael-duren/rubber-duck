@@ -24,8 +24,17 @@ import (
 // bearer-token auth as `duck submit` (loadToken), no separate "author"
 // credential.
 func educatorCmd(args []string) error {
+	// Bare `duck educator` needs a subcommand: show the educator help.
 	if len(args) == 0 {
-		return errEducatorUsage
+		return usageHelp("educator")
+	}
+	// `duck educator help [sub]`, `duck educator --help`, `duck educator -h`.
+	if isHelpArg(args[0]) {
+		return helpCmd(append([]string{"educator"}, args[1:]...))
+	}
+	// `duck educator <sub> --help` → that subcommand's detailed help.
+	if hasHelpFlag(args[1:]) {
+		return helpCmd([]string{"educator", args[0]})
 	}
 	switch args[0] {
 	case "pull":
@@ -35,11 +44,10 @@ func educatorCmd(args []string) error {
 	case "lint":
 		return educatorLintCmd(args[1:])
 	default:
-		return errEducatorUsage
+		fmt.Fprintf(os.Stderr, "duck: unknown educator subcommand %q\n\n", args[0])
+		return usageHelp("educator")
 	}
 }
-
-var errEducatorUsage = errors.New("usage: duck educator <pull|push|lint> [args]")
 
 // educatorMetaSuffix names the sidecar `duck educator pull` writes next to
 // the fetched markdown file, e.g. "intro-to-go-go.md" gets a sidecar named
@@ -177,11 +185,11 @@ func educatorPullCmd(args []string) error {
 		return err
 	}
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: duck educator pull <course>/<language> [--base URL] [--force]")
+		return usageHelp("educator", "pull")
 	}
 	course, language, ok := strings.Cut(rest[0], "/")
 	if !ok || course == "" || language == "" {
-		return fmt.Errorf("usage: duck educator pull <course>/<language>")
+		return usageHelp("educator", "pull")
 	}
 
 	token, err := loadToken()
