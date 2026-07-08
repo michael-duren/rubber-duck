@@ -39,7 +39,7 @@ dev: db generate css
 	    i=$$((i+1)); test $$i -lt 120 || exit 0; sleep 0.5; done; \
 	  n="$$(docker compose exec -T postgres psql -U getcracked -d getcracked -tAc 'select count(*) from courses' 2>/dev/null)"; \
 	  if [ "$$n" = "0" ]; then echo "dev: empty database, seeding quickstart courses"; $(MAKE) seed; fi ) &
-	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/getcracked serve"
+	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/duckserver serve"
 
 runner-images:
 	docker build -t gc-runner-go internal/grader/runners/go
