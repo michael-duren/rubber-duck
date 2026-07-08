@@ -60,9 +60,9 @@ func TestSubmissionRateLimited(t *testing.T) {
 		t.Fatalf("fresh user: limited = %v, %v; want false", limited, err)
 	}
 
-	// Daily quota: 5 submissions to the SAME challenge, each graded
-	// immediately so they don't also trip the in-flight cap, exhausts the
-	// quota...
+	// Daily quota: maxDailySubmissionsPerChallenge submissions to the SAME
+	// challenge, each graded immediately so they don't also trip the
+	// in-flight cap, exhausts the quota...
 	var firstSubs []int64
 	for i := range maxDailySubmissionsPerChallenge {
 		id, err := s.CreateSubmission(ctx, u.ID, first, "package x")
