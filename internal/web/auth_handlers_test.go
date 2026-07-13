@@ -169,7 +169,8 @@ func (f *fakeStore) DeleteOtherSessions(_ context.Context, userID int64, keepTok
 }
 
 // CourseReader stubs: auth tests don't exercise course pages beyond the
-// (empty) catalog rendered at "/"; catalog tests seed f.courses.
+// home page rendered at "/" (empty featured strip); catalog and home tests
+// seed f.courses.
 func (f *fakeStore) ListCourses(context.Context) ([]domain.CourseSummary, error) {
 	return f.courses, nil
 }

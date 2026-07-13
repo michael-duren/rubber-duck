@@ -19,7 +19,7 @@ func newVariantLink(course domain.Course) string {
 templ Course(user *domain.User, course domain.Course, variants []domain.VariantSummary, scores map[string]domain.CourseScore) {
 	@Layout(course.Title, user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
-			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / { course.Slug }
+			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / { course.Slug }
 		</nav>
 		<div class="mt-4 grid gap-8 lg:grid-cols-[1fr_20rem]">
 			<div>

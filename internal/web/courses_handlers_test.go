@@ -37,19 +37,19 @@ func TestCatalogFiltering(t *testing.T) {
 		want    []string // page must contain all of these
 		exclude []string // and none of these
 	}{
-		{"no filter", "/", []string{"Intro to Go", "Build a Terminal", "// 2 courses"}, nil},
+		{"no filter", "/courses", []string{"Intro to Go", "Build a Terminal", "// 2 courses"}, nil},
 		// templ HTML-escapes the quoted query, hence &#34;.
-		{"search by title", "/?q=terminal", []string{"Build a Terminal", "// 1 course matching &#34;terminal&#34;"}, []string{"Intro to Go"}},
-		{"search is case-insensitive and hits languages", "/?q=GO", []string{"Intro to Go"}, []string{"Build a Terminal"}},
-		{"search hits tags", "/?q=systems", []string{"Build a Terminal"}, []string{"Intro to Go"}},
+		{"search by title", "/courses?q=terminal", []string{"Build a Terminal", "// 1 course matching &#34;terminal&#34;"}, []string{"Intro to Go"}},
+		{"search is case-insensitive and hits languages", "/courses?q=GO", []string{"Intro to Go"}, []string{"Build a Terminal"}},
+		{"search hits tags", "/courses?q=systems", []string{"Build a Terminal"}, []string{"Intro to Go"}},
 		// "build-a-term" only matches the slug, not the spaced title.
-		{"search hits slugs", "/?q=build-a-term", []string{"Build a Terminal"}, []string{"Intro to Go"}},
-		{"tag filter", "/?tag=systems", []string{"Build a Terminal", "// 1 course --tag=systems"}, []string{"Intro to Go"}},
+		{"search hits slugs", "/courses?q=build-a-term", []string{"Build a Terminal"}, []string{"Intro to Go"}},
+		{"tag filter", "/courses?tag=systems", []string{"Build a Terminal", "// 1 course --tag=systems"}, []string{"Intro to Go"}},
 		// Multiple tag params narrow: a course must carry every selected tag.
-		{"multi-tag keeps courses with all tags", "/?tag=systems&tag=cli", []string{"Build a Terminal", "// 1 course --tag=systems,cli"}, []string{"Intro to Go"}},
-		{"multi-tag excludes partial matches", "/?tag=systems&tag=backend", []string{"no matches"}, []string{"Intro to Go", "Build a Terminal"}},
-		{"lang filter", "/?lang=go", []string{"Intro to Go"}, []string{"Build a Terminal"}},
-		{"combined filters exclude everything", "/?tag=systems&q=intro", []string{"no matches", "// 0 courses"}, []string{"Intro to Go", "Build a Terminal"}},
+		{"multi-tag keeps courses with all tags", "/courses?tag=systems&tag=cli", []string{"Build a Terminal", "// 1 course --tag=systems,cli"}, []string{"Intro to Go"}},
+		{"multi-tag excludes partial matches", "/courses?tag=systems&tag=backend", []string{"no matches"}, []string{"Intro to Go", "Build a Terminal"}},
+		{"lang filter", "/courses?lang=go", []string{"Intro to Go"}, []string{"Build a Terminal"}},
+		{"combined filters exclude everything", "/courses?tag=systems&q=intro", []string{"no matches", "// 0 courses"}, []string{"Intro to Go", "Build a Terminal"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestCatalogHTMXFragment(t *testing.T) {
 	mux, fs := testMux(t)
 	catalogFixture(fs)
 
-	rec := getPage(mux, "/?q=go", http.Header{"HX-Request": {"true"}})
+	rec := getPage(mux, "/courses?q=go", http.Header{"HX-Request": {"true"}})
 	body := rec.Body.String()
 	if strings.Contains(body, "<html") {
 		t.Error("HX-Request response should be a fragment, got a full page")
@@ -93,8 +93,50 @@ func TestCatalogHTMXFragment(t *testing.T) {
 		t.Error("fragment missing filtered course")
 	}
 
-	rec = getPage(mux, "/?q=go", http.Header{"HX-Request": {"true"}, "HX-History-Restore-Request": {"true"}})
+	rec = getPage(mux, "/courses?q=go", http.Header{"HX-Request": {"true"}, "HX-History-Restore-Request": {"true"}})
 	if !strings.Contains(rec.Body.String(), "<html") {
 		t.Error("history restore should get the full page, got a fragment")
 	}
+}
+
+// TestHomePage covers the landing page at "/": headline, signup CTA, and the
+// featured-courses strip (capped at three, absent on an empty catalog).
+func TestHomePage(t *testing.T) {
+	t.Run("with courses", func(t *testing.T) {
+		mux, fs := testMux(t)
+		catalogFixture(fs)
+		rec := getPage(mux, "/", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET / = %d, want 200", rec.Code)
+		}
+		body := rec.Body.String()
+		for _, want := range []string{"Build it and see", `href="/signup"`, `href="/courses"`, "Intro to Go", "Build a Terminal"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("GET /: body missing %q", want)
+			}
+		}
+	})
+
+	t.Run("empty catalog skips the featured strip", func(t *testing.T) {
+		mux, _ := testMux(t)
+		rec := getPage(mux, "/", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET / = %d, want 200", rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), "fresh from the catalog") {
+			t.Error("GET /: featured strip rendered with no courses")
+		}
+	})
+
+	t.Run("featured strip caps at three", func(t *testing.T) {
+		mux, fs := testMux(t)
+		fs.courses = []domain.CourseSummary{
+			{Slug: "a", Title: "Course A"}, {Slug: "b", Title: "Course B"},
+			{Slug: "c", Title: "Course C"}, {Slug: "d", Title: "Course D"},
+		}
+		body := getPage(mux, "/", nil).Body.String()
+		if !strings.Contains(body, "Course C") || strings.Contains(body, "Course D") {
+			t.Error("GET /: featured strip should show the first three courses only")
+		}
+	})
 }

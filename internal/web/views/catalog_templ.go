@@ -59,7 +59,7 @@ func Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLang
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div>     <form method=\"get\" action=\"/\" hx-get=\"/\" hx-trigger=\"submit, input changed delay:300ms from:find input[name='q']\" hx-target=\"#catalog-results\" hx-swap=\"outerHTML\" hx-push-url=\"true\" x-data=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div>     <form method=\"get\" action=\"/courses\" hx-get=\"/courses\" hx-trigger=\"submit, input changed delay:300ms from:find input[name='q']\" hx-target=\"#catalog-results\" hx-swap=\"outerHTML\" hx-push-url=\"true\" x-data=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

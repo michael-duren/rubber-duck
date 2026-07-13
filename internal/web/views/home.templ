@@ -1,0 +1,219 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// Home is the landing page at "/": one long scroll that walks a visitor from
+// "what is this" to "create an account". It's structured as a replayed shell
+// session — each section opens with a prompt-line eyebrow and its content is
+// the output — and each section owns one color of the site's ANSI palette
+// (amber = points, violet = depth, cyan = languages, emerald = the prompt).
+// featured is a small slice of real catalog courses for the teaser strip;
+// empty is fine (the strip is skipped).
+templ Home(user *domain.User, featured []domain.CourseSummary) {
+	@Layout("Learn how software really works", user) {
+		// Reveal styles only hide content when JS is present to reveal it
+		// again (see .js .reveal in assets/input.css). This runs before the
+		// sections below parse, so nothing flashes.
+		<script>document.documentElement.classList.add("js")</script>
+		<section class="py-14 text-center sm:py-20">
+			<p class="reveal font-mono text-sm text-emerald-600 dark:text-emerald-400">$ man duck <span class="tui-cursor" aria-hidden="true">▊</span></p>
+			<h1 class="reveal mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-6xl" style="--reveal-delay:.08s">
+				Software isn't magic.
+				<br/>
+				<span class="text-emerald-600 dark:text-emerald-400">Build it and see.</span>
+			</h1>
+			<p class="reveal mx-auto mt-6 max-w-2xl text-lg text-slate-600 dark:text-slate-400" style="--reveal-delay:.16s">
+				Rubber Duck courses make you build the things you use every day —
+				hash maps, databases, terminals, whole operating systems — in real
+				code, graded by real test suites.
+			</p>
+			<div class="reveal mt-8 flex flex-wrap items-center justify-center gap-3" style="--reveal-delay:.24s">
+				if user == nil {
+					<a href="/signup" class="bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500">Create free account</a>
+				} else {
+					<a href="/courses" class="bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500">Pick your next course</a>
+				}
+				<a href="/courses" class="border border-slate-300 px-5 py-3 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">$ browse courses</a>
+			</div>
+			<p class="reveal mt-4 font-mono text-xs text-slate-500 dark:text-slate-500" style="--reveal-delay:.3s">{ "// free · no email required · browser or terminal" }</p>
+			<div class="reveal tui-frame mt-12 border border-slate-300 dark:border-slate-800" style="--reveal-delay:.38s">
+				<img src="/static/img/home/hero.svg" alt="A terminal session: duck pull scaffolds a course, duck submit runs its tests and awards points, and an ASCII rubber duck asks you to explain it" width="960" height="320" class="w-full"/>
+			</div>
+		</section>
+		@homeFeature(
+			"$ duck how", "text-amber-600 dark:text-amber-400",
+			"Real code. Real tests. Real points.",
+			"/static/img/home/graded.svg",
+			"Your solution flows into a sandbox with no network access, comes out as a per-test pass/fail log, and earns points",
+			false,
+		) {
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Every lesson ends in a challenge: a prompt, starter code, and a test
+				suite with teeth. Your code compiles and runs in an isolated
+				sandbox — no multiple choice, no fill-in-the-blank.
+			</p>
+			<ul class="mt-5 space-y-2 font-mono text-sm text-slate-700 dark:text-slate-300">
+				<li><span class="text-amber-600 dark:text-amber-400">[1]</span> pick a course, read the lesson</li>
+				<li><span class="text-amber-600 dark:text-amber-400">[2]</span> make the tests pass</li>
+				<li><span class="text-amber-600 dark:text-amber-400">[3]</span> collect the points — best submission counts</li>
+			</ul>
+		}
+		@homeFeature(
+			"$ duck ls --sort=depth", "text-violet-600 dark:text-violet-400",
+			"Start at hello. End at ring 0.",
+			"/static/img/home/ladder.svg",
+			"The catalog sorted by depth: from a CLI chatbot down to an operating system that boots in QEMU",
+			true,
+		) {
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				The catalog is a ladder. Near the top: your first CLI, a chatbot, a
+				hash map. Near the bottom: a database with its own B-tree, Raft
+				consensus, an operating system that boots from power-on to a shell
+				prompt you wrote.
+			</p>
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Climb at your own pace — every level down, there's less magic left
+				between you and the machine.
+			</p>
+		}
+		@homeFeature(
+			"$ duck pull --lang=?", "text-cyan-600 dark:text-cyan-400",
+			"Mainstream to metal.",
+			"/static/img/home/languages.svg",
+			"The same hash-map insert written in Python, Go, and C — each variant closer to the hardware",
+			false,
+		) {
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Many courses ship in several language variants. Learn the idea in
+				Python or Go, then take the same course again in C and meet the
+				pointers the runtime was hiding from you.
+			</p>
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Same concepts, same challenges — a different altitude each time.
+			</p>
+		}
+		@homeFeature(
+			"$ duck submit", "text-emerald-600 dark:text-emerald-400",
+			"Your terminal. Your editor. Zero waiting.",
+			"/static/img/home/cli.svg",
+			"duck submit runs the tests locally in under a second, claims the points instantly, and the server verifies in the background",
+			true,
+		) {
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				The <span class="font-mono">duck</span> CLI pulls a course's
+				challenges to your machine and runs the real test suite with your
+				own toolchain. Submit, and your points land instantly — the server
+				re-runs your code in the background and stamps it verified.
+			</p>
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Prefer the browser? Edit and submit right on the lesson page.
+				Nothing to install.
+			</p>
+		}
+		@homeFeature(
+			"$ cat courses/*.md", "text-fuchsia-600 dark:text-fuchsia-400",
+			"Courses maintained like code.",
+			"/static/img/home/agents.svg",
+			"A course is one markdown document, published through an API and parsed into live lessons and graded challenges",
+			false,
+		) {
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				Every course is a plain markdown document, authored and revised by
+				AI agents, reviewed in pull requests, and published through an API.
+				Find a mistake in a lesson? It gets fixed the way a bug gets fixed.
+			</p>
+			<p class="mt-4 text-slate-600 dark:text-slate-400">
+				That's also why the catalog keeps growing — publishing a great
+				course costs a document, not a video studio.
+			</p>
+		}
+		if len(featured) > 0 {
+			<section class="border-t border-slate-200 py-16 dark:border-slate-800">
+				<p class="reveal font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ "// fresh from the catalog" }</p>
+				<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					for i, c := range featured {
+						<a
+							href={ templ.SafeURL("/courses/" + c.Slug) }
+							class="reveal tui-frame group flex flex-col border border-slate-300 bg-white transition hover:border-emerald-500 dark:border-slate-800 dark:bg-[#0e1410] dark:hover:border-emerald-500"
+							style={ fmt.Sprintf("--reveal-delay:%.2fs", 0.08*float64(i)) }
+						>
+							<img src={ "/courses/" + c.Slug + "/card.svg" } alt="" width="640" height="256" loading="lazy" class="block w-full border-b border-slate-300 dark:border-slate-800"/>
+							<div class="flex flex-1 flex-col p-5">
+								<h3 class="text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400">{ c.Title }</h3>
+								<div class="mt-auto flex items-center justify-between pt-4">
+									<span class="flex gap-1.5">
+										for _, l := range c.Languages {
+											@langChip(l)
+										}
+									</span>
+									if c.DurationHours > 0 {
+										<span class="font-mono text-xs text-slate-500 dark:text-slate-400">~{ fmt.Sprintf("%g", c.DurationHours) }h</span>
+									}
+								</div>
+							</div>
+						</a>
+					}
+				</div>
+				<p class="reveal mt-6 text-center">
+					<a href="/courses" class="font-mono text-sm text-emerald-600 hover:underline dark:text-emerald-400">$ duck ls --all →</a>
+				</p>
+			</section>
+		}
+		<section class="border-t border-slate-200 py-20 dark:border-slate-800">
+			<div class="reveal tui-frame mx-auto max-w-3xl border border-slate-300 bg-white p-8 text-center sm:p-12 dark:border-slate-800 dark:bg-[#0e1410]">
+				<p class="font-mono text-sm text-emerald-600 dark:text-emerald-400">$ duck signup</p>
+				<h2 class="mt-4 text-3xl font-bold tracking-tight">Username. Password. That's&nbsp;it.</h2>
+				<p class="mx-auto mt-4 max-w-md text-slate-600 dark:text-slate-400">
+					No email, no card, no trial clock. Your first passing test suite
+					is about ten minutes away.
+				</p>
+				if user == nil {
+					<a href="/signup" class="mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500">Create free account</a>
+				} else {
+					<a href="/courses" class="mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500">Browse the catalog</a>
+				}
+			</div>
+		</section>
+		// Reveal-on-scroll: adds .reveal-in the first time an element enters
+		// the viewport. Reduced-motion users get everything visible up front
+		// (the CSS side also disables the transition for them).
+		<script>
+			(() => {
+				const els = document.querySelectorAll(".reveal");
+				if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+					els.forEach((el) => el.classList.add("reveal-in"));
+					return;
+				}
+				const io = new IntersectionObserver((entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) {
+							entry.target.classList.add("reveal-in");
+							io.unobserve(entry.target);
+						}
+					}
+				}, { threshold: 0.15, rootMargin: "0px 0px -8% 0px" });
+				els.forEach((el) => io.observe(el));
+			})();
+		</script>
+	}
+}
+
+// homeFeature is one prompt-line section of the scroll: eyebrow command in
+// the section's ANSI color, a heading, body copy (children), and the art
+// pane. flip puts the art on the left on desktop, alternating the rhythm.
+templ homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) {
+	<section class="grid items-center gap-8 border-t border-slate-200 py-16 sm:py-20 md:grid-cols-2 md:gap-14 dark:border-slate-800">
+		<div class={ "reveal", templ.KV("md:order-2", flip) }>
+			<p class={ "font-mono text-sm", eyebrowColor }>{ eyebrow }</p>
+			<h2 class="mt-3 text-3xl font-bold tracking-tight">{ heading }</h2>
+			{ children... }
+		</div>
+		<div class={ "reveal tui-frame border border-slate-300 dark:border-slate-800", templ.KV("md:order-1", flip) } style="--reveal-delay:.12s">
+			<img src={ art } alt={ artAlt } width="640" height="256" loading="lazy" class="w-full"/>
+		</div>
+	</section>
+}

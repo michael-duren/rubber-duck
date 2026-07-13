@@ -26,8 +26,8 @@ templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLan
 		// the dropdowns need Alpine; noscript inputs keep URL filters sticky).
 		<form
 			method="get"
-			action="/"
-			hx-get="/"
+			action="/courses"
+			hx-get="/courses"
 			hx-trigger="submit, input changed delay:300ms from:find input[name='q']"
 			hx-target="#catalog-results"
 			hx-swap="outerHTML"

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> duck ls</tspan><tspan fill="#64748b"> --sort=depth</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- one row per rung: name, depth meter, landmark -->
+  <g font-size="13" fill="#cbd5e1">
+    <text xml:space="preserve" x="40" y="88">cli-chatbot</text>
+    <text xml:space="preserve" x="40" y="112">build-a-hashmap</text>
+    <text xml:space="preserve" x="40" y="136">build-a-terminal</text>
+    <text xml:space="preserve" x="40" y="160">build-a-database</text>
+    <text xml:space="preserve" x="40" y="184">raft-in-go</text>
+    <text xml:space="preserve" x="40" y="208">educational-os</text>
+  </g>
+
+  <!-- depth meters: filled segments are violet, the rest outlines -->
+  <g>
+    <rect x="260" y="79" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="79" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="312" y="79" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="338" y="79" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="364" y="79" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="390" y="79" width="22" height="10" fill="none" stroke="#27352d"/>
+
+    <rect x="260" y="103" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="103" width="22" height="10" fill="#a78bfa"/>
+    <rect x="312" y="103" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="338" y="103" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="364" y="103" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="390" y="103" width="22" height="10" fill="none" stroke="#27352d"/>
+
+    <rect x="260" y="127" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="127" width="22" height="10" fill="#a78bfa"/>
+    <rect x="312" y="127" width="22" height="10" fill="#a78bfa"/>
+    <rect x="338" y="127" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="364" y="127" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="390" y="127" width="22" height="10" fill="none" stroke="#27352d"/>
+
+    <rect x="260" y="151" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="151" width="22" height="10" fill="#a78bfa"/>
+    <rect x="312" y="151" width="22" height="10" fill="#a78bfa"/>
+    <rect x="338" y="151" width="22" height="10" fill="#a78bfa"/>
+    <rect x="364" y="151" width="22" height="10" fill="none" stroke="#27352d"/>
+    <rect x="390" y="151" width="22" height="10" fill="none" stroke="#27352d"/>
+
+    <rect x="260" y="175" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="175" width="22" height="10" fill="#a78bfa"/>
+    <rect x="312" y="175" width="22" height="10" fill="#a78bfa"/>
+    <rect x="338" y="175" width="22" height="10" fill="#a78bfa"/>
+    <rect x="364" y="175" width="22" height="10" fill="#a78bfa"/>
+    <rect x="390" y="175" width="22" height="10" fill="none" stroke="#27352d"/>
+
+    <rect x="260" y="199" width="22" height="10" fill="#a78bfa"/>
+    <rect x="286" y="199" width="22" height="10" fill="#a78bfa"/>
+    <rect x="312" y="199" width="22" height="10" fill="#a78bfa"/>
+    <rect x="338" y="199" width="22" height="10" fill="#a78bfa"/>
+    <rect x="364" y="199" width="22" height="10" fill="#a78bfa"/>
+    <rect x="390" y="199" width="22" height="10" fill="#a78bfa"/>
+  </g>
+
+  <text xml:space="preserve" x="440" y="88" font-size="12" fill="#34d399">← start here</text>
+  <text xml:space="preserve" x="440" y="208" font-size="12" fill="#a78bfa">← boots in QEMU</text>
+
+  <text xml:space="preserve" x="24" y="240" font-size="12" fill="#64748b">every level down, less magic left</text>
+</svg>
