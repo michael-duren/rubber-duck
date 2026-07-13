@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
+.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -26,6 +26,25 @@ css: $(TAILWIND)
 
 build: generate css
 	go build -o duckserver ./cmd/duckserver
+
+# --- duck CLI (the local learner/author companion) ---
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+MANDIR ?= $(PREFIX)/share/man
+
+duck:
+	go build -o duck ./cmd/duck
+
+# install builds the duck CLI and installs it alongside its man page, so
+# `man duck` works after a `make install`. Override the location with
+# PREFIX=... (default /usr/local) or DESTDIR=... when packaging.
+install: duck
+	install -Dm755 duck $(DESTDIR)$(BINDIR)/duck
+	install -Dm644 manpages/duck.1 $(DESTDIR)$(MANDIR)/man1/duck.1
+	@echo "installed duck to $(DESTDIR)$(BINDIR) and its man page to $(DESTDIR)$(MANDIR)/man1"
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/duck $(DESTDIR)$(MANDIR)/man1/duck.1
 
 db:
 	docker compose up -d --wait postgres
@@ -144,7 +163,7 @@ infra-validate:
 	cd infra && tofu fmt -check && tofu validate
 
 clean:
-	rm -f duckserver internal/web/static/app.css
+	rm -f duckserver duck internal/web/static/app.css
 
 lint: ## run golangci-lint (same version config as CI)
 	golangci-lint run ./...

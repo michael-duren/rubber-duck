@@ -29,7 +29,7 @@ func submitCmd(args []string) error {
 		return err
 	}
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: duck submit <challenge-slug> [--remote]")
+		return usageHelp("submit")
 	}
 	slug := rest[0]
 

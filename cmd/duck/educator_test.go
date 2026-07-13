@@ -534,14 +534,15 @@ func TestEducatorCmdDispatch(t *testing.T) {
 
 // TestEducatorAliasRouting checks main's run() dispatch wires both
 // "educator" and "ed" to the same subcommand handling (issue #43/#44/#45's
-// alias requirement), using the "no subcommand" error as the observable
-// signal that dispatch reached educatorCmd rather than falling through to
-// errUsageError.
+// alias requirement), using the "no subcommand" signal (educatorCmd prints
+// the educator help and returns errHelpShown) as the observable evidence
+// that dispatch reached educatorCmd rather than falling through to an
+// unknown-command error.
 func TestEducatorAliasRouting(t *testing.T) {
 	for _, alias := range []string{"educator", "ed"} {
 		err := run([]string{alias})
-		if !errors.Is(err, errEducatorUsage) {
-			t.Errorf("run([%q]) = %v, want errEducatorUsage", alias, err)
+		if !errors.Is(err, errHelpShown) {
+			t.Errorf("run([%q]) = %v, want errHelpShown", alias, err)
 		}
 	}
 }
