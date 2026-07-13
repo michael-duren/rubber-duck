@@ -44,13 +44,15 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 
 	pages := http.NewServeMux()
-	pages.HandleFunc("GET /{$}", h.catalog)
+	pages.HandleFunc("GET /{$}", h.homePage)
+	pages.HandleFunc("GET /courses", h.catalog)
 	pages.HandleFunc("GET /about", h.aboutPage)
 	pages.HandleFunc("GET /cli", h.cliPage)
 	pages.HandleFunc("GET /tokens", h.tokensPage)
 	pages.HandleFunc("GET /courses/new", h.requireUser(h.newCoursePage))
 	pages.HandleFunc("POST /courses/new", h.requireUser(h.createCourse))
 	pages.HandleFunc("GET /courses/{slug}", h.coursePage)
+	pages.HandleFunc("GET /courses/{slug}/card.svg", h.courseArt)
 	pages.HandleFunc("GET /courses/{slug}/{lang}", h.variantPage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}/edit", h.requireUser(h.editVariantPage))
 	pages.HandleFunc("POST /courses/{slug}/{lang}/edit", h.requireUser(h.saveVariant))
@@ -73,6 +75,21 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("POST /login", h.login)
 	pages.HandleFunc("POST /logout", h.logout)
 	mux.Handle("/", h.withCSRF(h.withUser(pages)))
+}
+
+// homePage renders the landing page. It pulls the course list so the
+// "fresh from the catalog" strip shows real courses; the strip is capped at
+// three and skipped entirely on an empty deployment.
+func (h *handlers) homePage(w http.ResponseWriter, r *http.Request) {
+	courses, err := h.courses.ListCourses(r.Context())
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	if len(courses) > 3 {
+		courses = courses[:3]
+	}
+	h.render(w, r, views.Home(currentUser(r), courses))
 }
 
 func (h *handlers) aboutPage(w http.ResponseWriter, r *http.Request) {

@@ -82,7 +82,7 @@ templ Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.Us
 		if len(scores) == 0 {
 			<p class="mt-6 text-slate-500 dark:text-slate-400">
 				No challenges attempted yet.
-				<a href="/" class="text-emerald-600 hover:underline dark:text-emerald-400">Pick a course</a> and earn your first points.
+				<a href="/courses" class="text-emerald-600 hover:underline dark:text-emerald-400">Pick a course</a> and earn your first points.
 			</p>
 		} else {
 			<div class="mt-8 flex flex-col gap-3">

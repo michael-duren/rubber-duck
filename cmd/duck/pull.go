@@ -30,11 +30,11 @@ func pullCmd(args []string) error {
 		return err
 	}
 	if len(rest) != 1 {
-		return fmt.Errorf("usage: duck pull <course>/<language> [--base URL]")
+		return usageHelp("pull")
 	}
 	course, language, ok := strings.Cut(rest[0], "/")
 	if !ok || course == "" || language == "" {
-		return fmt.Errorf("usage: duck pull <course>/<language>")
+		return usageHelp("pull")
 	}
 	files, ok := grader.LanguageFiles[language]
 	if !ok {

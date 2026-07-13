@@ -79,7 +79,7 @@ func EditVariant(user *domain.User, slug, lang, markdown string, version int, er
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><a href=\"/\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><a href=\"/courses\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

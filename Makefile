@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
+.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -27,12 +27,31 @@ css: $(TAILWIND)
 build: generate css
 	go build -o duckserver ./cmd/duckserver
 
+# --- duck CLI (the local learner/author companion) ---
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+MANDIR ?= $(PREFIX)/share/man
+
+duck:
+	go build -o duck ./cmd/duck
+
+# install builds the duck CLI and installs it alongside its man page, so
+# `man duck` works after a `make install`. Override the location with
+# PREFIX=... (default /usr/local) or DESTDIR=... when packaging.
+install: duck
+	install -Dm755 duck $(DESTDIR)$(BINDIR)/duck
+	install -Dm644 manpages/duck.1 $(DESTDIR)$(MANDIR)/man1/duck.1
+	@echo "installed duck to $(DESTDIR)$(BINDIR) and its man page to $(DESTDIR)$(MANDIR)/man1"
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/duck $(DESTDIR)$(MANDIR)/man1/duck.1
+
 db:
 	docker compose up -d --wait postgres
 
-# WARN: USE WITH CAUTION
+# WARN: USE WITH CAUTION - wipes this project's containers and pgdata volume
 prune:
-	docker volume rm $(docker volume list --quiet | grep -i "_pgdata")
+	docker compose down -v
 
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
@@ -58,11 +77,13 @@ test-integration: db
 
 # GC_API_KEY/GC_URL are cleared so a key exported in the developer's shell
 # profile can't leak in: make seed always mints a throwaway local key and
-# targets localhost (real content goes through make publish).
+# targets localhost. Seeds the quickstart fixture plus every course in
+# courses/, so local dev has the same catalog as prod.
 seed:
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed seed/intro-to-go.md
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/embedded-pico-c.md
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/build-a-hashmap-c.md
+	@for f in seed/intro-to-go.md courses/*.md; do \
+		echo "seeding $$f"; \
+		GC_API_KEY= GC_URL= go run ./cmd/duckserver seed "$$f" || exit 1; \
+	done
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
 # publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
@@ -142,7 +163,7 @@ infra-validate:
 	cd infra && tofu fmt -check && tofu validate
 
 clean:
-	rm -f duckserver internal/web/static/app.css
+	rm -f duckserver duck internal/web/static/app.css
 
 lint: ## run golangci-lint (same version config as CI)
 	golangci-lint run ./...

@@ -10,7 +10,7 @@ import (
 templ Variant(user *domain.User, course domain.Course, v domain.Variant, completed map[int64]bool) {
 	@Layout(course.Title+" ("+v.Language+")", user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
-			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
+			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> / { v.Language }
 		</nav>
 		<div class="mt-4 flex flex-wrap items-center gap-3">

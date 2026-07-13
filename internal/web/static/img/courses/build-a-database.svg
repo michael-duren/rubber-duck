@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./db</tspan><tspan fill="#64748b"> &lt; query.sql</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- B+tree: root page, two internal pages, leaves with row stripes -->
+  <rect x="270" y="64" width="100" height="26" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+  <rect x="270" y="64" width="100" height="26" fill="none" stroke="#fbbf24" stroke-width="6" opacity="0.12"/>
+  <line x1="320" y1="64" x2="320" y2="90" stroke="#fbbf24" opacity="0.5"/>
+  <text xml:space="preserve" x="295" y="81" font-size="12" fill="#cbd5e1" text-anchor="middle">17</text>
+  <text xml:space="preserve" x="345" y="81" font-size="12" fill="#cbd5e1" text-anchor="middle">42</text>
+
+  <path d="M300 90 L180 116" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M320 90 L320 116" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M340 90 L460 116" stroke="#27352d" stroke-width="1.5"/>
+
+  <rect x="130" y="116" width="100" height="26" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="180" y="133" font-size="12" fill="#94a3b8" text-anchor="middle">5 · 11</text>
+  <rect x="270" y="116" width="100" height="26" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="320" y="133" font-size="12" fill="#94a3b8" text-anchor="middle">23 · 31</text>
+  <rect x="410" y="116" width="100" height="26" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="460" y="133" font-size="12" fill="#94a3b8" text-anchor="middle">57 · 80</text>
+
+  <path d="M180 142 L120 166" stroke="#27352d"/>
+  <path d="M200 142 L240 166" stroke="#27352d"/>
+  <path d="M320 142 L320 166" stroke="#27352d"/>
+  <path d="M460 142 L460 166" stroke="#27352d"/>
+
+  <g stroke="#27352d">
+    <rect x="76" y="166" width="88" height="44" fill="none" stroke="#fbbf24" opacity="0.85"/>
+    <line x1="84" y1="178" x2="156" y2="178" stroke="#fbbf24" stroke-opacity="0.6"/>
+    <line x1="84" y1="189" x2="146" y2="189" stroke="#fbbf24" stroke-opacity="0.4"/>
+    <line x1="84" y1="200" x2="152" y2="200" stroke="#fbbf24" stroke-opacity="0.25"/>
+    <rect x="196" y="166" width="88" height="44" fill="none"/>
+    <line x1="204" y1="178" x2="276" y2="178"/><line x1="204" y1="189" x2="266" y2="189"/><line x1="204" y1="200" x2="272" y2="200"/>
+    <rect x="316" y="166" width="88" height="44" fill="none"/>
+    <line x1="324" y1="178" x2="396" y2="178"/><line x1="324" y1="189" x2="386" y2="189"/><line x1="324" y1="200" x2="392" y2="200"/>
+    <rect x="436" y="166" width="88" height="44" fill="none"/>
+    <line x1="444" y1="178" x2="516" y2="178"/><line x1="444" y1="189" x2="506" y2="189"/><line x1="444" y1="200" x2="512" y2="200"/>
+  </g>
+  <text xml:space="preserve" x="120" y="226" font-size="11" fill="#fbbf24" text-anchor="middle" opacity="0.8">leaf · 4 KiB</text>
+
+  <text xml:space="preserve" x="40" y="246" font-size="12" fill="#64748b">pager · B+tree · WAL — a database from first principles</text>
+</svg>

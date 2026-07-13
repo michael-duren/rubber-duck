@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./crew</tspan><tspan fill="#64748b"> "draft the report"</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- router on top, the crew below, critic looping on the writer -->
+  <rect x="264" y="68" width="112" height="28" fill="none" stroke="#e879f9" stroke-width="1.5"/>
+  <rect x="264" y="68" width="112" height="28" fill="none" stroke="#e879f9" stroke-width="6" opacity="0.12"/>
+  <text xml:space="preserve" x="320" y="87" font-size="13" fill="#cbd5e1" text-anchor="middle">router</text>
+
+  <path d="M300 96 L140 144" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M140 144 l10 -4 -4 9 z" fill="#64748b"/>
+  <path d="M320 96 L320 144" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M320 144 l-5 -8 h10 z" fill="#64748b"/>
+  <path d="M340 96 L500 144" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M500 144 l-10 -4 4 9 z" fill="#64748b"/>
+
+  <rect x="64" y="146" width="140" height="30" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="134" y="166" font-size="13" fill="#94a3b8" text-anchor="middle">researcher</text>
+
+  <rect x="250" y="146" width="140" height="30" fill="none" stroke="#e879f9"/>
+  <text xml:space="preserve" x="320" y="166" font-size="13" fill="#e879f9" text-anchor="middle">critic</text>
+
+  <rect x="436" y="146" width="140" height="30" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="506" y="166" font-size="13" fill="#94a3b8" text-anchor="middle">writer</text>
+
+  <!-- researcher hands to writer; critic and writer loop -->
+  <path d="M204 190 C 280 216 420 216 436 186" stroke="#27352d" stroke-width="1.2" fill="none"/>
+  <path d="M436 186 l-9 5 8 5 z" fill="#64748b"/>
+  <path d="M436 156 L390 156" stroke="#e879f9" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <path d="M390 156 l8 -4 v8 z" fill="#e879f9"/>
+  <path d="M390 170 L436 170" stroke="#e879f9" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <path d="M436 170 l-8 -4 v8 z" fill="#e879f9"/>
+  <text xml:space="preserve" x="413" y="140" font-size="11" fill="#e879f9" text-anchor="middle">revise ×2</text>
+
+  <text xml:space="preserve" x="134" y="196" font-size="11" fill="#64748b" text-anchor="middle">sources[]</text>
+  <text xml:space="preserve" x="506" y="196" font-size="11" fill="#64748b" text-anchor="middle">draft v3</text>
+
+  <text xml:space="preserve" x="40" y="236" font-size="12" fill="#64748b">role prompts · pipelines · a bounded critic loop</text>
+</svg>
