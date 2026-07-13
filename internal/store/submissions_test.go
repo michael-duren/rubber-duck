@@ -96,20 +96,16 @@ func TestSubmissionRateLimited(t *testing.T) {
 		t.Errorf("after one submission ages out: limited = %v, %v; want false", limited, err)
 	}
 
-	// Max in-flight: fill the cap (3) using `second` and `third`, leaving
-	// `third`'s own count untouched so checking it isolates the in-flight
-	// cap from the per-challenge daily quota.
-	sub2, err := s.CreateSubmission(ctx, u.ID, second, "package x")
-	if err != nil {
-		t.Fatalf("create submission 2: %v", err)
-	}
-	sub3, err := s.CreateSubmission(ctx, u.ID, second, "package x")
-	if err != nil {
-		t.Fatalf("create submission 3: %v", err)
-	}
-	sub4, err := s.CreateSubmission(ctx, u.ID, second, "package x")
-	if err != nil {
-		t.Fatalf("create submission 4: %v", err)
+	// Max in-flight: fill the cap using `second`, leaving `third`'s own
+	// count untouched so checking it isolates the in-flight cap from the
+	// per-challenge daily quota.
+	var inFlightSubs []int64
+	for i := range maxInFlightSubmissions {
+		id, err := s.CreateSubmission(ctx, u.ID, second, "package x")
+		if err != nil {
+			t.Fatalf("create in-flight submission %d: %v", i, err)
+		}
+		inFlightSubs = append(inFlightSubs, id)
 	}
 	limited, err = s.SubmissionRateLimited(ctx, u.ID, third)
 	if err != nil || !limited {
@@ -118,7 +114,7 @@ func TestSubmissionRateLimited(t *testing.T) {
 
 	// Grading (no longer pending/running) frees up the in-flight slot;
 	// `third` was never submitted to, so no quota masks the effect.
-	for _, id := range []int64{sub2, sub3, sub4} {
+	for _, id := range inFlightSubs {
 		if err := s.CompleteSubmission(ctx, id, "passed", "ok", 10, nil, nil); err != nil {
 			t.Fatalf("complete %d: %v", id, err)
 		}
