@@ -41,7 +41,7 @@ type EditProblem struct {
 templ EditVariant(user *domain.User, slug, lang, markdown string, version int, errMsg string, problems []EditProblem, submissionCount int) {
 	@Layout("Edit "+slug+" ("+lang+")", user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
-			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
+			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
 			<a href={ templ.SafeURL("/courses/" + slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + slug + "/" + lang) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ lang }</a> / edit
 		</nav>

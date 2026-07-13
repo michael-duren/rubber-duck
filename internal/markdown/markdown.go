@@ -21,6 +21,7 @@ var md = goldmark.New(
 			highlighting.WithStyle("github-dark"),
 			highlighting.WithFormatOptions(chromahtml.TabWidth(4)),
 		),
+		d2Extension{}, // ```d2 fences → inline SVG diagrams (see d2.go)
 	),
 	goldmark.WithParserOptions(parser.WithHeadingAttribute()),
 )

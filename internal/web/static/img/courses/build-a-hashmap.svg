@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./map</tspan><tspan fill="#64748b"> --get duck</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- key → hash → bucket index → chain -->
+  <text xml:space="preserve" x="40" y="128" font-size="14" fill="#cbd5e1">"duck"</text>
+  <path d="M104 123 L140 123" stroke="#e879f9" stroke-width="1.5"/>
+  <path d="M140 123 l-8 -5 v10 z" fill="#e879f9"/>
+
+  <rect x="144" y="106" width="92" height="32" fill="none" stroke="#e879f9" stroke-width="1.5"/>
+  <rect x="144" y="106" width="92" height="32" fill="none" stroke="#e879f9" stroke-width="6" opacity="0.12"/>
+  <text xml:space="preserve" x="190" y="127" font-size="13" fill="#cbd5e1" text-anchor="middle">fnv1a(k)</text>
+
+  <path d="M236 123 L280 123" stroke="#e879f9" stroke-width="1.5"/>
+  <path d="M280 123 l-8 -5 v10 z" fill="#e879f9"/>
+  <text xml:space="preserve" x="258" y="112" font-size="12" fill="#64748b" text-anchor="middle">%8</text>
+
+  <!-- the bucket array -->
+  <g font-size="11" fill="#64748b">
+    <text xml:space="preserve" x="298" y="80" >[0]</text><rect x="322" y="68" width="26" height="17" fill="none" stroke="#27352d"/>
+    <text xml:space="preserve" x="298" y="101">[1]</text><rect x="322" y="89" width="26" height="17" fill="none" stroke="#27352d"/>
+    <rect x="330" y="93" width="10" height="9" fill="#e879f9" opacity="0.4"/>
+    <text xml:space="preserve" x="298" y="122">[2]</text><rect x="322" y="110" width="26" height="17" fill="none" stroke="#27352d"/>
+    <text xml:space="preserve" x="298" y="143" fill="#e879f9">[3]</text><rect x="322" y="131" width="26" height="17" fill="none" stroke="#e879f9" stroke-width="1.5"/>
+    <rect x="330" y="135" width="10" height="9" fill="#e879f9"/>
+    <text xml:space="preserve" x="298" y="164">[4]</text><rect x="322" y="152" width="26" height="17" fill="none" stroke="#27352d"/>
+    <text xml:space="preserve" x="298" y="185">[5]</text><rect x="322" y="173" width="26" height="17" fill="none" stroke="#27352d"/>
+    <rect x="330" y="177" width="10" height="9" fill="#e879f9" opacity="0.4"/>
+    <text xml:space="preserve" x="298" y="206">[6]</text><rect x="322" y="194" width="26" height="17" fill="none" stroke="#27352d"/>
+    <text xml:space="preserve" x="298" y="227">[7]</text><rect x="322" y="215" width="26" height="17" fill="none" stroke="#27352d"/>
+  </g>
+
+  <!-- collision chain off bucket 3 -->
+  <path d="M348 139 L392 139" stroke="#e879f9" stroke-width="1.5"/>
+  <path d="M392 139 l-8 -5 v10 z" fill="#e879f9"/>
+  <rect x="396" y="124" width="92" height="30" fill="none" stroke="#e879f9"/>
+  <text xml:space="preserve" x="442" y="143" font-size="12" fill="#cbd5e1" text-anchor="middle">duck: 42</text>
+  <path d="M488 139 L520 139" stroke="#94a3b8" stroke-width="1.2"/>
+  <path d="M520 139 l-8 -5 v10 z" fill="#94a3b8"/>
+  <rect x="524" y="124" width="76" height="30" fill="none" stroke="#94a3b8" opacity="0.8"/>
+  <text xml:space="preserve" x="562" y="143" font-size="12" fill="#94a3b8" text-anchor="middle">goose:7</text>
+  <text xml:space="preserve" x="562" y="172" font-size="12" fill="#64748b" text-anchor="middle">→ ∅</text>
+
+  <text xml:space="preserve" x="440" y="220" font-size="12" fill="#64748b">load 0.62 — resize at 0.75</text>
+</svg>

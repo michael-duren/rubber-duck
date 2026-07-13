@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> duck submit concurrent-sum</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- the foreground: instant -->
+  <g font-size="14">
+    <text xml:space="preserve" x="40" y="88" fill="#64748b">running tests with your own go toolchain…</text>
+    <text xml:space="preserve" x="40" y="118"><tspan fill="#cbd5e1">10/10 </tspan><tspan fill="#34d399">PASS</tspan><tspan fill="#64748b"> (0.9s)</tspan></text>
+    <text xml:space="preserve" x="40" y="148"><tspan fill="#fbbf24">+100 pts</tspan><tspan fill="#cbd5e1"> claimed </tspan><tspan fill="#34d399">✓</tspan></text>
+  </g>
+
+  <line x1="24" y1="172" x2="616" y2="172" stroke="#1e2b24"/>
+
+  <!-- the background: the server double-checks, you don't wait for it -->
+  <g font-size="13">
+    <text xml:space="preserve" x="40" y="198" fill="#64748b">meanwhile, in the background:</text>
+    <text xml:space="preserve" x="40" y="222"><tspan fill="#94a3b8">server re-ran your solution — </tspan><tspan fill="#34d399">verified ✓</tspan></text>
+  </g>
+
+  <text xml:space="preserve" x="600" y="244" font-size="12" fill="#64748b" text-anchor="end">no docker, no queue — points land in seconds</text>
+</svg>

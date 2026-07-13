@@ -50,7 +50,7 @@ func run(args []string) error {
 }
 
 func databaseURL() string {
-	return envOr("DATABASE_URL", "postgres://getcracked:getcracked@localhost:5432/getcracked?sslmode=disable")
+	return envOr("DATABASE_URL", "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable")
 }
 
 func serve(args []string) error {
