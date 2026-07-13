@@ -1,0 +1,158 @@
+{
+  "name": "rubber-duck",
+  "displayName": "Rubber Duck",
+  "description": "Browse Rubber Duck courses, pull challenges into your workspace, and run duck test / duck submit without leaving the editor.",
+  "version": "0.1.0",
+  "publisher": "rubber-duck",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michael-duren/rubber-duck"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Education",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/.duck-course.json"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Rubber Duck",
+      "properties": {
+        "duck.path": {
+          "type": "string",
+          "default": "duck",
+          "description": "Path to the duck CLI binary."
+        },
+        "duck.baseUrl": {
+          "type": "string",
+          "default": "https://duckgc.com",
+          "description": "Rubber Duck server base URL (also passed to duck pull/login as --base)."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "rubberDuck",
+          "title": "Rubber Duck",
+          "icon": "media/duck.svg"
+        }
+      ]
+    },
+    "views": {
+      "rubberDuck": [
+        {
+          "id": "duckCourses",
+          "name": "Courses",
+          "icon": "media/duck.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "duckCourses",
+        "contents": "Sign in to browse the course catalog.\n[Run duck login](command:duck.login)\nThe extension reads the same token the CLI uses ($DUCK_TOKEN or ~/.config/duck/token).\n[Refresh](command:duck.refreshCourses)",
+        "when": "!duck.signedIn"
+      }
+    ],
+    "commands": [
+      {
+        "command": "duck.refreshCourses",
+        "title": "Refresh Courses",
+        "category": "Duck",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "duck.login",
+        "title": "Login (duck login)",
+        "category": "Duck"
+      },
+      {
+        "command": "duck.pullCourse",
+        "title": "Pull Course",
+        "category": "Duck",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "duck.openCoursePage",
+        "title": "Open Course in Browser",
+        "category": "Duck",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "duck.test",
+        "title": "Test Challenge",
+        "category": "Duck",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "duck.testAll",
+        "title": "Test All Challenges",
+        "category": "Duck"
+      },
+      {
+        "command": "duck.submit",
+        "title": "Submit Challenge",
+        "category": "Duck",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "duck.submitRemote",
+        "title": "Submit Challenge (Grade on Server)",
+        "category": "Duck"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "duck.refreshCourses",
+          "when": "view == duckCourses",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "duck.pullCourse",
+          "when": "view == duckCourses && viewItem =~ /duckVariant/",
+          "group": "inline"
+        },
+        {
+          "command": "duck.openCoursePage",
+          "when": "view == duckCourses && viewItem == duckCourse",
+          "group": "inline"
+        },
+        {
+          "command": "duck.test",
+          "when": "view == duckCourses && viewItem == duckChallengePulled",
+          "group": "inline"
+        },
+        {
+          "command": "duck.submit",
+          "when": "view == duckCourses && viewItem == duckChallengePulled",
+          "group": "inline"
+        },
+        {
+          "command": "duck.submitRemote",
+          "when": "view == duckCourses && viewItem == duckChallengePulled",
+          "group": "duck@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}
