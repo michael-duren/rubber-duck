@@ -18,10 +18,10 @@ func (h *handlers) courseArt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	slug := r.PathValue("slug")
 	if b, err := staticFS.ReadFile("static/img/courses/" + slug + ".svg"); err == nil {
-		w.Write(b)
+		_, _ = w.Write(b)
 		return
 	}
-	w.Write(generatedCardSVG(slug))
+	_, _ = w.Write(generatedCardSVG(slug))
 }
 
 // ansiAccents mirrors the site's rainbow rule (assets/input.css): each card
