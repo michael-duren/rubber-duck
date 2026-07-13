@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgres://duckerserver:duckerserver@postgres:5432/duckerserver?sslmode=disable
+      DATABASE_URL: postgres://duckserver:duckserver@postgres:5432/duckserver?sslmode=disable
     volumes:
       # M1 grading runs sibling containers via the host daemon. Not hardened;
       # replaced behind the Grader interface in milestone 2.
@@ -16,15 +16,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: duckerserver
-      POSTGRES_PASSWORD: duckerserver
-      POSTGRES_DB: duckerserver
+      POSTGRES_USER: duckserver
+      POSTGRES_PASSWORD: duckserver
+      POSTGRES_DB: duckserver
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U duckerserver"]
+      test: ["CMD-SHELL", "pg_isready -U duckserver"]
       interval: 2s
       timeout: 3s
       retries: 15

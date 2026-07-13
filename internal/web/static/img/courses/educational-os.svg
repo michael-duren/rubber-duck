@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> qemu</tspan><tspan fill="#64748b"> -kernel duck_os.bin</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- boot log on the left -->
+  <g font-size="13">
+    <text xml:space="preserve" x="40" y="88"><tspan fill="#64748b">[</tspan><tspan fill="#34d399"> ok </tspan><tspan fill="#64748b">] gdt</tspan></text>
+    <text xml:space="preserve" x="40" y="112"><tspan fill="#64748b">[</tspan><tspan fill="#34d399"> ok </tspan><tspan fill="#64748b">] idt</tspan></text>
+    <text xml:space="preserve" x="40" y="136"><tspan fill="#64748b">[</tspan><tspan fill="#34d399"> ok </tspan><tspan fill="#64748b">] paging</tspan></text>
+    <text xml:space="preserve" x="40" y="160"><tspan fill="#64748b">[</tspan><tspan fill="#34d399"> ok </tspan><tspan fill="#64748b">] heap</tspan></text>
+    <text xml:space="preserve" x="40" y="184"><tspan fill="#64748b">[</tspan><tspan fill="#fbbf24"> .. </tspan><tspan fill="#64748b">] sched</tspan></text>
+    <text xml:space="preserve" x="40" y="212" fill="#f87171">duck&gt; <tspan fill="#cbd5e1">▊</tspan></text>
+  </g>
+
+  <!-- privilege stack on the right: shell down to silicon -->
+  <rect x="330" y="70" width="270" height="30" fill="none" stroke="#94a3b8"/>
+  <text xml:space="preserve" x="465" y="90" font-size="13" fill="#94a3b8" text-anchor="middle">user: shell (ring 3)</text>
+
+  <rect x="330" y="106" width="270" height="56" fill="none" stroke="#f87171" stroke-width="1.5"/>
+  <rect x="330" y="106" width="270" height="56" fill="none" stroke="#f87171" stroke-width="6" opacity="0.12"/>
+  <text xml:space="preserve" x="465" y="128" font-size="13" fill="#f87171" text-anchor="middle">kernel (ring 0)</text>
+  <text xml:space="preserve" x="465" y="150" font-size="12" fill="#94a3b8" text-anchor="middle">sched · vm · fs · irq</text>
+
+  <rect x="330" y="168" width="270" height="26" fill="none" stroke="#64748b"/>
+  <text xml:space="preserve" x="465" y="185" font-size="12" fill="#64748b" text-anchor="middle">boot.S</text>
+
+  <rect x="330" y="200" width="270" height="26" fill="none" stroke="#27352d"/>
+  <text xml:space="preserve" x="465" y="217" font-size="12" fill="#64748b" text-anchor="middle">hardware (x86)</text>
+
+  <text xml:space="preserve" x="40" y="244" font-size="12" fill="#64748b">from power-on to a shell prompt you wrote</text>
+</svg>

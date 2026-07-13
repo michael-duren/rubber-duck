@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./edit</tspan><tspan fill="#64748b"> main.cpp</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- the editor viewport: gutter, one real line, the rest as text bars -->
+  <rect x="40" y="66" width="560" height="150" fill="none" stroke="#27352d" stroke-width="1.5"/>
+  <line x1="76" y1="66" x2="76" y2="192" stroke="#1e2b24"/>
+  <g font-size="12" fill="#64748b" text-anchor="end">
+    <text xml:space="preserve" x="68" y="86">1</text><text xml:space="preserve" x="68" y="107">2</text><text xml:space="preserve" x="68" y="128">3</text><text xml:space="preserve" x="68" y="149">4</text><text xml:space="preserve" x="68" y="170">5</text>
+  </g>
+  <rect x="88" y="76" width="210" height="9" fill="#fbbf24" opacity="0.28"/>
+  <rect x="88" y="97" width="300" height="9" fill="#fbbf24" opacity="0.2"/>
+  <text xml:space="preserve" x="88" y="130" font-size="13" fill="#cbd5e1">while (running) { refresh(); <tspan fill="#fbbf24">▊</tspan></text>
+  <rect x="88" y="139" width="260" height="9" fill="#fbbf24" opacity="0.2"/>
+  <rect x="88" y="160" width="150" height="9" fill="#fbbf24" opacity="0.28"/>
+  <text xml:space="preserve" x="52" y="188" font-size="13" fill="#64748b">~</text>
+
+  <!-- status bar -->
+  <rect x="40" y="192" width="560" height="24" fill="#fbbf24" opacity="0.14"/>
+  <text xml:space="preserve" x="52" y="208" font-size="12" fill="#fbbf24">-- INSERT --</text>
+  <text xml:space="preserve" x="330" y="208" font-size="12" fill="#94a3b8" text-anchor="middle">main.cpp [+]</text>
+  <text xml:space="preserve" x="588" y="208" font-size="12" fill="#94a3b8" text-anchor="end">3,29</text>
+
+  <text xml:space="preserve" x="40" y="240" font-size="12" fill="#64748b">rope buffer · viewport math · undo — no curses, just you</text>
+</svg>
