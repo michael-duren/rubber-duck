@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="960" height="320" fill="#0b120e"/>
+
+  <!-- a whole session, compressed: pull, hack, submit, go deeper -->
+  <g font-size="15">
+    <text xml:space="preserve" x="32" y="40"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> duck pull </tspan><tspan fill="#22d3ee">build-a-database/go</tspan></text>
+    <text xml:space="preserve" x="32" y="66" font-size="14"><tspan fill="#64748b">  ok — 12 challenges → ./build-a-database-go</tspan></text>
+
+    <text xml:space="preserve" x="32" y="106"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> nvim pager/solution.go</tspan><tspan fill="#64748b">   # your editor, your toolchain</tspan></text>
+
+    <text xml:space="preserve" x="32" y="146"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> duck submit pager</tspan></text>
+    <text xml:space="preserve" x="32" y="172" font-size="14"><tspan fill="#64748b">  compiling ........ ok (1.2s)</tspan></text>
+    <text xml:space="preserve" x="32" y="198" font-size="14"><tspan fill="#cbd5e1">  8/8 </tspan><tspan fill="#34d399">PASS</tspan><tspan fill="#cbd5e1">   </tspan><tspan fill="#fbbf24">+150 pts</tspan><tspan fill="#64748b">   · audit queued ✓</tspan></text>
+
+    <text xml:space="preserve" x="32" y="238"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> duck pull </tspan><tspan fill="#22d3ee">educational-os/c</tspan><tspan fill="#64748b">   # when you're ready</tspan></text>
+    <text xml:space="preserve" x="32" y="278"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ▊</tspan></text>
+  </g>
+
+  <!-- the duck itself: rubber duck debugging, industrialized -->
+  <g font-size="28" fill="#34d399">
+    <text xml:space="preserve" x="672" y="96">   __</text>
+    <text xml:space="preserve" x="672" y="130"> &lt;(o )___</text>
+    <text xml:space="preserve" x="672" y="164">  ( ._&gt; /</text>
+    <text xml:space="preserve" x="672" y="198">   `---'</text>
+  </g>
+  <text xml:space="preserve" x="676" y="240" font-size="13" fill="#64748b">"explain it to me —</text>
+  <text xml:space="preserve" x="676" y="260" font-size="13" fill="#64748b"> better yet, build it."</text>
+</svg>

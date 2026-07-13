@@ -150,6 +150,30 @@
 	}
 }
 
+/* Home-page reveal-on-scroll. Elements are only hidden under html.js (set
+   by an inline script at the top of the home page), so with JS disabled the
+   page renders fully visible; home.templ's IntersectionObserver adds
+   .reveal-in as sections scroll into view. --reveal-delay staggers siblings. */
+.js .reveal {
+	opacity: 0;
+	transform: translateY(24px);
+	transition:
+		opacity 0.7s ease,
+		transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+	transition-delay: var(--reveal-delay, 0s);
+}
+.js .reveal.reveal-in {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.js .reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+}
+
 /* TUI-style bracket corners (┌ … ┘) drawn over an element's own border. */
 .tui-frame {
 	position: relative;

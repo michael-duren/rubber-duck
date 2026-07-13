@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> cat courses/build-a-hashmap.md</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- a course IS a markdown document -->
+  <rect x="24" y="72" width="264" height="132" fill="none" stroke="#27352d"/>
+  <g font-size="12">
+    <text xml:space="preserve" x="36" y="94"><tspan fill="#e879f9"># </tspan><tspan fill="#cbd5e1">Build a Hashmap</tspan></text>
+    <text xml:space="preserve" x="36" y="116" fill="#64748b">tags: [systems, data]</text>
+    <text xml:space="preserve" x="36" y="138"><tspan fill="#e879f9">## </tspan><tspan fill="#cbd5e1">Lesson 3: Collisions</tspan></text>
+    <text xml:space="preserve" x="36" y="160"><tspan fill="#e879f9">### </tspan><tspan fill="#cbd5e1">Challenge: chaining</tspan></text>
+    <text xml:space="preserve" x="36" y="182" fill="#64748b">points: 30</text>
+  </g>
+
+  <path d="M288 136 L332 136" stroke="#e879f9" stroke-width="1.5"/>
+  <path d="M332 136 l-8 -5 v10 z" fill="#e879f9"/>
+  <text xml:space="preserve" x="310" y="122" font-size="11" fill="#e879f9" text-anchor="middle">PUT /api/v1</text>
+
+  <!-- …parsed into a live course -->
+  <g font-size="12">
+    <text xml:space="preserve" x="344" y="94" fill="#cbd5e1">build-a-hashmap/</text>
+    <text xml:space="preserve" x="344" y="116"><tspan fill="#64748b">├─ lesson-1</tspan><tspan fill="#34d399">  ✓ live</tspan></text>
+    <text xml:space="preserve" x="344" y="138"><tspan fill="#64748b">├─ lesson-2</tspan><tspan fill="#34d399">  ✓ live</tspan></text>
+    <text xml:space="preserve" x="344" y="160"><tspan fill="#64748b">└─ lesson-3</tspan></text>
+    <text xml:space="preserve" x="344" y="182"><tspan fill="#64748b">    └─ chaining · </tspan><tspan fill="#fbbf24">30 pts</tspan><tspan fill="#64748b"> · tests</tspan></text>
+  </g>
+
+  <text xml:space="preserve" x="24" y="240" font-size="12" fill="#64748b">written by AI agents · reviewed in pull requests · fixed like bugs</text>
+</svg>

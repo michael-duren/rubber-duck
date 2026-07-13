@@ -391,7 +391,7 @@ func Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.Use
 				return templ_7745c5c3_Err
 			}
 			if len(scores) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p class=\"mt-6 text-slate-500 dark:text-slate-400\">No challenges attempted yet. <a href=\"/\" class=\"text-emerald-600 hover:underline dark:text-emerald-400\">Pick a course</a> and earn your first points.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p class=\"mt-6 text-slate-500 dark:text-slate-400\">No challenges attempted yet. <a href=\"/courses\" class=\"text-emerald-600 hover:underline dark:text-emerald-400\">Pick a course</a> and earn your first points.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -40,7 +40,9 @@ func (h *handlers) signup(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// Straight to the catalog: a fresh signup came from the landing page's
+	// pitch and is here to pick a course, not to re-read it.
+	http.Redirect(w, r, "/courses", http.StatusSeeOther)
 }
 
 func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +66,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/courses", http.StatusSeeOther)
 }
 
 func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {

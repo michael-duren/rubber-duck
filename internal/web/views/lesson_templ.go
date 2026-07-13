@@ -47,7 +47,7 @@ func Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain.
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><span class=\"text-emerald-600 dark:text-emerald-400\">~</span>/ <a href=\"/\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><span class=\"text-emerald-600 dark:text-emerald-400\">~</span>/ <a href=\"/courses\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -270,7 +270,7 @@ func Final(user *domain.User, course domain.Course, v domain.Variant, latestCode
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><span class=\"text-emerald-600 dark:text-emerald-400\">~</span>/ <a href=\"/\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<nav class=\"font-mono text-xs text-slate-500 dark:text-slate-400\"><span class=\"text-emerald-600 dark:text-emerald-400\">~</span>/ <a href=\"/courses\" class=\"hover:text-emerald-600 dark:hover:text-emerald-400\">courses</a> / <a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

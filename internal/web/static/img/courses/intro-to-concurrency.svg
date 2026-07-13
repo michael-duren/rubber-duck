@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./run</tspan><tspan fill="#64748b"> --workers=2</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- two goroutine lanes feeding one channel -->
+  <text xml:space="preserve" x="40" y="98" font-size="13" fill="#64748b">w1</text>
+  <line x1="70" y1="94" x2="300" y2="94" stroke="#27352d" stroke-width="1.5"/>
+  <rect x="110" y="85" width="18" height="18" fill="#34d399" opacity="0.35"/>
+  <rect x="170" y="85" width="18" height="18" fill="#34d399" opacity="0.6"/>
+  <rect x="240" y="85" width="18" height="18" fill="#34d399"/>
+
+  <text xml:space="preserve" x="40" y="172" font-size="13" fill="#64748b">w2</text>
+  <line x1="70" y1="168" x2="300" y2="168" stroke="#27352d" stroke-width="1.5"/>
+  <rect x="140" y="159" width="18" height="18" fill="#34d399" opacity="0.45"/>
+  <rect x="215" y="159" width="18" height="18" fill="#34d399" opacity="0.8"/>
+
+  <!-- lanes merge into the channel -->
+  <path d="M300 94 L352 122" stroke="#34d399" stroke-width="1.5" fill="none"/>
+  <path d="M300 168 L352 140" stroke="#34d399" stroke-width="1.5" fill="none"/>
+
+  <!-- the channel: a buffered queue with slots -->
+  <text xml:space="preserve" x="368" y="112" font-size="13" fill="#94a3b8">queue (cap 4)</text>
+  <rect x="360" y="118" width="176" height="28" fill="none" stroke="#34d399" stroke-width="1.5"/>
+  <rect x="360" y="118" width="176" height="28" fill="none" stroke="#34d399" stroke-width="6" opacity="0.12"/>
+  <line x1="404" y1="118" x2="404" y2="146" stroke="#27352d"/>
+  <line x1="448" y1="118" x2="448" y2="146" stroke="#27352d"/>
+  <line x1="492" y1="118" x2="492" y2="146" stroke="#27352d"/>
+  <rect x="373" y="123" width="18" height="18" fill="#34d399"/>
+  <rect x="417" y="123" width="18" height="18" fill="#34d399" opacity="0.75"/>
+
+  <!-- receiver -->
+  <path d="M536 132 L584 132" stroke="#34d399" stroke-width="1.5"/>
+  <path d="M584 132 l-8 -5 v10 z" fill="#34d399"/>
+  <text xml:space="preserve" x="560" y="120" font-size="13" fill="#94a3b8" text-anchor="end">recv</text>
+
+  <text xml:space="preserve" x="40" y="222" font-size="12" fill="#64748b">spawn · send · join — no shared state, just messages</text>
+</svg>

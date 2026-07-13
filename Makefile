@@ -30,9 +30,9 @@ build: generate css
 db:
 	docker compose up -d --wait postgres
 
-# WARN: USE WITH CAUTION
+# WARN: USE WITH CAUTION - wipes this project's containers and pgdata volume
 prune:
-	docker volume rm $(docker volume list --quiet | grep -i "_pgdata")
+	docker compose down -v
 
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
@@ -58,11 +58,13 @@ test-integration: db
 
 # GC_API_KEY/GC_URL are cleared so a key exported in the developer's shell
 # profile can't leak in: make seed always mints a throwaway local key and
-# targets localhost (real content goes through make publish).
+# targets localhost. Seeds the quickstart fixture plus every course in
+# courses/, so local dev has the same catalog as prod.
 seed:
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed seed/intro-to-go.md
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/embedded-pico-c.md
-	GC_API_KEY= GC_URL= go run ./cmd/duckserver seed courses/build-a-hashmap-c.md
+	@for f in seed/intro-to-go.md courses/*.md; do \
+		echo "seeding $$f"; \
+		GC_API_KEY= GC_URL= go run ./cmd/duckserver seed "$$f" || exit 1; \
+	done
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
 # publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
