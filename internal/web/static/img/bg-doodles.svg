@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Desk-toy doodle tile for the site's ambient background (see .site-bg
+       in assets/input.css). One mid gray-green stroke works over both themes;
+       the CSS layer sets the final opacity, so strokes here stay full-strength.
+       Icons keep ~40px clear of the tile edge so the repeat never seams. -->
+  <defs>
+    <g id="duck">
+      <circle cx="17" cy="13" r="9"/>
+      <path d="M8 11l-7 3 7 3"/>
+      <path d="M25 16c8-2 15 2 15 9 0 8-8 12-18 12h-5c-8 0-13-4-13-10"/>
+      <path d="M20 27c5-1 8-4 9-7"/>
+      <circle cx="14" cy="11" r="1.4" fill="#7f8f85" stroke="none"/>
+      <path d="M-4 42c4 3 9 3 13 0 4 3 9 3 13 0 4 3 9 3 13 0"/>
+    </g>
+    <g id="crt">
+      <rect x="0" y="0" width="38" height="28" rx="3"/>
+      <rect x="5" y="5" width="28" height="18" rx="1.5"/>
+      <path d="M10 10l4 4-4 4"/>
+      <path d="M17 18h6"/>
+      <path d="M15 28l-2 5h12l-2-5"/>
+      <path d="M8 35h22"/>
+    </g>
+    <g id="floppy">
+      <path d="M0 0h24l8 8v24H0z"/>
+      <rect x="7" y="0" width="13" height="10"/>
+      <rect x="6" y="19" width="20" height="13"/>
+      <path d="M10 24h12M10 28h8"/>
+    </g>
+    <g id="bug">
+      <ellipse cx="13" cy="17" rx="9" ry="11"/>
+      <path d="M13 6v22"/>
+      <path d="M9 7 6 2m11 5 3-5"/>
+      <path d="M4 12 0 9m22 3 4-3M4 19h-6m28 0h-6M6 25l-4 4m18-4 4 4"/>
+    </g>
+    <g id="print">
+      <path d="M12 2 2 13m10-11v15m0-15 10 11"/>
+      <path d="M2 13q5 6 10 4 5 2 10-4"/>
+      <path d="M12 21v3"/>
+    </g>
+    <g id="prints">
+      <use href="#print" transform="rotate(-12)"/>
+      <use href="#print" transform="translate(30 24) rotate(8)"/>
+    </g>
+    <g id="spark">
+      <path d="M8 0v16M0 8h16"/>
+    </g>
+    <g id="mug">
+      <path d="M0 10h20v10c0 5-4 8-10 8S0 25 0 20z"/>
+      <path d="M20 12c6 0 6 10 0 10"/>
+      <path d="M6 6c2-2 0-4 0-6m8 6c2-2 0-4 0-6"/>
+    </g>
+  </defs>
+  <g stroke="#7f8f85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <use href="#duck" transform="translate(64 56) rotate(-8)"/>
+    <use href="#crt" transform="translate(392 76) rotate(6)"/>
+    <use href="#spark" transform="translate(552 44) rotate(15) scale(0.8)"/>
+    <use href="#floppy" transform="translate(216 200) rotate(-12)"/>
+    <use href="#bug" transform="translate(512 268) rotate(18)"/>
+    <use href="#spark" transform="translate(120 320) rotate(-10) scale(0.6)"/>
+    <use href="#prints" transform="translate(320 408) rotate(-16)"/>
+    <use href="#mug" transform="translate(80 490) rotate(7)"/>
+    <use href="#duck" transform="translate(444 512) rotate(9) scale(0.85)"/>
+    <use href="#spark" transform="translate(590 560) scale(0.7)"/>
+  </g>
+</svg>
