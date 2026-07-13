@@ -303,63 +303,63 @@ func renderTopic(w io.Writer, topic []string) error {
 
 // renderMainHelp writes the top-level command list.
 func renderMainHelp(w io.Writer) {
-	fmt.Fprintln(w, "duck — local companion CLI for Rubber Duck courses")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Learners pull a course's challenges, run tests with their own")
-	fmt.Fprintln(w, "toolchain, and submit graded solutions. Authors round-trip a course's")
-	fmt.Fprintln(w, "markdown with `duck educator`.")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  duck <command> [args]")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Commands:")
+	_, _ = fmt.Fprintln(w, "duck — local companion CLI for Rubber Duck courses")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Learners pull a course's challenges, run tests with their own")
+	_, _ = fmt.Fprintln(w, "toolchain, and submit graded solutions. Authors round-trip a course's")
+	_, _ = fmt.Fprintln(w, "markdown with `duck educator`.")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  duck <command> [args]")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Commands:")
 	width := 0
 	for _, c := range commands {
 		width = max(width, len(c.name))
 	}
 	for _, c := range commands {
-		fmt.Fprintf(w, "  %-*s  %s\n", width, c.name, c.summary)
+		_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, c.name, c.summary)
 	}
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	renderFlagBlock(w, "Environment:", globalEnv)
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Run \"duck help <command>\" or \"duck <command> --help\" for details.")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Run \"duck help <command>\" or \"duck <command> --help\" for details.")
 }
 
 // renderCmdHelp writes the detailed help for one command or subcommand.
 func renderCmdHelp(w io.Writer, c cmdHelp) {
-	fmt.Fprintf(w, "%s — %s\n\n", c.title, c.summary)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s\n", c.usage)
+	_, _ = fmt.Fprintf(w, "%s — %s\n\n", c.title, c.summary)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s\n", c.usage)
 	if c.long != "" {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, c.long)
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, c.long)
 	}
 	if len(c.subs) > 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "Subcommands:")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "Subcommands:")
 		width := 0
 		for _, s := range c.subs {
 			width = max(width, len(s.name))
 		}
 		for _, s := range c.subs {
-			fmt.Fprintf(w, "  %-*s  %s\n", width, s.name, s.summary)
+			_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, s.name, s.summary)
 		}
 	}
 	if len(c.flags) > 0 {
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 		renderFlagBlock(w, "Flags:", c.flags)
 	}
 	if len(c.envs) > 0 {
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 		renderFlagBlock(w, "Environment:", c.envs)
 	}
 	if len(c.examples) > 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "Examples:")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "Examples:")
 		for _, e := range c.examples {
-			fmt.Fprintf(w, "  %s\n", e.cmd)
-			fmt.Fprintf(w, "      %s\n", e.desc)
+			_, _ = fmt.Fprintf(w, "  %s\n", e.cmd)
+			_, _ = fmt.Fprintf(w, "      %s\n", e.desc)
 		}
 	}
 }
@@ -367,12 +367,12 @@ func renderCmdHelp(w io.Writer, c cmdHelp) {
 // renderFlagBlock writes a titled, column-aligned list of name/description
 // pairs (used for both flags and environment variables).
 func renderFlagBlock(w io.Writer, title string, items []flagHelp) {
-	fmt.Fprintln(w, title)
+	_, _ = fmt.Fprintln(w, title)
 	width := 0
 	for _, it := range items {
 		width = max(width, len(it.name))
 	}
 	for _, it := range items {
-		fmt.Fprintf(w, "  %-*s  %s\n", width, it.name, it.desc)
+		_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, it.name, it.desc)
 	}
 }
