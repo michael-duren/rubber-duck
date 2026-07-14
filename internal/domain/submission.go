@@ -21,6 +21,13 @@ type Submission struct {
 	TestsPassed *int
 	TestsTotal  *int
 
+	// VariantVersion is the course_variants.version the submission was made
+	// against (stamped at insert). Comparing it to the variant's current
+	// version tells whether the course has been updated since — used for the
+	// "completed before the course was updated" notice; scores stay valid
+	// either way.
+	VariantVersion int
+
 	// Claimed marks a verdict the duck CLI reported from a local test run.
 	// The server re-grades claimed submissions in the background; the
 	// outcome lands in AuditStatus/AuditOutput without touching the

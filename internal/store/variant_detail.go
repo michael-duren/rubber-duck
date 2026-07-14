@@ -39,7 +39,8 @@ func (s *Store) VariantDetail(ctx context.Context, courseSlug, language string) 
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, slug, title, position, content_md, content_html
-		FROM lessons WHERE variant_id = $1 ORDER BY position`, v.ID)
+		FROM lessons WHERE variant_id = $1 AND archived_at IS NULL
+		ORDER BY position`, v.ID)
 	if err != nil {
 		return domain.Course{}, domain.Variant{}, err
 	}
@@ -61,7 +62,8 @@ func (s *Store) VariantDetail(ctx context.Context, courseSlug, language string) 
 	crows, err := s.pool.Query(ctx, `
 		SELECT id, lesson_id, slug, title, position, prompt_md, prompt_html,
 		       starter_code, test_code, points
-		FROM challenges WHERE variant_id = $1 ORDER BY position`, v.ID)
+		FROM challenges WHERE variant_id = $1 AND archived_at IS NULL
+		ORDER BY position`, v.ID)
 	if err != nil {
 		return domain.Course{}, domain.Variant{}, err
 	}
