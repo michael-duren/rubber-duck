@@ -24,7 +24,6 @@ type fakeStore struct {
 	variantSlug    string
 	variantSource  string       // raw markdown returned by VariantSource
 	variantVersion int          // version returned by VariantSource / checked by UpsertVariant
-	subCount       int          // returned by VariantSubmissionCount (issue #37)
 	upserts        []upsertCall // every *applied* UpsertVariant call, for edited_by assertions
 	submissions    map[int64]domain.Submission
 	nextSub        int64
@@ -213,12 +212,6 @@ func (f *fakeStore) UpsertVariant(_ context.Context, course domain.Course, varia
 	f.variantSource = variant.SourceMD
 	f.variantVersion++
 	return f.variantVersion, nil
-}
-
-// VariantSubmissionCount backs the destructive-save warning (issue #37);
-// tests set subCount directly to simulate existing submissions.
-func (f *fakeStore) VariantSubmissionCount(_ context.Context, slug, lang string) (int, error) {
-	return f.subCount, nil
 }
 
 // SubmissionStore stubs.

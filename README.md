@@ -112,8 +112,12 @@ Rules:
     "details": [{"line": 41, "message": "challenge \"fan-in\": missing '### Tests' block"}]}}
   ```
 
-- Re-publishing a variant **replaces** its lessons and challenges and deletes
-  their submissions (users' scores for that variant reset). Keep slugs stable.
+- Re-publishing a variant updates its lessons and challenges **in place,
+  keyed by slug** — submissions and scores survive. A challenge whose slug
+  leaves the document is archived (hidden from the course, its submissions
+  kept as history); if the slug later returns, the challenge revives with
+  its history reattached. Slugs are identity: keep them stable, and rename
+  only when you intend "this is a different challenge".
 - `PUT` also accepts a `gc_u_...` human user token (the same CLI token minted
   for `duck submit`/`duck test`) in place of an agent key. Human-authored
   writes may include an optional `expected_version` field (from a prior
@@ -205,8 +209,9 @@ GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
 ```
 
 `make publish` loops `duckserver seed --url $GC_URL <file>` over every
-`courses/*.md`, bumping each variant's version. Re-publishing **replaces**
-a variant's lessons/challenges and resets submissions for it — keep slugs
+`courses/*.md`, bumping each variant's version. Re-publishing updates a
+variant's lessons/challenges in place by slug — learner submissions and
+scores survive; removed slugs are archived, not deleted — keep slugs
 stable (see "Course document format" above).
 
 ## Editing courses in the browser
@@ -248,13 +253,11 @@ API's `PUT` uses:
   save is rejected with "someone else changed this since you opened it —
   reload to see their version" instead of silently overwriting their
   change.
-- If the variant already has submissions, saving shows "saving will reset
-  progress for N submissions… — re-publishing replaces its lessons and
-  challenges, which deletes them" and requires an explicit "Yes, save
-  anyway" click before it proceeds — the same destructive re-publish
-  semantics documented above for `make publish`, just surfaced up front
-  instead of buried in this README. A variant with no submissions yet
-  saves immediately, no extra click.
+- Saving is never destructive to learner data: like `make publish`, it
+  updates lessons/challenges in place by slug, so submissions and scores
+  survive every save. (There used to be a "saving will reset progress"
+  confirmation step here; it disappeared along with the destructive
+  behavior it warned about.)
 
 **Live preview.** A preview pane next to the textarea shows the rendered
 markdown (headings, code blocks with syntax highlighting) via an AJAX call
