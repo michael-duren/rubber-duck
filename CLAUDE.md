@@ -24,8 +24,9 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `make test-integration` — store tests against compose Postgres
 - `make runner-images` — build gc-runner-go / gc-runner-python / gc-runner-c
   (needed for dockergrader e2e tests, which skip if images are missing)
-- `make seed` — publish seed/intro-to-go.md through the local agent API
-  (quickstart fixture only — see `make publish` for real course content)
+- `make seed` — publish seed/intro-to-go.md plus every course in `courses/`
+  through the local agent API (always a throwaway local key + localhost;
+  see `make publish` for publishing to a real/remote server)
 - `make publish` — loop `duckserver seed` over `courses/*.md` (the
   canonical, PR-reviewed course content); `GC_API_KEY=... [GC_URL=...]
   make publish`

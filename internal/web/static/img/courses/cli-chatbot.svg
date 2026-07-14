@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./chat</tspan><tspan fill="#64748b"> --stream</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- a transcript, mid-stream -->
+  <g font-size="14">
+    <text xml:space="preserve" x="40" y="94"><tspan fill="#64748b">you&gt;</tspan><tspan fill="#cbd5e1"> how do you remember what I said?</tspan></text>
+    <text xml:space="preserve" x="40" y="126"><tspan fill="#a78bfa">duck&gt;</tspan><tspan fill="#cbd5e1"> I don't — every turn resends the</tspan></text>
+    <text xml:space="preserve" x="40" y="150"><tspan fill="#cbd5e1">      whole conversation, and when the</tspan></text>
+    <text xml:space="preserve" x="40" y="174"><tspan fill="#cbd5e1">      window fills, old turns get trim</tspan><tspan fill="#a78bfa">▊</tspan></text>
+  </g>
+
+  <!-- the context window meter: the course's central constraint -->
+  <text xml:space="preserve" x="40" y="220" font-size="13"><tspan fill="#64748b">ctx </tspan><tspan fill="#a78bfa">[██████████</tspan><tspan fill="#2b2438">██</tspan><tspan fill="#a78bfa">]</tspan><tspan fill="#94a3b8"> 3.4k/4k tok</tspan></text>
+  <text xml:space="preserve" x="600" y="220" font-size="12" fill="#64748b" text-anchor="end">retry 0/3</text>
+</svg>

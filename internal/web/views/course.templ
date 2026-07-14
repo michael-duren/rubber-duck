@@ -19,7 +19,7 @@ func newVariantLink(course domain.Course) string {
 templ Course(user *domain.User, course domain.Course, variants []domain.VariantSummary, scores map[string]domain.CourseScore) {
 	@Layout(course.Title, user) {
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
-			<a href="/" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / { course.Slug }
+			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> / { course.Slug }
 		</nav>
 		<div class="mt-4 grid gap-8 lg:grid-cols-[1fr_20rem]">
 			<div>
@@ -59,6 +59,7 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 				</div>
 			</div>
 			<aside class="h-fit border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+				<img src={ "/courses/" + course.Slug + "/card.svg" } alt="" width="640" height="256" class="mb-4 block w-full border border-slate-200 dark:border-slate-800"/>
 				if course.DurationHours > 0 {
 					<div class="flex justify-between text-sm">
 						<span class="text-slate-500 dark:text-slate-400">Estimated time</span>

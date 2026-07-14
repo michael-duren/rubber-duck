@@ -9,4 +9,7 @@ infra/*.tfvars
 issues/
 # Added by goreleaser init:
 dist/
-duck
+# The `make duck` / `make install` build artifact. Anchored to the repo root
+# so it does not also ignore the cmd/duck source directory (an unanchored
+# `duck` matches any path component named "duck").
+/duck

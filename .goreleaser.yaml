@@ -38,6 +38,13 @@ archives:
   # tar.gz/zip for the Homebrew cask and archive-preferring users.
   - id: archives
     formats: [tar.gz]
+    # Bundle the man page (and keep the default docs) so `brew install` can
+    # link it and tarball users get `duck.1`. Setting `files` replaces
+    # goreleaser's default doc set, so re-list README/LICENSE explicitly.
+    files:
+      - README*
+      - LICENSE*
+      - manpages/duck.1
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -55,6 +62,11 @@ archives:
 homebrew_casks:
   - name: duck
     ids: [archives]
+    # Links duck.1 into the Homebrew man path (`man duck` after install).
+    # The path is relative to the extracted archive — see the `files` entry
+    # on the archives build above that puts it there.
+    manpages:
+      - manpages/duck.1
     repository:
       owner: michael-duren
       name: homebrew-tap

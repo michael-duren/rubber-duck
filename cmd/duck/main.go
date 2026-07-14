@@ -14,14 +14,30 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
+		// A command that already printed its help (missing a required arg,
+		// unknown command) exits non-zero without a second, redundant line.
+		if errors.Is(err, errHelpShown) {
+			os.Exit(2)
+		}
 		fmt.Fprintln(os.Stderr, "duck:", err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string) error {
+	// Bare `duck` prints the full help (exit 0) rather than a terse usage line.
 	if len(args) == 0 {
-		return errUsageError
+		return helpCmd(nil)
+	}
+	// Explicit top-level help: `duck help [topic...]`, `duck --help`, `duck -h`.
+	if isHelpArg(args[0]) {
+		return helpCmd(args[1:])
+	}
+	// `duck <cmd> --help` / `duck <cmd> -h` → that command's detailed help.
+	// educator is excluded so its own dispatch can handle `--help` for both
+	// the group and its subcommands.
+	if args[0] != "educator" && args[0] != "ed" && hasHelpFlag(args[1:]) {
+		return helpCmd(args[:1])
 	}
 	switch args[0] {
 	case "pull":
@@ -37,11 +53,10 @@ func run(args []string) error {
 	case "educator", "ed":
 		return educatorCmd(args[1:])
 	default:
-		return errUsageError
+		fmt.Fprintf(os.Stderr, "duck: unknown command %q\n\n", args[0])
+		return usageHelp()
 	}
 }
-
-var errUsageError = errors.New("usage: duck <pull|test|submit|login|version|educator (ed)> [args]")
 
 // parseInterleaved parses fs accepting flags before AND after positional
 // arguments (`duck pull intro-to-go/go --base URL`), which stdlib flag
