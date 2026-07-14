@@ -12,10 +12,18 @@ import (
 )
 
 // UpsertVariant atomically stores a course and one language variant.
-// Re-submitting replaces the variant's lessons and challenges (cascading
-// their submissions) and bumps its version. editedBy records which human
-// user made the change, if any; nil means the write is agent-authored
-// (e.g. the /api/v1 markdown-publish path). Returns the new version.
+// Re-submitting diffs the variant's lessons and challenges by slug rather
+// than replacing them: rows whose slug is still present are updated in place
+// (their IDs — and therefore their submissions — survive), rows whose slug
+// disappeared are archived rather than deleted (their submissions remain as
+// history), and a slug that reappears revives its archived row, reattaching
+// that history. Slugs are the identity contract: agents/editors must keep
+// them stable across publishes (README "Course document format"). The
+// variant's version bumps on every publish; submissions record the version
+// they were made against (see CreateSubmission) so the UI can tell "passed
+// before the course was updated". editedBy records which human user made the
+// change, if any; nil means the write is agent-authored (e.g. the /api/v1
+// markdown-publish path). Returns the new version.
 //
 // expectedVersion implements optimistic concurrency for human-driven writes
 // (the web editor, and the agent API's user-token PUT that backs `duck
@@ -133,41 +141,81 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 		return 0, fmt.Errorf("upsert variant: %w", err)
 	}
 
-	// Replace content wholesale; deleting lessons cascades their challenges.
-	if _, err := tx.Exec(ctx, `DELETE FROM lessons WHERE variant_id = $1`, variantID); err != nil {
-		return 0, err
+	// Diff content by slug. Archive first: a row whose slug left the document
+	// must stop being live before the upserts below run, both so it doesn't
+	// linger and because the one_final_per_variant partial index only has room
+	// for one live final — replacing the final's slug needs the old row
+	// archived before the new one inserts. Rows are archived, never deleted:
+	// deleting would cascade their submissions, which is exactly the data
+	// loss this diff exists to prevent.
+	lessonSlugs := make([]string, 0, len(variant.Lessons))
+	challengeSlugs := []string{variant.Final.Slug}
+	for _, l := range variant.Lessons {
+		lessonSlugs = append(lessonSlugs, l.Slug)
+		for _, c := range l.Challenges {
+			challengeSlugs = append(challengeSlugs, c.Slug)
+		}
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM challenges WHERE variant_id = $1`, variantID); err != nil {
-		return 0, err
+	if _, err := tx.Exec(ctx, `
+		UPDATE challenges SET archived_at = now()
+		WHERE variant_id = $1 AND archived_at IS NULL AND slug != ALL($2)`,
+		variantID, challengeSlugs); err != nil {
+		return 0, fmt.Errorf("archive challenges: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE lessons SET archived_at = now()
+		WHERE variant_id = $1 AND archived_at IS NULL AND slug != ALL($2)`,
+		variantID, lessonSlugs); err != nil {
+		return 0, fmt.Errorf("archive lessons: %w", err)
 	}
 
 	for _, l := range variant.Lessons {
 		var lessonID int64
 		err := tx.QueryRow(ctx, `
 			INSERT INTO lessons (variant_id, slug, title, position, content_md, content_html)
-			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (variant_id, slug) DO UPDATE SET
+				title = EXCLUDED.title,
+				position = EXCLUDED.position,
+				content_md = EXCLUDED.content_md,
+				content_html = EXCLUDED.content_html,
+				archived_at = NULL
+			RETURNING id`,
 			variantID, l.Slug, l.Title, l.Position, l.ContentMD, l.ContentHTML,
 		).Scan(&lessonID)
 		if err != nil {
 			return 0, fmt.Errorf("lesson %q: %w", l.Slug, err)
 		}
 		for _, c := range l.Challenges {
-			if err := insertChallenge(ctx, tx, variantID, &lessonID, c); err != nil {
+			if err := upsertChallenge(ctx, tx, variantID, &lessonID, c); err != nil {
 				return 0, err
 			}
 		}
 	}
-	if err := insertChallenge(ctx, tx, variantID, nil, variant.Final); err != nil {
+	// Final goes last: if the document turned the old final into a lesson
+	// challenge, the loop above has already moved that row under its lesson,
+	// freeing the one-live-final slot this insert needs.
+	if err := upsertChallenge(ctx, tx, variantID, nil, variant.Final); err != nil {
 		return 0, err
 	}
 
 	return version, tx.Commit(ctx)
 }
 
-func insertChallenge(ctx context.Context, tx pgx.Tx, variantID int64, lessonID *int64, c domain.Challenge) error {
+func upsertChallenge(ctx context.Context, tx pgx.Tx, variantID int64, lessonID *int64, c domain.Challenge) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO challenges (variant_id, lesson_id, slug, title, position, prompt_md, prompt_html, starter_code, test_code, points)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (variant_id, slug) DO UPDATE SET
+			lesson_id = EXCLUDED.lesson_id,
+			title = EXCLUDED.title,
+			position = EXCLUDED.position,
+			prompt_md = EXCLUDED.prompt_md,
+			prompt_html = EXCLUDED.prompt_html,
+			starter_code = EXCLUDED.starter_code,
+			test_code = EXCLUDED.test_code,
+			points = EXCLUDED.points,
+			archived_at = NULL`,
 		variantID, lessonID, c.Slug, c.Title, c.Position, c.PromptMD, c.PromptHTML, c.StarterCode, c.TestCode, c.Points)
 	if err != nil {
 		return fmt.Errorf("challenge %q: %w", c.Slug, err)

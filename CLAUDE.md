@@ -58,8 +58,12 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - Killing `go run` can orphan the server on :8080 — `pkill -f duckserver`.
 - Grading containers: killing the docker CLI doesn't kill the container;
   dockergrader force-removes by name (don't regress this).
-- Re-publishing a course variant deletes its lessons/challenges (cascade:
-  submissions). Documented agent contract; keep slugs stable.
+- Re-publishing a course variant diffs lessons/challenges by slug: rows
+  update in place (submissions survive), removed slugs are archived (not
+  deleted — history kept), returning slugs revive their row. Slugs are the
+  identity contract; keep them stable. Submissions carry variant_version
+  for the "completed before update" UI notice. Explicit DELETE of a
+  course/variant still cascades submissions.
 - Internal names still say `getcracked`/`gc-*` after the brand rename —
   intentional; see issues/ops/04-deep-rename.md before "fixing" any.
 - GCP: app SA needs project-level run.viewer to poll RunJob LROs (job-
