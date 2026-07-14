@@ -25,7 +25,7 @@ type SubmissionStore interface {
 	SubmissionsForChallenge(ctx context.Context, userID, challengeID int64) ([]domain.Submission, error)
 }
 
-const rateLimitMessage = "Too many submissions — you can submit each challenge up to 5 times per day, or let your in-flight submissions finish (max 3 at a time)."
+const rateLimitMessage = "Too many submissions — you can submit each challenge up to 10 times per day, or let your in-flight submissions finish (max 10 at a time)."
 
 // Enqueuer hands a stored submission to the grading pool.
 type Enqueuer interface {

@@ -15,8 +15,8 @@ import (
 // spins a real Cloud Run Job execution, so both exist to stop a burst (or
 // script) from queueing unbounded job runs.
 const (
-	maxInFlightSubmissions          = 3
-	maxDailySubmissionsPerChallenge = 5
+	maxInFlightSubmissions          = 10
+	maxDailySubmissionsPerChallenge = 10
 )
 
 // SubmissionRateLimited reports whether a new submission from this user
