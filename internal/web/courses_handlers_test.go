@@ -140,3 +140,45 @@ func TestHomePage(t *testing.T) {
 		}
 	})
 }
+
+// TestLessonPageCourseUpdatedNotice: a user whose passing submission was made
+// against an older content version sees the "completed before the course was
+// updated" notice; a pass at the current version doesn't trigger it.
+func TestLessonPageCourseUpdatedNotice(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &domain.Variant{
+		Language: "go",
+		Version:  2,
+		Lessons: []domain.Lesson{{
+			ID: 1, Slug: "basics", Title: "Basics", Position: 1,
+			Challenges: []domain.Challenge{{ID: 7, Slug: "sum", Title: "Sum", Points: 10}},
+		}},
+	}
+	// loginAlice's signup makes alice the fake's first (and only) user, ID 1.
+	fs.submissions[1] = domain.Submission{ID: 1, UserID: 1, ChallengeID: 7, Status: "passed", Score: 10, VariantVersion: 1}
+
+	const notice = "before the course was updated"
+	req := httptest.NewRequest("GET", "/courses/intro-to-concurrency/go/lessons/basics", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET lesson = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), notice) {
+		t.Errorf("expected the course-updated notice for a pass at an older version")
+	}
+
+	// Passing again at the current version clears the notice.
+	fs.submissions[2] = domain.Submission{ID: 2, UserID: 1, ChallengeID: 7, Status: "passed", Score: 10, VariantVersion: 2}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest("GET", "/courses/intro-to-concurrency/go/lessons/basics", nil)
+	req.AddCookie(session)
+	mux.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), notice) {
+		t.Errorf("notice should not appear once the user has passed the current version")
+	}
+}

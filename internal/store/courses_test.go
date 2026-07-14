@@ -185,15 +185,10 @@ func TestUpsertVariantNewVariantExpectedVersionZero(t *testing.T) {
 	}
 }
 
-// TestVariantSubmissionCount covers issue #37: the web editor warns before a
-// save that would cascade-delete submissions, using this count to name the
-// exact impact.
-func TestVariantSubmissionCount(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	_, ids := seedChallenges(t, s)
-	first, second := ids[0], ids[1]
-
+// loadSeedCourse parses seed/intro-to-go.md into domain values, the same
+// document seedChallenges publishes.
+func loadSeedCourse(t *testing.T) (domain.Course, domain.Variant) {
+	t.Helper()
 	src, err := os.ReadFile("../../seed/intro-to-go.md")
 	if err != nil {
 		t.Fatal(err)
@@ -206,39 +201,205 @@ func TestVariantSubmissionCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return course, variant
+}
 
-	// A freshly-seeded variant has no submissions yet.
-	count, err := s.VariantSubmissionCount(ctx, course.Slug, variant.Language)
+// challengeIDsBySlug maps every live challenge (final included) to its row ID.
+func challengeIDsBySlug(t *testing.T, s *Store, slug, language string) map[string]int64 {
+	t.Helper()
+	_, v, err := s.VariantDetail(context.Background(), slug, language)
 	if err != nil {
-		t.Fatalf("VariantSubmissionCount: %v", err)
+		t.Fatalf("variant detail: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("count before any submissions = %d, want 0", count)
+	ids := map[string]int64{v.Final.Slug: v.Final.ID}
+	for _, l := range v.Lessons {
+		for _, c := range l.Challenges {
+			ids[c.Slug] = c.ID
+		}
 	}
+	return ids
+}
+
+// TestUpsertVariantPreservesSubmissions is the core of the
+// no-data-loss-on-republish contract: re-publishing a variant updates
+// content rows in place by slug, so challenge IDs — and the submissions
+// hanging off them — survive, and each submission keeps the variant version
+// it was made against.
+func TestUpsertVariantPreservesSubmissions(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	course, variant := loadSeedCourse(t)
+
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	before := challengeIDsBySlug(t, s, course.Slug, variant.Language)
 
 	u, err := s.CreateUser(ctx, "alice", "hash1")
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	if _, err := s.CreateSubmission(ctx, u.ID, first, "package x"); err != nil {
-		t.Fatalf("create submission 1: %v", err)
-	}
-	if _, err := s.CreateSubmission(ctx, u.ID, second, "package x"); err != nil {
-		t.Fatalf("create submission 2: %v", err)
-	}
-
-	count, err = s.VariantSubmissionCount(ctx, course.Slug, variant.Language)
+	target := variant.Lessons[0].Challenges[0]
+	subID, err := s.CreateSubmission(ctx, u.ID, before[target.Slug], "package x")
 	if err != nil {
-		t.Fatalf("VariantSubmissionCount: %v", err)
+		t.Fatalf("create submission: %v", err)
 	}
-	if count != 2 {
-		t.Errorf("count = %d, want 2 (one per submitted challenge, regardless of user)", count)
+	if err := s.CompleteSubmission(ctx, subID, "passed", "ok", target.Points, nil, nil); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	sub, err := s.SubmissionForUser(ctx, subID, u.ID)
+	if err != nil {
+		t.Fatalf("load submission: %v", err)
+	}
+	if sub.VariantVersion != 1 {
+		t.Errorf("submission variant_version = %d, want 1", sub.VariantVersion)
 	}
 
-	// A nonexistent variant reports 0 rather than erroring.
-	if noneCount, err := s.VariantSubmissionCount(ctx, "nope", "go"); err != nil || noneCount != 0 {
-		t.Errorf("count for missing variant = %d, %v; want 0, nil", noneCount, err)
+	// Re-publish with edited content but the same slugs.
+	updated := variant
+	updated.Lessons[0].ContentMD += "\n\nrevised"
+	v2, err := s.UpsertVariant(ctx, course, updated, nil, nil)
+	if err != nil {
+		t.Fatalf("re-publish: %v", err)
 	}
+	if v2 != 2 {
+		t.Fatalf("version after re-publish = %d, want 2", v2)
+	}
+
+	after := challengeIDsBySlug(t, s, course.Slug, variant.Language)
+	for slug, id := range before {
+		if after[slug] != id {
+			t.Errorf("challenge %q ID changed across re-publish: %d -> %d", slug, id, after[slug])
+		}
+	}
+	subs, err := s.SubmissionsForChallenge(ctx, u.ID, before[target.Slug])
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("submissions after re-publish = %d, %v; want the original 1", len(subs), err)
+	}
+	if subs[0].VariantVersion != 1 {
+		t.Errorf("old submission variant_version = %d, want 1 (made against v1)", subs[0].VariantVersion)
+	}
+
+	// A fresh submission is stamped with the new version.
+	newSub, err := s.CreateSubmission(ctx, u.ID, before[target.Slug], "package y")
+	if err != nil {
+		t.Fatalf("create post-update submission: %v", err)
+	}
+	sub, err = s.SubmissionForUser(ctx, newSub, u.ID)
+	if err != nil {
+		t.Fatalf("load post-update submission: %v", err)
+	}
+	if sub.VariantVersion != 2 {
+		t.Errorf("post-update submission variant_version = %d, want 2", sub.VariantVersion)
+	}
+}
+
+// TestUpsertVariantArchiveAndRevive covers slugs leaving and re-entering the
+// document: a removed challenge is archived (hidden from reads, submissions
+// and their points kept), and a slug that comes back revives the same row,
+// reattaching the old submissions.
+func TestUpsertVariantArchiveAndRevive(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	course, variant := loadSeedCourse(t)
+
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	ids := challengeIDsBySlug(t, s, course.Slug, variant.Language)
+
+	removed := variant.Lessons[0].Challenges[0]
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	subID, err := s.CreateSubmission(ctx, u.ID, ids[removed.Slug], "package x")
+	if err != nil {
+		t.Fatalf("create submission: %v", err)
+	}
+	if err := s.CompleteSubmission(ctx, subID, "passed", "ok", removed.Points, nil, nil); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	// Re-publish without that challenge.
+	trimmed := variant
+	trimmed.Lessons = append([]domain.Lesson(nil), variant.Lessons...)
+	trimmed.Lessons[0].Challenges = variant.Lessons[0].Challenges[1:]
+	if _, err := s.UpsertVariant(ctx, course, trimmed, nil, nil); err != nil {
+		t.Fatalf("trimmed re-publish: %v", err)
+	}
+
+	if after := challengeIDsBySlug(t, s, course.Slug, variant.Language); after[removed.Slug] != 0 {
+		t.Errorf("removed challenge %q still visible after re-publish", removed.Slug)
+	}
+	subs, err := s.SubmissionsForChallenge(ctx, u.ID, ids[removed.Slug])
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("submissions on archived challenge = %d, %v; want 1 (history preserved)", len(subs), err)
+	}
+
+	// Earned points survive the archival; possible points shrink to the
+	// live content.
+	scores, err := s.UserCourseScores(ctx, u.ID)
+	if err != nil || len(scores) != 1 {
+		t.Fatalf("scores = %v, %v; want 1 row", scores, err)
+	}
+	if scores[0].Earned != removed.Points {
+		t.Errorf("earned = %d, want %d (archived challenge's points stay valid)", scores[0].Earned, removed.Points)
+	}
+	if wantPossible := variant.TotalPoints() - removed.Points; scores[0].Possible != wantPossible {
+		t.Errorf("possible = %d, want %d (live challenges only)", scores[0].Possible, wantPossible)
+	}
+
+	// Re-publish the full document: the slug revives its archived row.
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("revive re-publish: %v", err)
+	}
+	revived := challengeIDsBySlug(t, s, course.Slug, variant.Language)
+	if revived[removed.Slug] != ids[removed.Slug] {
+		t.Errorf("revived challenge ID = %d, want original %d (history must reattach)", revived[removed.Slug], ids[removed.Slug])
+	}
+	variantID, _ := seedVariantID(t, s, course.Slug, variant.Language)
+	completed, err := s.CompletedChallenges(ctx, u.ID, variantID)
+	if err != nil || !completed[ids[removed.Slug]] {
+		t.Errorf("revived challenge not marked complete (completed=%v, err=%v)", completed, err)
+	}
+}
+
+// TestUpsertVariantFinalSlugChange replaces the final challenge's slug: the
+// old final must be archived (freeing the one-live-final-per-variant slot)
+// and the new one inserted, in one publish.
+func TestUpsertVariantFinalSlugChange(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	course, variant := loadSeedCourse(t)
+
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	renamed := variant
+	renamed.Final.Slug = variant.Final.Slug + "-v2"
+	if _, err := s.UpsertVariant(ctx, course, renamed, nil, nil); err != nil {
+		t.Fatalf("re-publish with renamed final: %v", err)
+	}
+
+	_, v, err := s.VariantDetail(ctx, course.Slug, variant.Language)
+	if err != nil {
+		t.Fatalf("variant detail: %v", err)
+	}
+	if v.Final.Slug != renamed.Final.Slug {
+		t.Errorf("final slug = %q, want %q", v.Final.Slug, renamed.Final.Slug)
+	}
+}
+
+// seedVariantID resolves the variant row ID for a slug/language pair.
+func seedVariantID(t *testing.T, s *Store, slug, language string) (int64, int) {
+	t.Helper()
+	_, v, err := s.VariantDetail(context.Background(), slug, language)
+	if err != nil {
+		t.Fatalf("variant detail: %v", err)
+	}
+	return v.ID, v.Version
 }
 
 // variantEditedBy reads the edited_by column directly; it's attribution

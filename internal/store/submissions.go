@@ -15,8 +15,8 @@ import (
 // spins a real Cloud Run Job execution, so both exist to stop a burst (or
 // script) from queueing unbounded job runs.
 const (
-	maxInFlightSubmissions          = 3
-	maxDailySubmissionsPerChallenge = 5
+	maxInFlightSubmissions          = 10
+	maxDailySubmissionsPerChallenge = 10
 )
 
 // SubmissionRateLimited reports whether a new submission from this user
@@ -36,10 +36,17 @@ func (s *Store) SubmissionRateLimited(ctx context.Context, userID, challengeID i
 	return limited, err
 }
 
+// CreateSubmission stamps the challenge's current variant version onto the
+// submission (via the SELECT feeding the INSERT), so later reads can tell
+// whether the submission predates a course update.
 func (s *Store) CreateSubmission(ctx context.Context, userID, challengeID int64, code string) (int64, error) {
 	var id int64
-	err := s.pool.QueryRow(ctx,
-		`INSERT INTO submissions (user_id, challenge_id, code) VALUES ($1, $2, $3) RETURNING id`,
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO submissions (user_id, challenge_id, code, variant_version)
+		SELECT $1, ch.id, $3, v.version
+		FROM challenges ch JOIN course_variants v ON v.id = ch.variant_id
+		WHERE ch.id = $2
+		RETURNING id`,
 		userID, challengeID, code,
 	).Scan(&id)
 	return id, err
@@ -47,12 +54,15 @@ func (s *Store) CreateSubmission(ctx context.Context, userID, challengeID int64,
 
 // CreateClaimedSubmission stores a submission whose verdict the CLI already
 // established locally: it lands graded, with the claimed status and score,
-// and waits only for its background audit.
+// and waits only for its background audit. Like CreateSubmission it stamps
+// the challenge's current variant version.
 func (s *Store) CreateClaimedSubmission(ctx context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO submissions (user_id, challenge_id, code, status, output, score, tests_passed, tests_total, claimed, graded_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, now())
+		INSERT INTO submissions (user_id, challenge_id, code, status, output, score, tests_passed, tests_total, claimed, graded_at, variant_version)
+		SELECT $1, ch.id, $3, $4, $5, $6, $7, $8, true, now(), v.version
+		FROM challenges ch JOIN course_variants v ON v.id = ch.variant_id
+		WHERE ch.id = $2
 		RETURNING id`,
 		userID, challengeID, code, status, output, score, testsPassed, testsTotal,
 	).Scan(&id)
@@ -133,7 +143,8 @@ func (s *Store) SubmissionForUser(ctx context.Context, id, userID int64) (domain
 		SELECT sub.id, sub.user_id, sub.challenge_id, ch.title, sub.code,
 		       sub.status, sub.score, coalesce(sub.output, ''), sub.created_at,
 		       sub.tests_passed, sub.tests_total,
-		       sub.claimed, coalesce(sub.audit_status, ''), coalesce(sub.audit_output, '')
+		       sub.claimed, coalesce(sub.audit_status, ''), coalesce(sub.audit_output, ''),
+		       sub.variant_version
 		FROM submissions sub
 		JOIN challenges ch ON ch.id = sub.challenge_id
 		WHERE sub.id = $1 AND sub.user_id = $2`,
@@ -141,7 +152,7 @@ func (s *Store) SubmissionForUser(ctx context.Context, id, userID int64) (domain
 	).Scan(&sub.ID, &sub.UserID, &sub.ChallengeID, &sub.ChallengeTitle, &sub.Code,
 		&sub.Status, &sub.Score, &sub.Output, &sub.CreatedAt,
 		&sub.TestsPassed, &sub.TestsTotal,
-		&sub.Claimed, &sub.AuditStatus, &sub.AuditOutput)
+		&sub.Claimed, &sub.AuditStatus, &sub.AuditOutput, &sub.VariantVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Submission{}, domain.ErrNotFound
 	}
@@ -155,7 +166,8 @@ func (s *Store) CompletedChallenges(ctx context.Context, userID, variantID int64
 		SELECT DISTINCT sub.challenge_id
 		FROM submissions sub
 		JOIN challenges ch ON ch.id = sub.challenge_id
-		WHERE sub.user_id = $1 AND ch.variant_id = $2 AND sub.status = 'passed'`,
+		WHERE sub.user_id = $1 AND ch.variant_id = $2 AND ch.archived_at IS NULL
+		  AND sub.status = 'passed'`,
 		userID, variantID)
 	if err != nil {
 		return nil, err
@@ -174,12 +186,17 @@ func (s *Store) CompletedChallenges(ctx context.Context, userID, variantID int64
 }
 
 // UserCourseScores sums the user's best score per challenge into one row
-// per course variant they have attempted.
+// per course variant they have attempted. Earned deliberately includes
+// scores on since-archived challenges — points, once earned, stay valid
+// across course updates — while Possible counts only live challenges, so
+// the two can briefly disagree after a course removes challenges someone
+// had completed.
 func (s *Store) UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.slug, c.title, v.language,
 		       coalesce(sum(best.score), 0),
-		       (SELECT coalesce(sum(ch2.points), 0) FROM challenges ch2 WHERE ch2.variant_id = v.id)
+		       (SELECT coalesce(sum(ch2.points), 0) FROM challenges ch2
+		        WHERE ch2.variant_id = v.id AND ch2.archived_at IS NULL)
 		FROM (
 			SELECT challenge_id, max(score) AS score
 			FROM submissions WHERE user_id = $1 GROUP BY challenge_id
@@ -240,7 +257,8 @@ func (s *Store) SubmissionsForChallenge(ctx context.Context, userID, challengeID
 		SELECT sub.id, sub.user_id, sub.challenge_id, ch.title, sub.code,
 		       sub.status, sub.score, coalesce(sub.output, ''), sub.created_at,
 		       sub.tests_passed, sub.tests_total,
-		       sub.claimed, coalesce(sub.audit_status, ''), coalesce(sub.audit_output, '')
+		       sub.claimed, coalesce(sub.audit_status, ''), coalesce(sub.audit_output, ''),
+		       sub.variant_version
 		FROM submissions sub
 		JOIN challenges ch ON ch.id = sub.challenge_id
 		WHERE sub.user_id = $1 AND sub.challenge_id = $2
@@ -257,7 +275,7 @@ func (s *Store) SubmissionsForChallenge(ctx context.Context, userID, challengeID
 		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ChallengeID, &sub.ChallengeTitle, &sub.Code,
 			&sub.Status, &sub.Score, &sub.Output, &sub.CreatedAt,
 			&sub.TestsPassed, &sub.TestsTotal,
-			&sub.Claimed, &sub.AuditStatus, &sub.AuditOutput); err != nil {
+			&sub.Claimed, &sub.AuditStatus, &sub.AuditOutput, &sub.VariantVersion); err != nil {
 			return nil, err
 		}
 		result = append(result, sub)

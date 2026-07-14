@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -477,155 +476,22 @@ func TestSaveVariantMissingVersionPreservesInput(t *testing.T) {
 	}
 }
 
-// TestEditVariantPageShowsSubmissionWarning covers issue #37's GET side: a
-// variant with existing submissions shows the exact count as soon as the
-// page loads, before the user ever clicks Save.
-func TestEditVariantPageShowsSubmissionWarning(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-	fs.subCount = 3
-
-	req := httptest.NewRequest("GET", "/courses/intro-to-concurrency/go/edit", nil)
-	req.AddCookie(session)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /edit = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "3 submission") {
-		t.Errorf("expected the exact submission count in the warning, got: %s", body)
-	}
-	if !strings.Contains(body, "Yes, save anyway") {
-		t.Error("expected the confirming submit control when submissions exist")
-	}
-	// The "Yes, save anyway" button is only meaningful if the hidden field it
-	// depends on (see views.EditVariant/edit.templ) is actually present —
-	// assert on the markup (via a regex tolerant of templ's exact
-	// whitespace/self-closing-slash codegen) so a future template edit that
-	// drops the hidden field, while leaving the button's visible text
-	// intact, fails a test instead of silently breaking every
-	// destructive-save confirmation.
-	if !confirmedHiddenFieldPattern.MatchString(body) {
-		t.Error("expected the hidden confirmed=1 field the 'Yes, save anyway' button depends on")
-	}
-}
-
-// confirmedHiddenFieldPattern matches an <input type="hidden" ...> tag that
-// also carries name="confirmed" and value="1", in either attribute order,
-// without depending on templ's exact whitespace or self-closing-slash
-// codegen (see edit_templ.go, which renders it without a trailing "/").
-var confirmedHiddenFieldPattern = regexp.MustCompile(
-	`<input[^>]*type="hidden"[^>]*name="confirmed"[^>]*value="1"[^>]*>|<input[^>]*type="hidden"[^>]*value="1"[^>]*name="confirmed"[^>]*>`)
-
-// TestSaveVariantNoSubmissionsSavesImmediately is the non-regression case:
-// a variant with zero submissions saves on the first plain Save, with no
-// confirmation step, exactly like before issue #37.
-func TestSaveVariantNoSubmissionsSavesImmediately(t *testing.T) {
+// TestSaveVariantSavesImmediately: a valid save applies on the first plain
+// Save with no confirmation step. (Saving used to require confirming when
+// submissions existed — issue #37 — but re-publishing no longer deletes
+// them, so the confirm flow is gone.)
+func TestSaveVariantSavesImmediately(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
 	fs.variantSlug = "intro-to-concurrency"
 	fs.variant = &fakeVariantGo
 	fs.variantSource = "stale"
-	fs.subCount = 0
 
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
 		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST with no submissions = %d, want 303 (saved immediately): %s", rec.Code, rec.Body)
-	}
-	if len(fs.upserts) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
-	}
-}
-
-// TestSaveVariantWithSubmissionsRequiresConfirmation covers issue #37's core
-// case: a variant with existing submissions, submitted without the
-// confirmed=1 field, must not save — it re-renders the edit page instead,
-// naming the exact count and preserving exactly what the user typed.
-func TestSaveVariantWithSubmissionsRequiresConfirmation(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-	fs.subCount = 5
-
-	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (in progress)", 1)
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {edited}, "version": {"0"}}, session)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST unconfirmed with submissions = %d, want 200 (re-render): %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "5 submission") {
-		t.Errorf("expected the exact submission count in the warning, got: %s", body)
-	}
-	if !strings.Contains(body, "(in progress)") {
-		t.Error("edit page should preserve exactly what the user submitted while awaiting confirmation")
-	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("unconfirmed destructive save must not be applied, got %d upserts", len(fs.upserts))
-	}
-}
-
-// TestSaveVariantVersionConflictWinsOverSubmissionConfirmation covers the
-// composition of issue #36 (version conflict) and issue #37 (submission
-// confirmation) when both apply to the same submit: saveVariant's doc
-// comment says the version-conflict peek runs, and wins, before the
-// submission-count check, so a stale submit against a variant that also has
-// outstanding submissions must show the version-conflict message — not the
-// submission-count warning — and must not save either way.
-func TestSaveVariantVersionConflictWinsOverSubmissionConfirmation(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-	fs.variantVersion = 2 // someone else already saved after this page was loaded at version 1
-	fs.subCount = 5       // ...and there are outstanding submissions on top of that
-
-	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (edited)", 1)
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {edited}, "version": {"1"}}, session) // stale version, no confirmed=1
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST stale version with submissions = %d, want 200 (re-render): %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "Someone else changed this since you opened it") {
-		t.Errorf("expected the version-conflict message to win, got: %s", body)
-	}
-	if strings.Contains(body, "5 submission") || strings.Contains(body, "Yes, save anyway") {
-		t.Error("submission-count warning should not appear once the version conflict already applies")
-	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("neither check should let a save through, got %d upserts", len(fs.upserts))
-	}
-}
-
-// TestSaveVariantWithSubmissionsConfirmedSaves is the other half of the same
-// case: the same submit, but with confirmed=1 present (as the rendered "Yes,
-// save anyway" button sends), must proceed and save.
-func TestSaveVariantWithSubmissionsConfirmedSaves(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-	fs.subCount = 5
-
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}, "confirmed": {"1"}}, session)
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST confirmed with submissions = %d, want 303 (saved): %s", rec.Code, rec.Body)
+		t.Fatalf("POST = %d, want 303 (saved immediately): %s", rec.Code, rec.Body)
 	}
 	if len(fs.upserts) != 1 {
 		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
