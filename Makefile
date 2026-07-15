@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish apikey apikey-prod check clean
+.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish sync-courses apikey apikey-prod check clean
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -113,6 +113,21 @@ publish:
 		echo "publishing $$f"; \
 		go run ./cmd/duckserver seed --url $(GC_URL) "$$f" || exit 1; \
 	done
+
+# Diff courses/*.md against a running server and push only the variants that
+# actually differ — unlike `publish`, which re-seeds every course
+# unconditionally (and so cascade-deletes lessons/challenges/submissions even
+# for courses that never changed). Auth is the `duck login` user token, not
+# GC_API_KEY: only a user-attributed caller gets the optimistic-concurrency
+# check that keeps a concurrent editor from being clobbered.
+#
+#   make sync-courses DRY_RUN=1                       # report, write nothing
+#   make sync-courses DUCK_URL=http://localhost:8080  # against `make dev`
+DUCK_URL ?= https://duckgc.com
+
+sync-courses: duck
+	DUCK=./duck DUCK_BASE_URL=$(DUCK_URL) \
+		./scripts/sync-courses.sh $(if $(DRY_RUN),--dry-run)
 
 # Interactive SQL shells. psql: the compose Postgres from `make dev`.
 # psql-prod: fetches the app's DATABASE_URL from Secret Manager (needs
