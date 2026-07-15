@@ -35,11 +35,15 @@ Give each subagent a prompt that:
 1. Names its one assigned file, e.g. `courses/dsa-from-scratch-go.md`.
 2. Tells it to invoke the `course-review` skill and follow it exactly,
    reviewing only that file.
-3. Restates the skill's hard rules as non-negotiable: never change a
-   lesson/challenge slug, never weaken tests to make the course pass, keep
-   required frontmatter intact, do NOT publish, and touch only its own
-   course file — note defects in other courses in the report rather than
-   editing them.
+3. Restates the skill's hard rules as non-negotiable: never weaken tests to
+   make the course pass, keep required frontmatter intact, do NOT publish,
+   and touch only its own course file — note defects in other courses in the
+   report rather than editing them. Treat lesson/challenge **slugs** as the
+   identity contract: keep them stable by default. Only rename a slug when it
+   is clearly wrong (e.g. a copy-paste leftover from another language
+   variant). A slug rename is never a silent edit — on republish the old slug
+   is archived and a new row is created, so call it out explicitly in the
+   report as a change that needs human sign-off.
 4. Asks it to run `go run ./cmd/coursecheck courses/<file>.md` (plus the
    per-language by-hand challenge checks the skill describes) and to not
    hand back a course that fails validation.
@@ -59,9 +63,9 @@ produce one consolidated summary across all courses:
 - A combined list of anything flagged as unverifiable or needing a human.
 - Any cross-course defects a subagent noticed but (correctly) did not edit.
 
-Commit the changes locally with a summary for the commit message and then 
-changes listed in in the commit message. NEVER NEVER NEVER sign the commit
-message with co authored by Claude. 
+Commit the changes locally: a one-line summary, then the per-course changes
+listed in the commit body. NEVER sign the commit message with a
+"Co-Authored-By: Claude" trailer or any AI-attribution line.
 
 If there were issues found:
 - Commit the changes as described above
