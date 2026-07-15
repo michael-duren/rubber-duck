@@ -756,8 +756,9 @@ counts its own recursion depth and, when a run of bad pivots pushes it
 past ~2 log n, bails out to heapsort — which happens to be your next
 lesson. glibc's `qsort` goes the other way: it is a *merge sort*, which is
 why the C library function you'd assume sorts in place may quietly
-`malloc` a scratch buffer — and it drops to heapsort only if that
-allocation fails.
+`malloc` a scratch buffer — and only if that allocation fails does it fall
+back to an in-place quicksort (itself an introsort, with heapsort as *its*
+own safety net).
 
 That glibc choice has a postscript worth your time. In 2023 its
 maintainers replaced the merge sort with an introsort — faster, and no

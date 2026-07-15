@@ -466,16 +466,24 @@ Anthropic SDK raises typed exceptions — `RateLimitError`, `APIConnectionError`
 `TypeError` from a bad dict key, fails immediately instead of quietly burning
 through your retry budget.
 
-Use it in the chat loop by wrapping the client call in a
-zero-argument lambda:
+Use it in the chat loop. The seam from the chat-loop lesson pays off again:
+because the client is just a callable, you can wrap *it* in retries and hand
+the wrapped version to `chat_turn` unchanged:
 
 ```python
-        reply = call_with_retries(
-            lambda: chat_turn(history, user_input, anthropic_client),
-            attempts=3,
+        retrying_client = lambda msgs: call_with_retries(
+            lambda: anthropic_client(msgs), attempts=3
         )
+        reply = chat_turn(history, user_input, retrying_client)
         print(reply)
 ```
+
+Retry the *client call*, not the whole turn. `chat_turn` appends the user
+message to `history` *before* it calls the client, so wrapping the entire
+`chat_turn` in the retry would re-append that message on every attempt —
+a single transient failure would leave two or three copies of the user's
+question in the history. Wrapping just the client keeps each retry scoped to
+the one thing that's actually flaky: the network request.
 
 Two honest footnotes for your real app. First, the official SDKs already
 retry rate limits and server errors internally (the Anthropic SDK defaults to

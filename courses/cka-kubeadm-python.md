@@ -837,6 +837,13 @@ kubectl create role pod-reader --verb=get,list,watch --resource=pods -n dev
 kubectl create rolebinding alice-reads-pods --role=pod-reader --user=alice -n dev
 ```
 
+The cluster-wide half of the grid is the same grammar with the namespace
+dropped: `kubectl create clusterrole pod-reader --verb=get,list
+--resource=pods` and `kubectl create clusterrolebinding ... --clusterrole
+pod-reader --serviceaccount=<ns>:<sa>` (or `--user`). Reach for these when
+a task says "cluster-wide" or spans namespaces — the mock exam's
+`get`/`list` pods-everywhere ServiceAccount is exactly this shape.
+
 Your verification tool — learn it before creating anything, because it's
 also how you *check your own work* on the exam:
 

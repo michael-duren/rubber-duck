@@ -247,7 +247,7 @@ The token bucket itself is two lines of math. A bucket holds up to `burst`
 tokens and starts full. Tokens drip in continuously at `rate` per second:
 
 ```go
-elapsed := now.Sub(last)
+elapsed := now().Sub(last) // now is the injected func() time.Time
 tokens = min(tokens+elapsed.Seconds()*float64(rate), float64(burst))
 ```
 
