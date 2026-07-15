@@ -930,11 +930,18 @@ Restore inverts it: unpack the snapshot to a *new* data directory, then
 point etcd's static pod at it:
 
 ```bash
-sudo etcdutl snapshot restore /var/backups/etcd-snap.db \
+sudo etcdctl snapshot restore /var/backups/etcd-snap.db \
   --data-dir /var/lib/etcd-restore
 ```
 
-then edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
+Restore is a local operation on the snapshot file, so — unlike the
+snapshot *save* — it needs no endpoint or cert flags. One version note:
+Ubuntu's `etcd-client` package is etcd 3.4, where `etcdctl snapshot
+restore` is the command. etcd 3.5+ moved restore into a separate
+`etcdutl` binary (`etcdutl snapshot restore`, same flags) and 3.6 dropped
+it from `etcdctl` entirely — so on a newer etcd, or the official release
+tarball that bundles both, run `etcdutl snapshot restore` instead. Then
+edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
 `/var/lib/etcd` to `/var/lib/etcd-restore` and let the kubelet restart
 it. Drill the full loop: create a marker deployment, snapshot, delete
 the deployment, restore, watch the deployment *come back*. (On your HA

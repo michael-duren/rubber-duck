@@ -380,7 +380,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.70"
+      version = "~> 0.111.0"
     }
   }
 }
@@ -396,6 +396,23 @@ provider "proxmox" {
   }
 }
 ```
+
+That `version` line earns a closer look, because `bpg/proxmox` is still a
+`0.x` provider. Semver's promise — "no breaking changes without a major
+version bump" — only switches on at `1.0`; below that, `0.112` is allowed
+to rename or remove an attribute that `0.111` accepted, and this provider
+does move fast. So the pin matters. Terraform's `~>` (the *pessimistic*
+operator) treats the **last** number you write as the only one it may
+increment: `~> 0.111.0` means ">= 0.111.0, < 0.112.0" — you pick up bugfix
+patches on `terraform init` but never a surprise minor. Drop a digit to
+`~> 0.111` and that last number becomes the minor, so `init` would happily
+jump you to `0.150` and possibly break your config out from under you.
+That's exactly the trap the original `~> 0.70` fell into: it resolves to
+"< 1.0", so a fresh `init` pulls whatever `0.x` is newest today, not a
+`0.70`. Pin the minor here, and let the `.terraform.lock.hcl` file that
+`init` generates (commit it — it's not under the `.terraform/` dir you
+gitignore below) freeze the exact build your teammates and future self
+resolve to.
 
 The `ssh` block is a bpg quirk worth knowing: a few operations (uploading
 cloud-init snippet files, some disk imports) aren't fully covered by the

@@ -728,9 +728,12 @@ no power loss — the process being killed (OOM killer, Ctrl-C, a bug) is enough
 It gets subtler: the kernel and the drive may write your data back in **any
 order**. Writing bytes 0–4095 then 4096–8191 does not mean they reach the
 platter in that order. A crash can leave the *second* page written and the
-first one old — a file that's interleaved old/new garbage. This is called a
-**torn write**, and it's why "I'll just be careful about write order" doesn't
-work without explicit barriers (fsync is also an ordering barrier).
+first one old — a file that's interleaved old/new garbage. This is why "I'll just be careful about write
+order" doesn't work without explicit barriers (fsync is also an ordering
+barrier). (The single-page version of this hazard is the classic **torn
+write**, or **torn page**: one page write fractured into part-old, part-new
+because the drive's atomic unit is only a sector — the reason Postgres logs
+whole page images after each checkpoint.)
 
 ## The Fix: Write-New-Then-Rename
 
