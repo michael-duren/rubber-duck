@@ -349,8 +349,8 @@ docs](https://docs.tigera.io/calico/latest/getting-started/kubernetes/)
 for the current version and substitute it below:
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/tigera-operator.yaml
-curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/custom-resources.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/tigera-operator.yaml
+curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/custom-resources.yaml
 ```
 
 **Edit `custom-resources.yaml` before applying**: its default pod CIDR is
@@ -837,6 +837,13 @@ kubectl create role pod-reader --verb=get,list,watch --resource=pods -n dev
 kubectl create rolebinding alice-reads-pods --role=pod-reader --user=alice -n dev
 ```
 
+The cluster-wide half of the grid is the same grammar with the namespace
+dropped: `kubectl create clusterrole pod-reader --verb=get,list
+--resource=pods` and `kubectl create clusterrolebinding ... --clusterrole
+pod-reader --serviceaccount=<ns>:<sa>` (or `--user`). Reach for these when
+a task says "cluster-wide" or spans namespaces — the mock exam's
+`get`/`list` pods-everywhere ServiceAccount is exactly this shape.
+
 Your verification tool — learn it before creating anything, because it's
 also how you *check your own work* on the exam:
 
@@ -930,11 +937,18 @@ Restore inverts it: unpack the snapshot to a *new* data directory, then
 point etcd's static pod at it:
 
 ```bash
-sudo etcdutl snapshot restore /var/backups/etcd-snap.db \
+sudo etcdctl snapshot restore /var/backups/etcd-snap.db \
   --data-dir /var/lib/etcd-restore
 ```
 
-then edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
+Restore is a local operation on the snapshot file, so — unlike the
+snapshot *save* — it needs no endpoint or cert flags. One version note:
+Ubuntu's `etcd-client` package is etcd 3.4, where `etcdctl snapshot
+restore` is the command. etcd 3.5+ moved restore into a separate
+`etcdutl` binary (`etcdutl snapshot restore`, same flags) and 3.6 dropped
+it from `etcdctl` entirely — so on a newer etcd, or the official release
+tarball that bundles both, run `etcdutl snapshot restore` instead. Then
+edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
 `/var/lib/etcd` to `/var/lib/etcd-restore` and let the kubelet restart
 it. Drill the full loop: create a marker deployment, snapshot, delete
 the deployment, restore, watch the deployment *come back*. (On your HA
@@ -1029,17 +1043,22 @@ extends itself.
 
 **Helm** — templated charts with versioned releases. Install it
 (one-line script in the Helm docs), then run one full lifecycle against
-your cluster:
+your cluster. We use **podinfo**, a tiny self-contained demo chart. A
+word on chart choice: countless tutorials reach for Bitnami charts, but
+Bitnami retired its free public image catalog in 2025, so those charts
+now deploy and then wedge on `ImagePullBackOff`. The habit that saves
+you — on the exam and in the wild — is confirming a chart's images are
+still pullable before you build on it.
 
 ```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add podinfo https://stefanprodan.github.io/podinfo
 helm repo update
-helm install mydb bitnami/postgresql --set auth.postgresPassword=drill
+helm install mydemo podinfo/podinfo --set replicaCount=2
 helm list
-helm get values mydb
-helm upgrade mydb bitnami/postgresql --set primary.persistence.size=2Gi
-helm rollback mydb 1
-helm uninstall mydb
+helm get values mydemo            # just the values you overrode
+helm upgrade mydemo podinfo/podinfo --set replicaCount=3
+helm rollback mydemo 1            # back to the 2-replica revision
+helm uninstall mydemo
 ```
 
 The exam shapes: install a given chart with specific values overridden
@@ -1192,8 +1211,9 @@ def test_checkpoint_claimed():
 # Final Challenge: The Mock Exam {#mock-exam points=50}
 
 Simulate the real thing. **Two hours on a timer**, docs allowed (only
-kubernetes.io/docs, kubernetes.io/blog, and helm.sh — the real
-allowlist), no lesson text, no old shell history. Do the tasks in any
+kubernetes.io/docs, kubernetes.io/blog, helm.sh, and
+gateway-api.sigs.k8s.io — the real CKA allowlist), no lesson text, no old
+shell history. Do the tasks in any
 order; skip and return rather than sinking time — that discipline is
 half of passing. Score a task only if it fully works.
 

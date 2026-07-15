@@ -1757,7 +1757,7 @@ Every terminal vendor of the 1970s invented its own control codes,
 and portable software drowned in the differences (the `termcap`
 database, and later `terminfo`, exist to catalogue that chaos — more
 below). ANSI standardized a common language in **ANSI X3.64** (1979),
-which grew into **ECMA-48** / ISO 6429. DEC's **VT100** (1978) was the
+aligned with **ECMA-48** / ISO 6429. DEC's **VT100** (1978) was the
 hit implementation, so the family is called "ANSI escape codes" and
 "VT100 sequences" interchangeably. Everything since — xterm, Linux
 console, tmux, kitty, iTerm2, Windows Terminal — is a VT100 descendant
@@ -4579,7 +4579,7 @@ grid stays exactly `rows × cols`; scrolled-off lines move to a
 separate buffer that only ever grows at one end and gets trimmed at
 the other. First-in, first-out, bounded: a **ring buffer**.
 
-Fix a capacity of `cap` lines and keep three numbers alongside the
+Fix a capacity of `cap` lines and keep two more numbers alongside the
 storage:
 
 ```
@@ -7109,7 +7109,7 @@ int editor_find_next(const struct editor *e, const char *query,
 
 - Search forward from (`from_row`, `from_col`) inclusive, wrapping
   past the end of the buffer, over **all** lines — including the
-  part of the starting line *before* `from_col*` on the wrapped
+  part of the starting line *before* `from_col` on the wrapped
   pass (a match just left of the cursor must be reachable).
 - On a hit: store its position, return 1. No match anywhere (or
   empty/NULL query, or an out-of-range start): return 0.

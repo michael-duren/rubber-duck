@@ -118,6 +118,24 @@ Close a channel to signal "no more values". Receivers can range over a
 channel until it is closed. Only the sending side should close a channel —
 closing an already-closed channel, or sending on a closed one, panics.
 
+```go
+ch := make(chan int)
+go func() {
+	defer close(ch)
+	for i := 1; i <= 3; i++ {
+		ch <- i
+	}
+}()
+for v := range ch { // 1, 2, 3 — the loop ends when ch is closed and drained
+	fmt.Println(v)
+}
+```
+
+The sender closes `ch` (here with `defer`) once it has nothing left to send;
+that close is what lets the `range` loop terminate instead of blocking
+forever on a fourth receive. This producer-closes-then-receiver-ranges shape
+is the backbone of every channel program below.
+
 A receive can also ask whether the channel is still open:
 
 ```go
@@ -158,6 +176,49 @@ for a != nil || b != nil {
 Setting a drained channel variable to `nil` is the trick that retires it:
 a receive on a `nil` channel never becomes ready, so `select` simply stops
 considering that case and keeps servicing the other one.
+
+### Chaining stages: a pipeline
+
+A *pipeline* is a chain of stages joined by channels, where each stage is a
+goroutine that receives from an upstream channel, does some work, and sends
+downstream. A middle stage is both a receiver and a sender: it ranges over
+its input and closes its output once that input runs dry — the same
+producer-closes-then-receiver-ranges shape from above, one link further down
+the chain.
+
+```go
+// stage 1: emit the numbers, then close
+nums := make(chan int)
+go func() {
+	defer close(nums)
+	for _, n := range []int{1, 2, 3} {
+		nums <- n
+	}
+}()
+
+// stage 2: square each value and forward it
+squares := make(chan int)
+go func() {
+	defer close(squares)
+	for n := range nums { // ends when stage 1 closes nums
+		squares <- n * n
+	}
+}()
+
+// stage 3: the caller consumes the last channel
+total := 0
+for sq := range squares { // ends when stage 2 closes squares
+	total += sq
+}
+fmt.Println(total) // 14
+```
+
+Each stage closing *its own* output channel is what makes the shutdowns
+cascade: stage 1 closing `nums` lets stage 2's `range` finish, which fires
+its `defer close(squares)`, which in turn lets the final loop end. Running
+the last stage in the calling goroutine is what makes it safe to read
+`total` afterward — the `range` over `squares` only returns once every
+upstream stage has closed, so it doubles as the synchronization point.
 
 ## Challenge: Fan In {#fan-in points=15}
 
