@@ -622,9 +622,9 @@ visible.
 FUNCSEL is where last lesson's warning bites: `GPIO_CTRL` packs *other* fields
 into the same word (output overrides, interrupt config). Most RP2040
 peripherals — IO_BANK0 included — actually do get atomic bit manipulation for
-free: every register is given a 4KB address slot, and writing to its address
-plus `0x1000`/`0x2000`/`0x3000` atomically XORs/sets/clears bits with no
-read-modify-write at all (datasheet §2.1.2). The SIO you just used is the
+free: each peripheral's registers are mirrored into three more 4KB windows, so
+writing to a register's normal address plus `0x1000`/`0x2000`/`0x3000` atomically
+XORs/sets/clears its bits with no read-modify-write at all (datasheet §2.1.2). The SIO you just used is the
 *exception* — it's wired straight to the cores off the normal bus, so it can't
 do that trick, which is exactly why it needed its own hand-built SET/CLR/XOR
 registers. That alias mechanism is one more address computation on top of what

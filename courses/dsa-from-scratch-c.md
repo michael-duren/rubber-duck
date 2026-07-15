@@ -1400,7 +1400,13 @@ Two C-only responsibilities the garbage-collected languages hide from you:
 
 - **The map owns its keys.** The caller's `const char *key` might be a
   stack buffer that's gone next line. `strdup` it on insert, `free` it on
-  delete, and free every key plus every node in `hm_free`.
+  delete, and free every key plus every node in `hm_free`. One catch:
+  `strdup` is a POSIX function, not ISO C, so under the `-std=c17` this
+  course compiles with it stays hidden and you'd get an
+  implicit-declaration error. The starter opens with
+  `#define _POSIX_C_SOURCE 200809L` (before any `#include`) to ask for it
+  — or skip `strdup` entirely and copy the key yourself:
+  `malloc(strlen(key) + 1)` then `strcpy`, which is all `strdup` does.
 - **Compare with `strcmp`, never `==`.** `key_a == key_b` on two `char *`
   asks "is this the same *address*?", not "is this the same *text*?" — it
   will appear to work in toy tests (where string literals get pooled) and
@@ -1432,6 +1438,7 @@ checker.
 ### Starter
 
 ```c
+#define _POSIX_C_SOURCE 200809L /* expose strdup under -std=c17 (see above) */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

@@ -99,8 +99,12 @@ of a WaitGroup. (The grader can't truly detect it; this is between you and
 the duck.) The intended shape is an atomic counter plus a channel used as a
 one-shot park/unpark signal: `Spawn` increments before starting the
 goroutine, a deferred decrement detects the drop to zero and wakes waiters.
-A `sync.Mutex` guarding the counter alongside a "currently idle" channel is
-also a fine design. Think hard about the classic bug: incrementing *inside*
+Reuse is the wrinkle the tests lean on: if you wake waiters by *closing* the
+channel, that channel is spent — a closed channel can't park the next round's
+waiters — so whichever `Spawn` next lifts the count off zero must install a
+fresh one. That coupling of "bump the count" and "swap the signal" is exactly
+why the other natural design is a `sync.Mutex` guarding the counter alongside
+a "currently idle" channel, updated together. Think hard about the classic bug: incrementing *inside*
 the new goroutine instead of before it starts — a `WaitAll` racing that
 increment sees zero and returns early.
 

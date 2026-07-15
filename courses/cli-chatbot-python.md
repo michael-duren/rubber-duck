@@ -512,8 +512,12 @@ def anthropic_streaming_client(messages):
 ```
 
 Notice it still returns the full reply string — so it drops into `chat_turn`
-unchanged, and history stays correct. Seams pay rent again: printing moved
-into the client; the loop logic didn't change at all.
+unchanged, and history stays correct. One adjustment when you switch the loop
+over to this client: printing now happens *inside* the client as chunks land,
+so drop the `print(reply)` from your loop — otherwise every answer prints
+twice, once streamed and once at the end. That's the only change; `chat_turn`
+and the history logic are untouched. Seams pay rent again: the printing
+responsibility moved into the client without disturbing the loop's structure.
 
 The challenge unit-tests the retry wrapper against a deliberately flaky fake
 "client" that fails a set number of times before succeeding — the sandbox

@@ -118,6 +118,24 @@ Close a channel to signal "no more values". Receivers can range over a
 channel until it is closed. Only the sending side should close a channel —
 closing an already-closed channel, or sending on a closed one, panics.
 
+```go
+ch := make(chan int)
+go func() {
+	defer close(ch)
+	for i := 1; i <= 3; i++ {
+		ch <- i
+	}
+}()
+for v := range ch { // 1, 2, 3 — the loop ends when ch is closed and drained
+	fmt.Println(v)
+}
+```
+
+The sender closes `ch` (here with `defer`) once it has nothing left to send;
+that close is what lets the `range` loop terminate instead of blocking
+forever on a fourth receive. This producer-closes-then-receiver-ranges shape
+is the backbone of every channel program below.
+
 A receive can also ask whether the channel is still open:
 
 ```go

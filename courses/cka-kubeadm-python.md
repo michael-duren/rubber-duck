@@ -1029,17 +1029,22 @@ extends itself.
 
 **Helm** — templated charts with versioned releases. Install it
 (one-line script in the Helm docs), then run one full lifecycle against
-your cluster:
+your cluster. We use **podinfo**, a tiny self-contained demo chart. A
+word on chart choice: countless tutorials reach for Bitnami charts, but
+Bitnami retired its free public image catalog in 2025, so those charts
+now deploy and then wedge on `ImagePullBackOff`. The habit that saves
+you — on the exam and in the wild — is confirming a chart's images are
+still pullable before you build on it.
 
 ```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add podinfo https://stefanprodan.github.io/podinfo
 helm repo update
-helm install mydb bitnami/postgresql --set auth.postgresPassword=drill
+helm install mydemo podinfo/podinfo --set replicaCount=2
 helm list
-helm get values mydb
-helm upgrade mydb bitnami/postgresql --set primary.persistence.size=2Gi
-helm rollback mydb 1
-helm uninstall mydb
+helm get values mydemo            # just the values you overrode
+helm upgrade mydemo podinfo/podinfo --set replicaCount=3
+helm rollback mydemo 1            # back to the 2-replica revision
+helm uninstall mydemo
 ```
 
 The exam shapes: install a given chart with specific values overridden

@@ -41,6 +41,36 @@ completes, which is how you safely use a value a thread produced — the
 so it must join both threads first. (A thread started with `daemon=True`
 is the exception: the process kills it outright on exit, unjoined.)
 
+### Getting a value back from a thread
+
+There's a catch: whatever `target` returns goes nowhere — `Thread` throws
+it away. To collect what a thread computed, hand it a place to write and
+read that place back after you've joined. A pre-sized list works well
+because each thread can own one index:
+
+```python
+import threading
+
+results = [0, 0]
+
+def work(i, part):
+    results[i] = sum(part)
+
+t0 = threading.Thread(target=work, args=(0, [1, 2, 3]))
+t1 = threading.Thread(target=work, args=(1, [4, 5, 6]))
+t0.start()
+t1.start()
+t0.join()
+t1.join()
+print(results[0] + results[1])  # 21
+```
+
+Each thread writes only its own slot, so the two never step on each other
+even though they run at the same time — pointing both threads at the *same*
+slot would let one overwrite the other's result. And read `results` only
+*after* both `.join()` calls return: that's the point at which every thread
+is guaranteed to have finished writing.
+
 ## Challenge: Run Work Concurrently {#concurrent-sum points=10}
 
 Implement `sum_nums(nums)` so that it splits the list in half and sums each
@@ -88,6 +118,28 @@ q = queue.Queue()
 threading.Thread(target=lambda: q.put(42)).start()
 print(q.get())  # 42
 ```
+
+### Draining a queue until the sentinel
+
+A `queue.Queue` carries no "closed" flag of its own, so the receiver decides
+when to stop by watching for the sentinel. The usual shape is a loop that
+`get`s until it sees `None`:
+
+```python
+while True:
+    v = q.get()
+    if v is None:
+        break
+    print(v)
+```
+
+`Queue.get()` blocks while the queue is empty, so this loop simply parks the
+thread until the next value — or the sentinel — arrives; there's no
+busy-waiting to manage. Draining a *single* queue is one loop like this. To
+consume two queues at once — as the fan-in challenge asks — give each its
+own draining loop in its own thread, since each `get()` blocks
+independently, and emit your own `None` downstream only once both inputs
+have delivered theirs.
 
 ## Challenge: Fan In {#fan-in points=15}
 

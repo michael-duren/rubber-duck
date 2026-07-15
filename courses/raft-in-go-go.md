@@ -813,7 +813,10 @@ In (b), S5 wins the next election (term 3, with votes from S3, S4, and
 itself) and writes a *different* entry at index 2. S5 crashes too; in (c),
 S1 restarts and wins election again, this time as leader of term 4 — but it
 has not accepted any new client command yet, so its log still ends at
-index 2 with the same old term-2 entry. Coming to power, S1 just resumes
+index 2 with the same old term-2 entry. (The paper's Figure 8(c) also shows
+S1 carrying an uncommitted term-4 entry at index 3; we leave that out so the
+hazard stands on its own — the danger here is entirely about the *old*
+index-2 entry, not any new one.) Coming to power, S1 just resumes
 normal replication (§5.3): retrying AppendEntries against S3 until the
 consistency check passes backfills that same old, already-existing entry
 onto S3 too. Nobody asked for that specifically; it falls out of the

@@ -3979,20 +3979,17 @@ int main() {
         check(doc == "", "test_undo_peels_first_session");
     }
     {
-        // Non-contiguous inserts don't coalesce.
+        // Non-contiguous inserts don't coalesce: the second insert lands
+        // BEFORE the first, so the end-of-run position doesn't line up.
         UndoHistory h;
-        std::string doc = "xy";
-        h.record_insert(0, "x");  // pretend history for "x" at 0...
-        // (fresh history; drive it for real:)
-        UndoHistory h2;
-        std::string d2;
-        ins(h2, d2, 0, "a");
-        ins(h2, d2, 0, "b");     // inserted BEFORE previous text
-        check(d2 == "ba", "test_doc_noncontiguous");
-        h2.undo(d2);
-        check(d2 == "a", "test_noncontiguous_separate_units");
-        h2.undo(d2);
-        check(d2 == "", "test_noncontiguous_second_undo");
+        std::string doc;
+        ins(h, doc, 0, "a");
+        ins(h, doc, 0, "b");     // inserted BEFORE previous text
+        check(doc == "ba", "test_doc_noncontiguous");
+        h.undo(doc);
+        check(doc == "a", "test_noncontiguous_separate_units");
+        h.undo(doc);
+        check(doc == "", "test_noncontiguous_second_undo");
     }
     {
         // Newline starts a new unit: undo is line-grained.
