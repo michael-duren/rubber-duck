@@ -1,0 +1,25 @@
+{
+  "name": "rubber-duck-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CodeMirror 6 bundle for the Rubber Duck challenge editor. Built once and vendored as internal/web/static/cm6.js — the web app has no bundler, so this is an author-machine regeneration step (Node >= 18). See README.md.",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --minify --format=iife --outfile=../internal/web/static/cm6.js --log-level=warning"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-cpp": "^6.0.2",
+    "@codemirror/lang-go": "^6.0.1",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.1",
+    "@replit/codemirror-vim": "^6.2.1",
+    "codemirror": "^6.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
