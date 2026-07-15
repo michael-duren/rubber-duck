@@ -231,8 +231,10 @@ func TestNoGoroutineLeak(t *testing.T) {
 
 # Lesson: Clocks You Can Control {#clocks-and-token-buckets}
 
-`time.After` in a hot loop allocates a timer per iteration; `time.Ticker`
-must be stopped or it lives forever. You know this. The deeper drill: **code
+`time.After` in a hot loop allocates a timer per iteration; a `time.Ticker`
+you forget to `Stop` keeps firing (Go 1.23+ can at least garbage-collect one
+you've dropped every reference to — older releases leaked it outright). You
+know this. The deeper drill: **code
 that reads the wall clock directly is untestable**, and rate limiters are
 where people learn that the hard way — the naive test for "2 requests per
 second" is a test that takes seconds and flakes in CI.

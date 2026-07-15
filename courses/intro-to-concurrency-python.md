@@ -121,9 +121,9 @@ print(q.get())  # 42
 
 ### Draining a queue until the sentinel
 
-A `queue.Queue` carries no "closed" flag of its own, so the receiver decides
-when to stop by watching for the sentinel. The usual shape is a loop that
-`get`s until it sees `None`:
+The sentinel is a convention the two sides agree on, not something the queue
+does for you, so the receiver decides when to stop by watching for it. The
+usual shape is a loop that `get`s until it sees `None`:
 
 ```python
 while True:

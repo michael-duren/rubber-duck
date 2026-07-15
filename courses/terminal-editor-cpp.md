@@ -573,15 +573,17 @@ ESC [ 4 ~  or  ESC [ 8 ~ End
 ESC [ 3 ~                Delete
 ESC [ 5 ~ / ESC [ 6 ~    PageUp / PageDown
 ESC O A ... ESC O F      arrows/Home/End again — SS3 form, sent by
-                         terminals in "application keypad" mode
+                         terminals in "application cursor keys" mode
 ```
 
 Yes: three different encodings for Home, from different terminal
 lineages, all still in the wild. A robust decoder accepts all of them.
 (The `~`-form numbers come from the VT220's function-key scheme; the
-`ESC O` prefix is SS3, "single shift 3", from the VT100's application
-keypad.) The `ctlseqs` document in the extended reading is the closest
-thing to a complete map.
+`ESC O` prefix is SS3, "single shift 3", the VT100 control that
+introduces its application-mode keypad and cursor-key codes — arrows
+switch to the SS3 form when the terminal enters application cursor-keys
+mode, `ESC [ ? 1 h`, DECCKM.) The `ctlseqs` document in the extended
+reading is the closest thing to a complete map.
 
 There's one genuinely nasty ambiguity: the user pressing the **Esc key**
 sends a lone 0x1B — the same byte that *starts* every sequence. The only

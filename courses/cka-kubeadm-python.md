@@ -1204,8 +1204,9 @@ def test_checkpoint_claimed():
 # Final Challenge: The Mock Exam {#mock-exam points=50}
 
 Simulate the real thing. **Two hours on a timer**, docs allowed (only
-kubernetes.io/docs, kubernetes.io/blog, and helm.sh — the real
-allowlist), no lesson text, no old shell history. Do the tasks in any
+kubernetes.io/docs, kubernetes.io/blog, helm.sh, and
+gateway-api.sigs.k8s.io — the real CKA allowlist), no lesson text, no old
+shell history. Do the tasks in any
 order; skip and return rather than sinking time — that discipline is
 half of passing. Score a task only if it fully works.
 

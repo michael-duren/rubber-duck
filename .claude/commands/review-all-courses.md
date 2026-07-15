@@ -59,5 +59,11 @@ produce one consolidated summary across all courses:
 - A combined list of anything flagged as unverifiable or needing a human.
 - Any cross-course defects a subagent noticed but (correctly) did not edit.
 
-Do not commit, open PRs, or publish. Leave the edits in the working tree
-for the operator to review, exactly as the `course-review` skill requires.
+Commit the changes locally with a summary for the commit message and then 
+changes listed in in the commit message. NEVER NEVER NEVER sign the commit
+message with co authored by Claude. 
+
+If there were issues found:
+- Commit the changes as described above
+- Clear any context
+- Rerun this skill, this skill will loop until all courses have no issues found

@@ -987,8 +987,8 @@ together, all become candidates together, split the vote, and repeat forever.
 Raft's fix is charmingly low-tech: **randomized election timeouts** (e.g.
 150–300 ms). Whoever draws the shortest timeout usually wins the election
 before anyone else even wakes up. The paper's own experiments (§9.3,
-"Performance") back this recommendation: shrinking the timeout range brings
-faster failover, but push it too low (well under the broadcast time) and
+"Performance") back this recommendation: lowering the election timeout speeds
+up failover, but push it too low (well under the broadcast time) and
 leaders start missing their own heartbeat deadline before followers'
 timeouts fire, causing unnecessary elections and *lower* availability — which
 is exactly the `broadcastTime << electionTimeout` half of the inequality

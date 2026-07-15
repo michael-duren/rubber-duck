@@ -7109,7 +7109,7 @@ int editor_find_next(const struct editor *e, const char *query,
 
 - Search forward from (`from_row`, `from_col`) inclusive, wrapping
   past the end of the buffer, over **all** lines — including the
-  part of the starting line *before* `from_col*` on the wrapped
+  part of the starting line *before* `from_col` on the wrapped
   pass (a match just left of the cursor must be reachable).
 - On a hit: store its position, return 1. No match anywhere (or
   empty/NULL query, or an out-of-range start): return 0.
