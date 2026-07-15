@@ -407,7 +407,7 @@ increment: `~> 0.111.0` means ">= 0.111.0, < 0.112.0" — you pick up bugfix
 patches on `terraform init` but never a surprise minor. Drop a digit to
 `~> 0.111` and that last number becomes the minor, so `init` would happily
 jump you to `0.150` and possibly break your config out from under you.
-That's exactly the trap the original `~> 0.70` fell into: it resolves to
+That's exactly the trap a naive `~> 0.70` falls into: it resolves to
 "< 1.0", so a fresh `init` pulls whatever `0.x` is newest today, not a
 `0.70`. Pin the minor here, and let the `.terraform.lock.hcl` file that
 `init` generates (commit it — it's not under the `.terraform/` dir you

@@ -241,9 +241,9 @@ buckets: buckets {
   "2"
   "3"
 }
-n1: "\"ada\" = 0"
-n3: "\"alan\" = 3"
-n2: "\"ken\" = 6"
+n1: "\"ada\""
+n3: "\"alan\""
+n2: "\"ken\""
 buckets."3" -> n1 -> n3 -> x1
 buckets."1" -> n2 -> x2
 x1: "∅" { shape: text }

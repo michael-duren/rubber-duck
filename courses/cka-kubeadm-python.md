@@ -349,8 +349,8 @@ docs](https://docs.tigera.io/calico/latest/getting-started/kubernetes/)
 for the current version and substitute it below:
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/tigera-operator.yaml
-curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/custom-resources.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/tigera-operator.yaml
+curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/custom-resources.yaml
 ```
 
 **Edit `custom-resources.yaml` before applying**: its default pod CIDR is

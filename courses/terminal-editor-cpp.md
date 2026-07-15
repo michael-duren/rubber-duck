@@ -633,9 +633,9 @@ Implement `decode_byte`, mapping a single input byte to a `Key`:
   Ctrl-H from tradition).
 - Remaining bytes `0x01..0x1A` → `CtrlKey` with the lowercase letter:
   `0x01` → `{'a'}`, `0x1A` → `{'z'}`.
-- Everything else — printable ASCII, and bytes ≥ 0x80 (UTF-8
-  continuation bytes pass through untouched; the buffer stores raw
-  bytes) — → `char` (cast the byte).
+- Everything else — printable ASCII, and bytes ≥ 0x80 (the non-ASCII
+  bytes of a UTF-8 sequence, lead and continuation alike, pass through
+  untouched; the buffer stores raw bytes) — → `char` (cast the byte).
 
 Note the parameter is `std::uint8_t`, not `char`: whether `char` is
 signed is platform-dependent, and a signed 0xE9 is −23 — the same bug the
@@ -1890,8 +1890,9 @@ axis:
 
 The horizontal axis is identical with `col_off`/`cur_rx`/`screen_cols` —
 and note it's **rx**, not cx, that the horizontal comparison uses: the
-viewport is a window over *screen columns*, and `cx_to_rx` is what turns the cursor's buffer position into the
-coordinate this policy clamps. Wire them in the wrong order (clamp on
+viewport is a window over *screen columns*, and `cx_to_rx` is what turns
+the cursor's buffer position into the coordinate this policy clamps. Wire
+them in the wrong order (clamp on
 cx, render with rx) and files with tabs scroll horizontally at the
 wrong moment — by an amount that depends on how many tabs are left of
 the cursor, a lovely class of bug to debug at 40 columns.

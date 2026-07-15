@@ -12,7 +12,7 @@ extended_reading:
     url: https://docs.python.org/3/library/queue.html
 ---
 
-# Lesson: Threads Basics {#goroutines-basics}
+# Lesson: Threads Basics {#threads-basics}
 
 A `threading.Thread` is an OS-backed thread managed by the Python runtime.
 In CPython (the runtime almost everyone uses), the Global Interpreter Lock
@@ -140,6 +140,63 @@ consume two queues at once — as the fan-in challenge asks — give each its
 own draining loop in its own thread, since each `get()` blocks
 independently, and emit your own `None` downstream only once both inputs
 have delivered theirs.
+
+### Chaining stages: a pipeline
+
+A *pipeline* is a chain of stages joined by queues, where each stage is a
+thread that gets values from an upstream queue, does some work, and puts the
+results on a downstream queue. A middle stage is both a consumer and a
+producer: it drains its input until the sentinel, then puts its *own* `None`
+on its output so the next stage knows when to stop — the same
+drain-until-`None`-then-signal shape from above, one link further down the
+chain.
+
+```python
+import queue
+import threading
+
+# stage 1: emit the numbers, then the sentinel
+nums = queue.Queue()
+def generate():
+    for n in [1, 2, 3]:
+        nums.put(n)
+    nums.put(None)
+
+# stage 2: square each value and forward it
+squares = queue.Queue()
+def square():
+    while True:
+        n = nums.get()
+        if n is None:
+            break
+        squares.put(n * n)
+    squares.put(None)  # forward end-of-stream downstream
+
+# stage 3: sum whatever comes out of the last queue
+result = [0]
+def total():
+    s = 0
+    while True:
+        v = squares.get()
+        if v is None:
+            break
+        s += v
+    result[0] = s
+
+threads = [threading.Thread(target=f) for f in (generate, square, total)]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join()
+print(result[0])  # 14
+```
+
+Each stage putting its *own* `None` on its output queue is what makes the
+shutdowns cascade: stage 1's sentinel ends stage 2's loop, which then puts
+the sentinel that ends stage 3's loop. Joining every thread before reading
+`result` is what makes that read safe — by the time `total`'s thread has
+finished, it has already written the final sum, exactly like reading the
+pre-sized list only after both `.join()` calls back in the threads lesson.
 
 ## Challenge: Fan In {#fan-in points=15}
 
