@@ -22,6 +22,57 @@ I/O and by some C-level operations, so threads still overlap I/O and
 blocking work. This course uses threads to practice coordinating concurrent
 tasks — the coordination patterns are the point, not raw CPU speedup.
 
+Concurrency is about *structuring* work as independent tasks; parallelism is
+about *running* them at once. The violet panel is concurrency (one core,
+tasks interleaved over time); the emerald panel is parallelism (many cores
+running tasks simultaneously). Because of the GIL, CPython threads sit in the
+violet picture for Python bytecode — interleaved, not truly parallel.
+
+```d2
+grid-rows: 2
+grid-gap: 30
+
+concurrency: "Concurrency" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  desc: "one core: A and B interleaved over time" {
+    shape: text
+  }
+  timeline: "" {
+    grid-rows: 1
+    grid-gap: 0
+    s1: A
+    s2: B
+    s3: A
+    s4: B
+    s5: A
+    s6: B
+  }
+}
+
+parallelism: "Parallelism" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+  desc: "two cores: A and B run at the same time" {
+    shape: text
+  }
+  core1: "Core 1" {
+    grid-rows: 1
+    grid-gap: 0
+    a1: A
+    a2: A
+    a3: A
+  }
+  core2: "Core 2" {
+    grid-rows: 1
+    grid-gap: 0
+    b1: B
+    b2: B
+    b3: B
+  }
+}
+```
+
 ```python
 import threading
 
@@ -79,6 +130,33 @@ one thread puts values in, another gets them out, and the queue itself
 handles the locking. A `None` put onto the queue is a common convention for
 "no more values" — a **sentinel** value the receiving side treats as a close
 signal, rather than real data.
+
+The amber producer puts values into the queue (violet); the cyan consumer
+gets them. This producer/consumer shape is the same idea Go models with a
+channel.
+
+```d2
+direction: right
+
+producer: "Producer\nsends / puts" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+chan: "channel (Go)\nqueue (Python)" {
+  shape: queue
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+consumer: "Consumer\nreceives / gets" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+
+producer -> chan: "value"
+chan -> consumer: "value"
+```
 
 ```python
 import queue

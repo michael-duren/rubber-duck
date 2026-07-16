@@ -112,7 +112,7 @@ func Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain.
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</nav><article class=\"mx-auto mt-6 max-w-3xl\"><p class=\"font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</nav><article class=\"mx-auto mt-6 max-w-5xl\"><p class=\"font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

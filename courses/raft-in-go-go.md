@@ -73,6 +73,32 @@ a legitimate leader (same or higher term) steps back down to follower. And
 *anyone* who sees a higher term — leader included — immediately becomes a
 follower of that term.
 
+Each state below carries a colored border — follower emerald, candidate amber,
+leader violet — and every edge is labeled with the event that triggers it.
+
+```d2
+direction: right
+
+follower: Follower {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+candidate: Candidate {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+leader: Leader {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+follower -> candidate: "election timeout"
+candidate -> candidate: "timeout: split vote"
+candidate -> leader: "wins majority"
+candidate -> follower: "current-term leader"
+leader -> follower: "discovers higher term"
+```
+
 Majorities are why Raft works: any two majorities of the same cluster overlap
 in at least one server, so at most one candidate can win a term, and any
 elected leader has talked to at least one server that saw previous decisions.
@@ -542,6 +568,46 @@ func TestHandleRequestVote(t *testing.T) {
 Once elected, a leader services client requests: it appends each command to its
 own log, then replicates the entry to the followers with **AppendEntries
 RPCs** — the same RPC that, sent with no entries, doubles as the heartbeat.
+
+Below, the leader's border is violet and the dashed edge is an AppendEntries
+still in flight; the emerald note marks the commit that follows once a majority
+of the cluster stores the entry — the leader itself counts toward that majority.
+
+```d2
+direction: right
+
+leader: "Leader — term 3" {
+  shape: sql_table
+  e1: "1 | term 1"
+  e2: "2 | term 3"
+  e3: "3 | term 3  (new)"
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+fa: "Follower A" {
+  shape: sql_table
+  e1: "1 | term 1"
+  e2: "2 | term 3"
+  e3: "3 | term 3"
+}
+
+fb: "Follower B" {
+  shape: sql_table
+  e1: "1 | term 1"
+  e2: "2 | term 3"
+}
+
+leader -> fa: "AppendEntries: stored"
+leader -> fb: "in flight" {style.stroke-dash: 4}
+
+commit: "leader + A = majority\n-> commitIndex = 3" {
+  shape: text
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+leader -> commit: "quorum"
+```
 
 The key invariant is the **Log Matching Property** (§5.3):
 

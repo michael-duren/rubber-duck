@@ -58,6 +58,33 @@ over your home network. Kubernetes doesn't care that its nodes live on two
 different hypervisors — to it they're just machines that can reach each
 other.
 
+The violet box is the cluster's brain; the greyed box is the services on
+`pve-main` that stay untouched. The dashed arrows are the control plane
+managing workers *across* the two hypervisors, over your LAN.
+
+```d2
+direction: right
+
+main: "pve-main · hypervisor" {
+  jelly: "Jellyfin\n+ services" {
+    style.stroke-dash: 3
+    style.font-color: "#9ca3af"
+  }
+  cp: "k8s-cp-1\ncontrol plane\napi · scheduler · etcd" {
+    style.stroke: "#a78bfa"
+    style.stroke-width: 2
+  }
+}
+
+worker: "pve-worker · hypervisor" {
+  w1: "k8s-w-1\nworker"
+  w2: "k8s-w-2\nworker"
+}
+
+main.cp -> worker.w1: manages {style.stroke-dash: 4}
+main.cp -> worker.w2: manages {style.stroke-dash: 4}
+```
+
 ## Why VMs on Proxmox instead of Kubernetes on bare metal?
 
 You could install Kubernetes directly on both machines. Don't — at least
@@ -229,6 +256,23 @@ iface vmbr0 inet static
 Note the node's own IP lives on the *bridge*, not the NIC. You don't need
 to edit this — the installer got it right — but when a VM config says
 `bridge=vmbr0`, this is what it's plugging into.
+
+`vmbr0` is a virtual switch: the node's own IP lives on the bridge, the
+physical NIC and every VM's virtual NIC are just ports on it, and the
+whole thing lands on your home LAN with no NAT.
+
+```d2
+direction: right
+nic: "enp3s0\nphysical NIC"
+br: "vmbr0\nLinux bridge\n.10" {style.stroke: "#22d3ee"; style.stroke-width: 2}
+lan: "home LAN\n192.168.1.0/24" {shape: cloud}
+cp: "cp-1 vnic" {shape: oval}
+w1: "w-1 vnic" {shape: oval}
+cp -> br
+w1 -> br
+nic -> br
+br -> lan
+```
 
 If you have the second machine already, repeat this lesson on it now
 (`pve-worker`, `192.168.1.11`). If not, carry on — everything until the
@@ -813,6 +857,18 @@ to end: **your infrastructure is a git repo, and reality is disposable.**
 Everything from here on builds on that being actually true, not
 aspirationally true.
 
+Here's the whole chain you've built — every arrow is a command, and none
+of it required touching a machine by hand:
+
+```d2
+direction: right
+tpl: "cloud-init\ntemplate\n(frozen)" {shape: oval}
+tf: "terraform\nclone N VMs" {style.stroke: "#d97706"; style.stroke-width: 2}
+ans: "ansible\nbaseline"
+k3s: "k3s cluster" {shape: oval; style.stroke: "#34d399"; style.stroke-width: 2}
+tpl -> tf -> ans -> k3s
+```
+
 ## Challenge: Rebuild From Nothing {#foundation-rebuild points=25}
 
 Do a full cold rebuild of the control-plane VM, from nothing to
@@ -1340,6 +1396,23 @@ The cluster exists; make it earn its electricity. We'll deploy `whoami` —
 a tiny web server that echoes back which pod served you, which makes
 replicas and self-healing *visible* — and route real HTTP to it from your
 LAN through the bundled Traefik ingress.
+
+The three rungs of the ladder you're about to write are one request path:
+your browser hits the Ingress by name, which forwards to a Service, which
+load-balances across the Deployment's pods wherever they landed.
+
+```d2
+direction: right
+client: "your laptop\nbrowser" {shape: oval}
+ing: "Ingress\nTraefik" {style.stroke: "#d97706"; style.stroke-width: 2}
+svc: "Service\nClusterIP"
+p1: "pod · w-1"
+p2: "pod · w-2"
+client -> ing: "app.lan"
+ing -> svc
+svc -> p1
+svc -> p2
+```
 
 Manifests are declarations, exactly like `.tf` files, so they live in the
 repo: create a `manifests/` directory. First `manifests/whoami.yaml`, all

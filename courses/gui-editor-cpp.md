@@ -74,6 +74,33 @@ the state, no screen required. Every graded challenge in this course works
 that way, and the final challenge drives a whole editor core with synthetic
 keystrokes and mouse clicks.
 
+The solid arrows are the per-frame cycle every backend runs; the dashed
+arrow is the one event that breaks out of it (`running = false`).
+
+```d2
+direction: right
+
+wait: "wait_for_event()" {
+  shape: oval
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+dispatch: "handle(ev)\ndispatch by type"
+update: "update state"
+draw: "repaint damage"
+quit: "running = false" {
+  shape: oval
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+
+wait -> dispatch: "event"
+dispatch -> update
+update -> draw
+draw -> wait: "loop"
+dispatch -> quit: "Quit" {style.stroke-dash: 4}
+```
+
 ### The event queue is a real queue
 
 Events arrive faster than you handle them — the X server doesn't wait for
@@ -2684,6 +2711,34 @@ adds one; a deletion trims or removes pieces without touching a single
 byte of text. The costs follow: insertion copies `s.size()` bytes into
 the add buffer plus O(pieces) list work — never O(document). A 500 MB
 file with one typo fixed is two buffers and three pieces.
+
+Each piece is an arrow into a span of one immutable buffer; the emerald
+arrow is the only piece that reads from the add buffer.
+
+```d2
+direction: right
+
+pieces: "piece list (the document)" {
+  shape: sql_table
+  p0: "original  0..10   \"the quick \""
+  p1: "add       0..6    \"brown \""
+  p2: "original  10..3   \"fox\""
+}
+
+orig: "original buffer (read-only)" {
+  shape: sql_table
+  t: "\"the quick fox\""
+}
+
+add: "add buffer (append-only)" {
+  shape: sql_table
+  t: "\"brown \""
+}
+
+pieces.p0 -> orig.t
+pieces.p2 -> orig.t
+pieces.p1 -> add.t {style.stroke: "#34d399"; style.stroke-width: 2}
+```
 
 The design rewards you three more times downstream:
 

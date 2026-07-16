@@ -64,6 +64,52 @@ in `runtime/proc.go`:
   An M must hold a P to run Go code; an M without a P is parked or sitting
   in a syscall.
 
+The amber oval is an M (an OS thread); each violet box is a P holding its
+local run queue of runnable Gs; grey is the one shared global queue.
+
+```d2
+direction: right
+
+m1: "M — OS thread" {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+m2: "M — OS thread" {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+p1: "P — local run queue" {
+  grid-rows: 1
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  g1: "G"
+  g2: "G"
+}
+p2: "P — local run queue" {
+  grid-rows: 1
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  g3: "G"
+  g4: "G"
+}
+
+glob: "global run queue" {
+  grid-rows: 1
+  style.stroke: "#9ca3af"
+  style.stroke-width: 2
+  g5: "G"
+  g6: "G"
+}
+
+m1 -- p1: "runs"
+m2 -- p2: "runs"
+p1 -- glob
+p2 -- glob
+```
+
 `go f()` compiles to a call to `runtime.newproc`, which allocates (or
 recycles) a `g`, seeds its `gobuf` so it will "return into" `f`, marks it
 `_Grunnable`, and drops it on the current P's run queue. That's all — the
@@ -236,6 +282,31 @@ The runtime's answer is a pair of functions you'll see all over `proc.go`:
 - **`goready`** — called by whoever unblocks it (the sender, the unlocker).
   It flips the G back to `_Grunnable` and pushes it onto a run queue. The M
   never stopped: after `gopark` it immediately picked up another runnable G.
+
+Each edge is labeled with the runtime routine that drives the transition; a
+G in `_Gwaiting` sits on no run queue at all.
+
+```d2
+direction: right
+
+runnable: "_Grunnable\n(on a run queue)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+running: "_Grunning\n(owns an M)" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+waiting: "_Gwaiting\n(on no queue)" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+runnable -> running: "execute"
+running -> waiting: "gopark"
+waiting -> runnable: "goready"
+running -> runnable: "Gosched / preempt"
+```
 
 `sync.Mutex` is a consumer of this machinery: its fast path is a single
 atomic CAS (compare-and-swap: "if the value is still what I last saw, swap

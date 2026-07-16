@@ -369,6 +369,30 @@ graph. It works for the same reason code review works — evaluating a draft
 is easier than producing one, and a reviewer who didn't write the draft
 isn't attached to it.
 
+The dashed edge back to the writer is the feedback loop; the amber note
+marks the hard cap (`max_rounds`) that keeps it from ping-ponging forever.
+
+```d2
+direction: right
+writer: "writer\n(draft / revise)" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+critic: "critic\n(evaluate)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+done: "APPROVED\nship draft" { shape: oval }
+budget: "hard bound:\n<= max_rounds reviews" {
+  shape: text
+  style.font-color: "#d97706"
+}
+writer -> critic: "draft"
+critic -> writer: "feedback" { style.stroke-dash: 4 }
+critic -> done: "approve"
+budget -- critic: { style.stroke: "#d97706"; style.stroke-dash: 4 }
+```
+
 It also introduces the classic multi-agent bug. "Repeat until the critic
 approves" — and what if it never approves? Critics with high standards and
 writers that can't meet them will happily ping-pong forever, and unlike an
@@ -560,6 +584,28 @@ looks at the incoming task and decides *which* agent (or pipeline) should
 handle it. "Find sources on X" should go straight to the researcher;
 "tighten this paragraph" needs only the writer; running the full
 research-write-review machine on either would waste three model calls.
+
+The coordinator (violet border) inspects one task and dispatches it to a
+single handler; the dashed `default` edge is the fallback taken when no
+keyword matches.
+
+```d2
+direction: right
+task: "task in" { shape: oval }
+router: "route()\ncoordinator" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+researcher: "researcher"
+writer: "writer"
+critic: "critic"
+generalist: "generalist"
+task -> router
+router -> researcher: "research"
+router -> writer: "write"
+router -> critic: "review"
+router -> generalist: "default" { style.stroke-dash: 4 }
+```
 
 Anthropic's agents article calls this pattern *routing* — classify the
 incoming task, then dispatch it to a specialized handler. That classification

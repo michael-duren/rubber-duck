@@ -41,6 +41,19 @@ documents --> chunk --> embed --> store        (indexing, done once)
 question  --> embed --> retrieve top-k --> prompt the model   (per query)
 ```
 
+The indexing pass runs once over your corpus; ovals are the pipeline's entry
+and exit, and the violet and emerald borders mark the embed step and the
+vector store it fills.
+
+```d2
+direction: right
+docs: "documents\n.md / .txt" {shape: oval}
+chunk: "chunk"
+embed: "embed" {style.stroke: "#a78bfa"; style.stroke-width: 2}
+store: "vector store\n(index)" {shape: oval; style.stroke: "#34d399"; style.stroke-width: 2}
+docs -> chunk -> embed -> store
+```
+
 By the end of this course that pipeline will be running on your machine, over
 your own files, with real embeddings and a real vector database. Each lesson
 adds one stage to the app; each challenge unit-tests the one pure function at
@@ -648,6 +661,24 @@ model in a way that keeps it honest. Three rules do most of the work:
    say a fixed sentinel — `NOT_IN_CONTEXT` — instead of improvising. A
    sentinel beats prose ("Unfortunately I could not…") because your code
    can match it exactly and translate it to a UX-appropriate message.
+
+Here is the whole per-query path those rules govern. The dashed edges are the
+two lookups — the question is embedded, then matched against the index by
+similarity; the solid arrows are the answer path, and the colored borders
+mark retrieval, the LLM call, and the grounded answer.
+
+```d2
+direction: right
+q: "question" {shape: oval}
+retrieve: "retrieve\ntop-k" {style.stroke: "#22d3ee"; style.stroke-width: 2}
+idx: "vector\nindex"
+prompt: "build\nprompt"
+llm: "LLM" {style.stroke: "#a78bfa"; style.stroke-width: 2}
+ans: "answer\n+ cites" {shape: oval; style.stroke: "#34d399"; style.stroke-width: 2}
+q -> retrieve: "embed" {style.stroke-dash: 4}
+idx -> retrieve: "similarity" {style.stroke-dash: 4}
+retrieve -> prompt -> llm -> ans
+```
 
 Prompt assembly is plain string building, and the exact format is the
 graded function. Add it to `rag.py`:

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> ./dsa</tspan><tspan fill="#64748b"> --from=scratch</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- left: the backing array -->
+  <text xml:space="preserve" x="40" y="90" font-size="12" fill="#64748b">int arr[]</text>
+  <g font-size="14" fill="#22d3ee">
+    <rect x="40" y="100" width="44" height="32" fill="none" stroke="#22d3ee"/>
+    <text xml:space="preserve" x="62" y="121" text-anchor="middle">2</text>
+    <rect x="84" y="100" width="44" height="32" fill="none" stroke="#22d3ee"/>
+    <text xml:space="preserve" x="106" y="121" text-anchor="middle">5</text>
+    <rect x="128" y="100" width="44" height="32" fill="none" stroke="#22d3ee"/>
+    <text xml:space="preserve" x="150" y="121" text-anchor="middle">3</text>
+    <rect x="172" y="100" width="44" height="32" fill="none" stroke="#22d3ee"/>
+    <text xml:space="preserve" x="194" y="121" text-anchor="middle">9</text>
+    <rect x="216" y="100" width="44" height="32" fill="none" stroke="#22d3ee"/>
+    <text xml:space="preserve" x="238" y="121" text-anchor="middle">7</text>
+  </g>
+  <g font-size="10" fill="#64748b" text-anchor="middle">
+    <text xml:space="preserve" x="62" y="146">0</text>
+    <text xml:space="preserve" x="106" y="146">1</text>
+    <text xml:space="preserve" x="150" y="146">2</text>
+    <text xml:space="preserve" x="194" y="146">3</text>
+    <text xml:space="preserve" x="238" y="146">4</text>
+  </g>
+  <text xml:space="preserve" x="40" y="176" font-size="12" fill="#64748b">the same bytes …</text>
+  <text xml:space="preserve" x="150" y="222" font-size="20" fill="#34d399" text-anchor="middle">↦</text>
+
+  <!-- right: … viewed as a binary heap -->
+  <path d="M470 100 L410 140" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M470 100 L536 140" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M410 160 L374 200" stroke="#27352d" stroke-width="1.5"/>
+  <path d="M410 160 L448 200" stroke="#27352d" stroke-width="1.5"/>
+
+  <circle cx="470" cy="90" r="18" fill="none" stroke="#22d3ee" stroke-width="1.5"/>
+  <text xml:space="preserve" x="470" y="95" font-size="14" fill="#cbd5e1" text-anchor="middle">2</text>
+  <circle cx="410" cy="150" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  <text xml:space="preserve" x="410" y="155" font-size="13" fill="#94a3b8" text-anchor="middle">5</text>
+  <circle cx="536" cy="150" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  <text xml:space="preserve" x="536" y="155" font-size="13" fill="#94a3b8" text-anchor="middle">3</text>
+  <circle cx="374" cy="210" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  <text xml:space="preserve" x="374" y="215" font-size="13" fill="#94a3b8" text-anchor="middle">9</text>
+  <circle cx="448" cy="210" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  <text xml:space="preserve" x="448" y="215" font-size="13" fill="#94a3b8" text-anchor="middle">7</text>
+  <text xml:space="preserve" x="590" y="94" font-size="12" fill="#22d3ee" text-anchor="end">min-heap</text>
+
+  <text xml:space="preserve" x="40" y="244" font-size="12" fill="#64748b">arrays · lists · trees — build the primitives from nothing</text>
+</svg>

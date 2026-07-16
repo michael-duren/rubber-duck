@@ -45,6 +45,29 @@ canceled when the client disconnects, and every database call, RPC, and
 worker goroutine spawned under it unwinds automatically — provided each
 one actually selects on `ctx.Done()` while blocking.
 
+The amber-bordered root is the context you cancel; each arrow derives a
+child, and canceling any node cancels every context reachable below it.
+
+```d2
+direction: right
+
+root: "handler ctx\n(client connects)" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+db: "DB call ctx"
+rpc: "RPC ctx"
+child: "WithTimeout child"
+w1: "worker"
+w2: "worker"
+
+root -> db
+root -> rpc
+rpc -> child
+child -> w1
+child -> w2
+```
+
 Two rules keep this honest. First, `ctx` is always the first parameter,
 never stored in a struct — it belongs to a call chain, not an object.
 Second, if you create a context, you `defer cancel()` even on success:
@@ -878,6 +901,30 @@ The value is in the precise semantics, so state them before building:
   because later failures are usually just fallout from the first one.
 - The zero value is ready to use — the Go idiom of making the empty
   struct meaningful, like `bytes.Buffer` and `sync.Mutex`.
+
+Every task fans out from `g.Go` and fans back into `Wait`; the
+red-bordered task is the first to fail, and its error is the one `Wait`
+returns.
+
+```d2
+direction: right
+
+go: "g.Go(f)" {shape: oval}
+t1: "task 1"
+t2: "task 2 — fails first" {
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+t3: "task 3"
+wait: "Wait()\nfirst error" {shape: oval}
+
+go -> t1
+go -> t2
+go -> t3
+t1 -> wait
+t2 -> wait
+t3 -> wait
+```
 
 Every piece is something you have already built in this course: a
 `WaitGroup` for "all done", a first-writer-wins slot for the error

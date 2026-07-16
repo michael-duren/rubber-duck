@@ -157,6 +157,21 @@ put the seam — a point in the code where you can swap in different behavior
 (a fake client instead of a real one) without touching the surrounding
 logic — so the loop logic is testable without the network.
 
+The violet border marks that seam — the swappable client call — and the
+dashed arrow is the loop back into the next turn.
+
+```d2
+direction: right
+
+read: "read input" { shape: oval }
+u: "append\nuser msg"
+call: "client(history)\n→ reply" { style.stroke: "#a78bfa"; style.stroke-width: 2 }
+a: "append reply\n& print"
+
+read -> u -> call -> a
+a -> read: "next turn" { style.stroke-dash: 4 }
+```
+
 The answer: define the turn as a function that takes the API as an argument.
 A **client** in this course is just a callable — `client(messages) -> str` —
 that takes the full message list and returns the assistant's reply text. In
@@ -338,6 +353,30 @@ message, it carries your bot's persona and rules, and silently losing it
 changes behavior in confusing ways ("why did it stop being concise after
 20 minutes?"). So the policy is: **keep the system message, keep the most
 recent messages, drop the middle.**
+
+Left-to-right is history order; dashed grey is what trimming drops, and the
+colored borders mark what it keeps (the oldest turns sit in the middle).
+
+```d2
+direction: right
+
+sys: "system\n(kept)" { style.stroke: "#34d399"; style.stroke-width: 2 }
+
+old: "dropped" {
+  style.stroke-dash: 4
+  u0: "user" { style.font-color: "#9ca3af" }
+  a0: "asst" { style.font-color: "#9ca3af" }
+}
+
+recent: "kept" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  u1: "user"
+  a1: "asst"
+}
+
+sys -> old -> recent
+```
 
 We'll measure the budget in message count. Real apps often count tokens
 instead, but the shape of the function is identical — count is simpler and

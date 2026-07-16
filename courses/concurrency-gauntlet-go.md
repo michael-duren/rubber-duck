@@ -250,6 +250,31 @@ at `burst`, doing integer math so half-tokens vanish, discarding fractional
 progress on a denied call, and racing unsynchronized state under concurrent
 callers.
 
+That last one is the data race below: two goroutines both read-modify-write
+the same `tokens` (red = the shared, lock-free state); with no lock there's
+no happens-before ordering between them, so their updates can interleave and
+lose a token.
+
+```d2
+direction: right
+
+g1: "goroutine A\nAllow()" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+g2: "goroutine B\nAllow()" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+tokens: "tokens\nshared, no lock" {
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+
+g1 -> tokens: "read + write"
+g2 -> tokens: "read + write"
+```
+
 ## Challenge: Deterministic Token Bucket {#token-bucket points=25}
 
 Implement a `Limiter` with:
@@ -1453,6 +1478,36 @@ gives you cycle detection *and* the ready set), then run a single
 coordinator loop that launches ready jobs while a completion channel feeds
 back results. No mutex needed if only the coordinator touches the graph
 state.
+
+That shape is a worker pool: the coordinator (violet) launches at most
+`parallelism` ready jobs at a time; each worker reports to the completion
+channel, which feeds results back so the coordinator can unblock the next
+ready jobs.
+
+```d2
+direction: right
+
+coord: "coordinator\n(owns graph state)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+ready: "ready jobs" {
+  shape: queue
+}
+w1: "worker 1"
+w2: "worker 2"
+w3: "worker 3"
+done: "completion\nchannel"
+
+coord -> ready: "launch <= P"
+ready -> w1
+ready -> w2
+ready -> w3
+w1 -> done
+w2 -> done
+w3 -> done
+done -> coord: "result feeds back"
+```
 
 ### Starter
 

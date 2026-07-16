@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256" font-family="ui-monospace,'Cascadia Code',Menlo,Consolas,monospace">
+  <rect width="640" height="256" fill="#0b120e"/>
+  <text xml:space="preserve" x="24" y="36" font-size="15"><tspan fill="#34d399">$</tspan><tspan fill="#cbd5e1"> kubeadm init</tspan><tspan fill="#64748b"> --pod-network-cidr=…</tspan></text>
+  <line x1="24" y1="52" x2="616" y2="52" stroke="#1e2b24"/>
+
+  <!-- the control plane, assembled from parts -->
+  <text xml:space="preserve" x="40" y="82" font-size="12" fill="#64748b">control plane</text>
+  <rect x="36" y="90" width="300" height="132" fill="none" stroke="#27352d"/>
+
+  <!-- kube-apiserver is the hub (amber emphasis) -->
+  <rect x="120" y="104" width="132" height="34" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+  <rect x="120" y="104" width="132" height="34" fill="none" stroke="#fbbf24" stroke-width="6" opacity="0.12"/>
+  <text xml:space="preserve" x="186" y="126" font-size="13" fill="#fbbf24" text-anchor="middle">kube-apiserver</text>
+
+  <!-- components hang off the apiserver -->
+  <path d="M120 132 L96 176" stroke="#27352d" stroke-width="1.2"/>
+  <path d="M186 138 L186 176" stroke="#27352d" stroke-width="1.2"/>
+  <path d="M252 132 L276 176" stroke="#27352d" stroke-width="1.2"/>
+
+  <rect x="48" y="176" width="96" height="30" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <text xml:space="preserve" x="96" y="195" font-size="11" fill="#94a3b8" text-anchor="middle">etcd</text>
+  <rect x="150" y="176" width="72" height="30" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <text xml:space="preserve" x="186" y="195" font-size="11" fill="#94a3b8" text-anchor="middle">scheduler</text>
+  <rect x="228" y="176" width="96" height="30" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <text xml:space="preserve" x="276" y="195" font-size="11" fill="#94a3b8" text-anchor="middle">controller</text>
+
+  <!-- workers join with a token -->
+  <text xml:space="preserve" x="470" y="82" font-size="12" fill="#fbbf24" text-anchor="middle">kubeadm join</text>
+  <path d="M336 128 L404 128" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <path d="M396 122 L404 128 L396 134" fill="none" stroke="#fbbf24" stroke-width="1.4"/>
+
+  <rect x="408" y="98" width="124" height="30" fill="none" stroke="#34d399" stroke-width="1.2"/>
+  <text xml:space="preserve" x="470" y="117" font-size="12" fill="#94a3b8" text-anchor="middle">node-1 · kubelet</text>
+  <rect x="408" y="138" width="124" height="30" fill="none" stroke="#34d399" stroke-width="1.2"/>
+  <text xml:space="preserve" x="470" y="157" font-size="12" fill="#94a3b8" text-anchor="middle">node-2 · kubelet</text>
+  <rect x="408" y="178" width="124" height="30" fill="none" stroke="#64748b" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <text xml:space="preserve" x="470" y="197" font-size="12" fill="#64748b" text-anchor="middle">node-3 · Ready?</text>
+
+  <text xml:space="preserve" x="40" y="244" font-size="12" fill="#64748b">kube-apiserver · etcd · scheduler — assemble the cluster by hand</text>
+</svg>

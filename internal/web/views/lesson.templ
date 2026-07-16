@@ -14,7 +14,7 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / { l.Slug }
 		</nav>
-		<article class="mx-auto mt-6 max-w-3xl">
+		<article class="mx-auto mt-6 max-w-5xl">
 			<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ "// lesson: " + l.Slug }</p>
 			<h1 class="mt-1 text-3xl font-bold">{ l.Title }</h1>
 			<div class="prose prose-slate mt-6 max-w-none dark:prose-invert">
