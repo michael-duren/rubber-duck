@@ -110,7 +110,7 @@ func (h *staticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodHead {
 		return
 	}
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 // acceptsGzip reports whether the client will take a gzip-encoded body. It
