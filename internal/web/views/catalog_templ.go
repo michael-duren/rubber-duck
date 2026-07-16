@@ -235,20 +235,20 @@ func CatalogResults(courses []domain.CourseSummary, query string, activeTags []s
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue("/courses/" + c.Slug + "/card.svg")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 105, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 107, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" alt=\"\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"block w-full border-b border-slate-300 dark:border-slate-800\"><div class=\"flex flex-1 flex-col p-5\"><h2 class=\"text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" alt=\"\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"block w-full border-b border-slate-300 invert hue-rotate-180 dark:border-slate-800 dark:invert-0 dark:hue-rotate-0\"><div class=\"flex flex-1 flex-col p-5\"><h2 class=\"text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(c.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 107, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 109, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -286,7 +286,7 @@ func CatalogResults(courses []domain.CourseSummary, query string, activeTags []s
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%g", c.DurationHours))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 120, Col: 78}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 122, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -351,7 +351,7 @@ func tagDropdown(options []string) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags.includes(%q)", o))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 164, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 166, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -364,7 +364,7 @@ func tagDropdown(options []string) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags = tags.includes(%q) ? tags.filter(t => t !== %q) : [...tags, %q]; $nextTick(() => $root.requestSubmit())", o, o, o))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 165, Col: 147}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 167, Col: 147}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -377,7 +377,7 @@ func tagDropdown(options []string) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags.includes(%q) ? '[x]' : '[ ]'", o))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 168, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 170, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -390,7 +390,7 @@ func tagDropdown(options []string) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(o)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 168, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 170, Col: 132}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -482,7 +482,7 @@ func langOption(value, label string) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("lang = %q; menu = null; $nextTick(() => $root.requestSubmit())", value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 208, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 210, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -495,7 +495,7 @@ func langOption(value, label string) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 210, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/catalog.templ`, Line: 212, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {

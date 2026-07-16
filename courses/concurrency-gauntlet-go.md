@@ -256,6 +256,25 @@ at `burst`, doing integer math so half-tokens vanish, discarding fractional
 progress on a denied call, and racing unsynchronized state under concurrent
 callers.
 
+That last one is the data race below: two goroutines both read-modify-write
+the same `tokens` (red = the shared, lock-free state); with no lock there's
+no happens-before ordering between them, so their updates can interleave and
+lose a token.
+
+```d2
+direction: right
+
+g1: "goroutine A\nAllow()"
+g2: "goroutine B\nAllow()"
+tokens: "tokens\nshared, no lock" {
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+
+g1 -> tokens: "read + write"
+g2 -> tokens: "read + write"
+```
+
 ## Challenge: Deterministic Token Bucket {#token-bucket points=25}
 
 Implement a `Limiter` with:
@@ -1459,6 +1478,33 @@ gives you cycle detection *and* the ready set), then run a single
 coordinator loop that launches ready jobs while a completion channel feeds
 back results. No mutex needed if only the coordinator touches the graph
 state.
+
+That shape looks like this: the coordinator loop (violet) launches a
+goroutine per ready job, keeping at most `parallelism` of them in flight;
+each finished job reports on the completion channel, which feeds results
+back so the coordinator can launch the next ready jobs.
+
+```d2
+direction: down
+
+coord: "coordinator loop (owns graph state)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+inflight: "at most parallelism in flight" {
+  grid-rows: 1
+  j1: "job Fn"
+  j2: "job Fn"
+  j3: "job Fn"
+}
+
+done: "completion channel"
+
+coord -> inflight: "launch ready"
+inflight -> done
+done -> coord: "unblocks next ready"
+```
 
 ### Starter
 

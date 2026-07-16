@@ -1654,6 +1654,35 @@ usually one or two. The B-Tree is what "cache-line-friendly array" (lesson 1)
 looks like when generalized into a tree: pack as much decision-making as
 possible into each unit of I/O.
 
+The boxed table is one node — a single 4 KB page whose keys and child
+pointers interleave; each `page` shape below is the subtree a pointer leads
+to. Three keys fan out to four children, and real nodes hold hundreds:
+
+```d2
+direction: down
+
+node: "B-Tree node" {
+  shape: sql_table
+  c0: "child ptr"
+  k1: "key 25"
+  c1: "child ptr"
+  k2: "key 50"
+  c2: "child ptr"
+  k3: "key 75"
+  c3: "child ptr"
+}
+
+l0: "keys < 25" { shape: page }
+l1: "25 < keys < 50" { shape: page }
+l2: "50 < keys < 75" { shape: page }
+l3: "keys > 75" { shape: page }
+
+node.c0 -> l0
+node.c1 -> l1
+node.c2 -> l2
+node.c3 -> l3
+```
+
 We'll build the honest starter version: an index over the unique ID column,
 stored as a growing array of `{id, row_index}` pairs. Its lookup is still
 O(n) *inside the index* — the structure is a stand-in — but it forces you to
@@ -2610,6 +2639,23 @@ real database's execution pipeline: **parse** the text, **validate** it,
 **plan** (here: pick the operation), **execute**, and expose results. It's a
 miniature of what happens to every SQL statement — SQLite compiles SQL to
 bytecode for a virtual machine; our "bytecode" is just a dispatch on the verb.
+
+The pipeline reads left to right; the cyan-bordered stage is the plan
+step — our whole "bytecode" is just a `switch` on the verb:
+
+```d2
+direction: right
+
+cmd: "\"INSERT\nAlice 30\"" { shape: oval }
+parse: "parse +\nvalidate"
+dispatch: "plan: pick op\n(switch on verb)" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+exec: "run table op\n-> 0 / -1" { shape: oval }
+
+cmd -> parse -> dispatch -> exec
+```
 
 All the building blocks from previous lessons are provided complete. Your work
 is the glue — and the glue is where consistency lives: LOAD must rebuild the

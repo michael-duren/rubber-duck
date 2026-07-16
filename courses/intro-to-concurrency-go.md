@@ -17,6 +17,65 @@ extended_reading:
 A goroutine is a lightweight thread managed by the Go runtime. Starting one
 costs a few kilobytes of stack, so programs routinely run thousands of them.
 
+Concurrency is about *structuring* work as independent tasks; parallelism is
+about *running* them at once. The violet panel is concurrency (one core,
+tasks interleaved over time); the emerald panel is parallelism (many cores
+running tasks simultaneously — read each core's row left to right, in step).
+Goroutines always give you the violet picture, and when more than one core
+is available (`GOMAXPROCS` defaults to the core count) the runtime runs
+them in parallel too.
+
+```d2
+grid-rows: 2
+grid-gap: 30
+
+concurrency: "Concurrency" {
+  style.stroke: "#8b5cf6"
+  style.stroke-width: 3
+  desc: "one core: A and B interleaved over time" {
+    shape: text
+  }
+  timeline: "" {
+    grid-rows: 1
+    grid-gap: 0
+    s1: A
+    s2: B
+    s3: A
+    s4: B
+    s5: A
+    s6: B
+  }
+}
+
+parallelism: "Parallelism" {
+  style.stroke: "#34d399"
+  style.stroke-width: 3
+  desc: "two cores: A and B run at the same time" {
+    shape: text
+  }
+  cores: "" {
+    grid-rows: 2
+    grid-gap: 8
+    style.stroke-width: 0
+    style.fill: transparent
+    core1: "Core 1" {
+      grid-rows: 1
+      grid-gap: 0
+      a1: A
+      a2: A
+      a3: A
+    }
+    core2: "Core 2" {
+      grid-rows: 1
+      grid-gap: 0
+      b1: B
+      b2: B
+      b3: B
+    }
+  }
+}
+```
+
 ```go
 go func() {
 	fmt.Println("hello from a goroutine")
@@ -107,6 +166,32 @@ func TestSum(t *testing.T) {
 
 Channels connect goroutines: one sends, another receives. Unbuffered channels
 synchronize both sides — a send blocks until a receiver is ready.
+
+The amber sender and the cyan receiver meet at the unbuffered channel
+(violet): the send blocks until a receiver is ready, then the value is
+handed straight over — nothing is stored in between.
+
+```d2
+direction: right
+
+sender: "Sender\ngoroutine" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+ch: "ch\nunbuffered channel" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+receiver: "Receiver\ngoroutine" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+
+sender -> ch: "ch <- 42\nblocks until a\nreceiver is ready"
+ch -> receiver: "<-ch\nhands the value over"
+```
 
 ```go
 ch := make(chan int)

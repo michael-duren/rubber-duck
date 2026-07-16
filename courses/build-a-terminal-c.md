@@ -2339,6 +2339,38 @@ canonical description, reverse-engineered from real DEC hardware, is
 Paul Flo Williams' state diagram at vt100.net — linked in extended
 reading. Ours is a faithful subset.)
 
+The whole machine at a glance, before the state-by-state tour below —
+each edge labelled with the byte that fires it. A violet border marks the
+resting **GROUND** state (printable and C0 bytes loop there as PRINT and
+CTRL events), amber the **CSI** parameter grinder (the two states you'll
+spend the most code on):
+
+```d2
+ground: "GROUND\n(resting)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+esc: "ESC_SEEN"
+csi: "CSI\n(param grinder)" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+osc: "OSC"
+charset: "CHARSET"
+
+ground -> ground: "printable: emit PRINT"
+ground -> ground: "C0: emit CTRL"
+ground -> esc: "ESC"
+esc -> csi: "'['"
+esc -> osc: "']'"
+esc -> charset: "'(' ')'"
+esc -> ground: "other: emit ESC"
+csi -> csi: "digit ; ?  collect"
+csi -> ground: "final byte: emit CSI"
+osc -> ground: "BEL / ESC backslash"
+charset -> ground: "any byte"
+```
+
 ## The states
 
 For the VT100 core plus OSC-skipping, five states suffice:
@@ -7328,6 +7360,30 @@ while (running) {
     read; decode key events; dispatch each;
 }
 leave the alternate screen; restore termios;
+```
+
+One turn of that loop, drawn as the cycle it is — violet is the render
+step, amber the one place the loop blocks (waiting on input), emerald the
+dispatch that mutates the model before the next render:
+
+```d2
+direction: right
+
+render: "render model -> frame,\nthen one write()" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+wait: "wait for input\n(poll + timeout)" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+dispatch: "read + decode keys,\ndispatch each event" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+
+render -> wait -> dispatch
+dispatch -> render: "repeat"
 ```
 
 Render, wait, dispatch, repeat. vim, less, htop, tmux: this loop.

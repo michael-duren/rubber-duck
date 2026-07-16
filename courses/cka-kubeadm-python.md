@@ -274,6 +274,25 @@ kubectl get nodes    # one node... NotReady. Correct! See below.
 
 ## The tour — learn this layout cold
 
+The kubelet (amber border) is the bootstrap: it watches
+`/etc/kubernetes/manifests/` and runs the four control-plane components as
+**static pods** — which is why editing (or breaking) a file there makes
+that component restart (or vanish).
+
+```d2
+kubelet: "kubelet\n(watches manifests/)" {style.stroke: "#fbbf24"; style.stroke-width: 2}
+pods: "static pods · kube-system" {
+  api: "kube-apiserver"
+  etcd: "etcd\n(all cluster state)"
+  sched: "scheduler"
+  ctrl: "controller-manager"
+}
+kubelet -> pods.api: runs
+kubelet -> pods.etcd: runs
+kubelet -> pods.sched: runs
+kubelet -> pods.ctrl: runs
+```
+
 The exam's troubleshooting tasks are largely "something in this layout is
 wrong, find it." Spend real time here:
 
@@ -341,6 +360,19 @@ Kubernetes defines the interface for this (the Container Network
 Interface) and implements none of it. We install **Calico**: it's
 widely deployed, and — decisive for the exam — it *enforces
 NetworkPolicy*, which the simplest plugins silently don't.
+
+The dashed arrows are the one-time `kubeadm join` handshake that
+registers each worker with the control plane (violet border); the pod
+network itself is Calico's job, below.
+
+```d2
+direction: right
+cp: "cp-1\ncontrol plane" {style.stroke: "#a78bfa"; style.stroke-width: 2}
+w1: "w-1\nkubelet + pods"
+w2: "w-2\nkubelet + pods"
+w1 -> cp: "kubeadm join" {style.stroke-dash: 4}
+w2 -> cp: "kubeadm join" {style.stroke-dash: 4}
+```
 
 ## Install Calico
 
@@ -439,6 +471,23 @@ biggest non-troubleshooting domain. The architecture we're building is
 alongside the other components, the three etcd members form a quorum
 (majority rules — three members tolerate one failure), and a TCP load
 balancer in front makes the API reachable when any one node is down.
+
+The amber hexagon is the TCP load balancer: each `:6443` edge is a plain
+TCP forward to a healthy **apiserver**, and the etcd members stacked
+alongside them form the 2-of-3 quorum.
+
+```d2
+direction: right
+lb: "haproxy\nk8s-api:6443\n(TCP LB)" {shape: hexagon; style.stroke: "#fbbf24"; style.stroke-width: 2}
+quorum: "quorum 2/3" {
+  cp1: "cp-1\napiserver + etcd"
+  cp2: "cp-2\napiserver + etcd"
+  cp3: "cp-3\napiserver + etcd"
+}
+lb -> quorum.cp1: ":6443"
+lb -> quorum.cp2: ":6443"
+lb -> quorum.cp3: ":6443"
+```
 
 ## The load balancer
 
@@ -919,6 +968,22 @@ does, which is precisely why the exam loves them: they're procedures,
 and procedures reward practice.
 
 ## etcd backup and restore — the marquee exam task
+
+`snapshot save` freezes the live cluster state (emerald cylinder) into a
+`.db` file (amber page); `snapshot restore` only unpacks that file into a
+fresh data-dir — etcd actually runs on it only after the third step,
+repointing `etcd.yaml`'s hostPath so the kubelet restarts etcd.
+
+```d2
+direction: right
+live: "live etcd" {shape: cylinder; style.stroke: "#34d399"; style.stroke-width: 2}
+snap: "snapshot.db" {shape: page; style.stroke: "#d97706"; style.stroke-width: 2}
+restored: "restored etcd\n(new data-dir)" {shape: cylinder}
+manifest: "etcd.yaml" {shape: page}
+live -> snap: "snapshot save"
+snap -> restored: "snapshot restore"
+manifest -> restored: "hostPath repoint;\nkubelet restarts"
+```
 
 All cluster state lives in etcd, so a cluster backup *is* an etcd
 snapshot. On `cp-1` (etcd speaks TLS with certs from the pki directory —
