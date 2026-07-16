@@ -295,10 +295,11 @@ function mount(textarea) {
 }
 
 // On phone-sized viewports CodeMirror (and a code-sized textarea) is not a
-// usable editing surface, so instead of mounting we swap the whole editing
-// slot — textarea and submit button — for a pointer to a desktop. Width is
-// checked once at load; a mid-session resize across the breakpoint needs a
-// reload, which is fine for the resize-to-phone-width case.
+// usable editing surface, so for textareas that opt in via data-mobile-notice
+// (the challenge cards) we swap the whole editing slot — textarea and submit
+// button — for a pointer to a desktop. Width is checked once at load; a
+// mid-session resize across the breakpoint needs a reload, which is fine for
+// the resize-to-phone-width case.
 function mobileNotice(textarea) {
   textarea.style.display = "none";
   const form = textarea.closest("form");
@@ -319,7 +320,17 @@ function mobileNotice(textarea) {
 function init() {
   const mobile = window.matchMedia("(max-width: 767px)").matches;
   document.querySelectorAll("textarea[data-editor]").forEach((t) => {
-    (mobile ? mobileNotice : mount)(t);
+    // Guard against double-mounting if the bundle is ever included twice.
+    if (t.dataset.editorMounted) return;
+    t.dataset.editorMounted = "true";
+    if (mobile) {
+      // Only textareas that opted in (challenge code) get swapped for the
+      // desktop pointer; everything else (the course markdown editor) keeps
+      // its plain textarea so the form stays usable on a phone.
+      if ("mobileNotice" in t.dataset) mobileNotice(t);
+      return;
+    }
+    mount(t);
   });
 }
 

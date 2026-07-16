@@ -13,6 +13,16 @@ import (
 	"strings"
 )
 
+// contentTypes pins the types we serve for known extensions.
+// mime.TypeByExtension consults the host's mime tables (/etc/mime.types), so
+// its answer varies across machines — e.g. .js can come back as
+// application/javascript. Pinning keeps responses identical everywhere.
+var contentTypes = map[string]string{
+	".css": "text/css; charset=utf-8",
+	".js":  "text/javascript; charset=utf-8",
+	".svg": "image/svg+xml",
+}
+
 // staticAsset is one embedded file, gzipped once at startup.
 type staticAsset struct {
 	raw         []byte
@@ -44,7 +54,10 @@ func newStaticHandler(fsys fs.FS, root string) (*staticHandler, error) {
 		if err != nil {
 			return err
 		}
-		ct := mime.TypeByExtension(path.Ext(p))
+		ct := contentTypes[path.Ext(p)]
+		if ct == "" {
+			ct = mime.TypeByExtension(path.Ext(p))
+		}
 		if ct == "" {
 			ct = http.DetectContentType(raw)
 		}
@@ -113,12 +126,26 @@ func (h *staticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// acceptsGzip reports whether the client will take a gzip-encoded body. It
-// honors an explicit "gzip;q=0" refusal but otherwise stays deliberately
-// simple — real browsers always send a plain "gzip" token.
+// acceptsGzip reports whether the client will take a gzip-encoded body: a
+// gzip token in Accept-Encoding whose q parameter, if present, is nonzero.
+// Wildcards and the x-gzip alias are ignored — every real browser sends a
+// plain "gzip" token.
 func acceptsGzip(r *http.Request) bool {
-	ae := r.Header.Get("Accept-Encoding")
-	return strings.Contains(ae, "gzip") && !strings.Contains(ae, "gzip;q=0")
+	for tok := range strings.SplitSeq(r.Header.Get("Accept-Encoding"), ",") {
+		enc, param, hasParam := strings.Cut(tok, ";")
+		if strings.TrimSpace(enc) != "gzip" {
+			continue
+		}
+		if !hasParam {
+			return true
+		}
+		if v, ok := strings.CutPrefix(strings.TrimSpace(param), "q="); ok {
+			q, err := strconv.ParseFloat(v, 64)
+			return err != nil || q > 0
+		}
+		return true
+	}
+	return false
 }
 
 // etagMatches reports whether an If-None-Match header covers etag. It accepts

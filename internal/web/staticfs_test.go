@@ -39,6 +39,8 @@ func TestStaticHandler(t *testing.T) {
 		{"gzip when accepted", "/static/app.js", "gzip, deflate, br", http.StatusOK, "gzip", "text/javascript; charset=utf-8"},
 		{"raw when not accepted", "/static/app.js", "", http.StatusOK, "", "text/javascript; charset=utf-8"},
 		{"gzip refused via q=0", "/static/app.js", "gzip;q=0", http.StatusOK, "", "text/javascript; charset=utf-8"},
+		{"gzip refused via spaced q=0", "/static/app.js", "gzip; q=0, identity", http.StatusOK, "", "text/javascript; charset=utf-8"},
+		{"gzip accepted with fractional q", "/static/app.js", "gzip;q=0.5", http.StatusOK, "gzip", "text/javascript; charset=utf-8"},
 		{"incompressible stays raw", "/static/blob.png", "gzip", http.StatusOK, "", "image/png"},
 		{"unknown 404s", "/static/nope.js", "gzip", http.StatusNotFound, "", ""},
 	}

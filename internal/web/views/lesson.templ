@@ -23,7 +23,11 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 			for _, c := range l.Challenges {
 				@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID], v.Version, v.Language)
 			}
-			@editorScript()
+			// Only load the editor bundle when there's a textarea for it to
+			// enhance: ChallengeCard renders the form only for signed-in users.
+			if user != nil && len(l.Challenges) > 0 {
+				@editorScript()
+			}
 			<div class="mt-10 flex justify-between border-t border-slate-200 pt-6 dark:border-slate-800">
 				<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="font-mono text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
 				if next != nil {
@@ -44,10 +48,12 @@ templ Final(user *domain.User, course domain.Course, v domain.Variant, latestCod
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / final
 		</nav>
-		<article class="mx-auto mt-6 max-w-3xl">
+		<article class="mx-auto mt-6 max-w-5xl">
 			<p class="font-mono text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">★ Final Challenge</p>
 			@ChallengeCard(user, v.Final, latestCode, submissions, v.Version, v.Language)
-			@editorScript()
+			if user != nil {
+				@editorScript()
+			}
 		</article>
 	}
 }
@@ -133,13 +139,15 @@ templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, su
 				// The editor is a terminal: dark phosphor in both themes. When
 				// cm6.js loads it enhances this textarea into CodeMirror (see
 				// data-editor / data-language); without JS the textarea still
-				// submits.
+				// submits. data-mobile-notice: on phone widths, swap the form
+				// for a "use a bigger screen" note instead of mounting.
 				<textarea
 					id={ fmt.Sprintf("code-%d", c.ID) }
 					name="code"
 					rows="14"
 					spellcheck="false"
 					data-editor
+					data-mobile-notice
 					data-language={ lang }
 					class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
 				>{ editorCode(latestCode, c.StarterCode) }</textarea>
