@@ -11,7 +11,7 @@
 
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState, Compartment } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
+import { keymap, lineNumbers } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -19,6 +19,7 @@ import { python } from "@codemirror/lang-python";
 import { cpp } from "@codemirror/lang-cpp";
 import { go } from "@codemirror/lang-go";
 import { javascript } from "@codemirror/lang-javascript";
+import { markdown } from "@codemirror/lang-markdown";
 import { vim } from "@replit/codemirror-vim";
 
 // Language modes keyed by the `data-language` attribute (the course variant's
@@ -31,6 +32,8 @@ const LANGUAGES = {
   cpp: cpp,
   javascript: javascript,
   js: javascript,
+  markdown: markdown,
+  md: markdown,
 };
 
 // The editor stays a dark "terminal" in both site themes — matching the
@@ -59,7 +62,7 @@ const phosphorTheme = EditorView.theme(
 
 // --- persisted settings (localStorage, same convention as the theme toggle) ---
 const SETTINGS_KEY = "rd.editor";
-const DEFAULTS = { fontSize: 14, tabSize: 4, lineWrap: false, vim: false };
+const DEFAULTS = { fontSize: 14, tabSize: 4, lineWrap: false, vim: false, relativeLines: false };
 
 function loadSettings() {
   try {
@@ -92,6 +95,22 @@ function keymapExt(useVim) {
   return useVim ? [vim(), keymap.of([indentWithTab])] : keymap.of([indentWithTab]);
 }
 
+// Relative line numbers (vim-style): the cursor line shows its absolute
+// number, every other line its distance from the cursor. Added at higher
+// precedence than basicSetup's lineNumbers(), so this formatNumber wins;
+// off = empty, falling back to basicSetup's absolute gutter. The gutter
+// re-renders on cursor line changes because basicSetup's
+// highlightActiveLineGutter marks the active line.
+function lineNumbersExt(relative) {
+  if (!relative) return [];
+  return lineNumbers({
+    formatNumber: (n, state) => {
+      const cursor = state.doc.lineAt(state.selection.main.head).number;
+      return String(n === cursor ? n : Math.abs(cursor - n));
+    },
+  });
+}
+
 function applySettings() {
   for (const ed of editors) {
     ed.view.dispatch({
@@ -100,6 +119,7 @@ function applySettings() {
         ed.tab.reconfigure([EditorState.tabSize.of(settings.tabSize), indentUnit.of(" ".repeat(settings.tabSize))]),
         ed.wrap.reconfigure(settings.lineWrap ? EditorView.lineWrapping : []),
         ed.keys.reconfigure(keymapExt(settings.vim)),
+        ed.nums.reconfigure(lineNumbersExt(settings.relativeLines)),
       ],
     });
   }
@@ -161,7 +181,14 @@ function buildPanel() {
   const vimLabel = mkLabel("vim");
   vimLabel.append(vimBox);
 
-  bar.append(fontLabel, tabLabel, wrapLabel, vimLabel);
+  // relative line numbers
+  const rel = document.createElement("input");
+  rel.type = "checkbox";
+  rel.dataset.role = "rel";
+  const relLabel = mkLabel("rel#");
+  relLabel.append(rel);
+
+  bar.append(fontLabel, tabLabel, wrapLabel, vimLabel, relLabel);
 
   const onChange = () => {
     settings = {
@@ -169,6 +196,7 @@ function buildPanel() {
       tabSize: parseInt(tab.value, 10) || DEFAULTS.tabSize,
       lineWrap: wrap.checked,
       vim: vimBox.checked,
+      relativeLines: rel.checked,
     };
     applySettings();
   };
@@ -176,6 +204,7 @@ function buildPanel() {
   tab.addEventListener("change", onChange);
   wrap.addEventListener("change", onChange);
   vimBox.addEventListener("change", onChange);
+  rel.addEventListener("change", onChange);
 
   return bar;
 }
@@ -189,6 +218,7 @@ function syncPanel(panel) {
   panel.querySelector('[data-role="tab"]').value = String(settings.tabSize);
   panel.querySelector('[data-role="wrap"]').checked = settings.lineWrap;
   panel.querySelector('[data-role="vim"]').checked = settings.vim;
+  panel.querySelector('[data-role="rel"]').checked = settings.relativeLines;
 }
 
 function mount(textarea) {
@@ -198,13 +228,18 @@ function mount(textarea) {
   const tab = new Compartment();
   const wrap = new Compartment();
   const keys = new Compartment();
+  const nums = new Compartment();
 
   const view = new EditorView({
     state: EditorState.create({
       doc: textarea.value,
       extensions: [
-        basicSetup,
+        // Order matters: vim (inside keys) must precede basicSetup, or
+        // basicSetup's history/search keymaps steal Ctrl-u/Ctrl-d before
+        // vim sees them. nums precedes it so its lineNumbers config wins.
         keys.of(keymapExt(settings.vim)),
+        nums.of(lineNumbersExt(settings.relativeLines)),
+        basicSetup,
         langFactory ? langFactory() : [],
         oneDark,
         phosphorTheme,
@@ -214,10 +249,24 @@ function mount(textarea) {
           indentUnit.of(" ".repeat(settings.tabSize)),
         ]),
         wrap.of(settings.lineWrap ? EditorView.lineWrapping : []),
+        // data-editor-height pins the editor to a fixed height with its own
+        // scrollbar (long docs like course markdown); without it the editor
+        // grows with its content, like the challenge textareas did.
+        textarea.dataset.editorHeight
+          ? EditorView.theme({
+              "&": { height: textarea.dataset.editorHeight },
+              ".cm-scroller": { overflow: "auto" },
+            })
+          : [],
         // Keep the textarea in sync so the existing form POST submits the
-        // edited code with zero handler changes.
+        // edited code with zero handler changes. The input event lets
+        // listeners on the textarea (the edit page's live preview) keep
+        // working as if the user typed into it directly.
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) textarea.value = u.state.doc.toString();
+          if (u.docChanged) {
+            textarea.value = u.state.doc.toString();
+            textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          }
         }),
       ],
     }),
@@ -240,13 +289,38 @@ function mount(textarea) {
     textarea.value = view.state.doc.toString();
   });
 
-  const ed = { view, panel, font, tab, wrap, keys };
+  const ed = { view, panel, font, tab, wrap, keys, nums };
   editors.push(ed);
   syncPanel(panel);
 }
 
+// On phone-sized viewports CodeMirror (and a code-sized textarea) is not a
+// usable editing surface, so instead of mounting we swap the whole editing
+// slot — textarea and submit button — for a pointer to a desktop. Width is
+// checked once at load; a mid-session resize across the breakpoint needs a
+// reload, which is fine for the resize-to-phone-width case.
+function mobileNotice(textarea) {
+  textarea.style.display = "none";
+  const form = textarea.closest("form");
+  const submit = form ? form.querySelector('button[type="submit"]') : null;
+  if (submit) submit.style.display = "none";
+
+  const note = document.createElement("div");
+  note.style.cssText =
+    "margin-top:.5rem;padding:.75rem 1rem;border:1px dashed #64748b;" +
+    "background:#0b0f0d;font-family:ui-monospace,monospace;font-size:13px;" +
+    "line-height:1.5;color:#94a3b8;";
+  note.textContent =
+    "// code editing needs a bigger screen — open this page on a desktop, " +
+    "or work locally with the duck CLI.";
+  textarea.after(note);
+}
+
 function init() {
-  document.querySelectorAll("textarea[data-editor]").forEach(mount);
+  const mobile = window.matchMedia("(max-width: 767px)").matches;
+  document.querySelectorAll("textarea[data-editor]").forEach((t) => {
+    (mobile ? mobileNotice : mount)(t);
+  });
 }
 
 if (document.readyState === "loading") {

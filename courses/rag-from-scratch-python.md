@@ -41,9 +41,9 @@ documents --> chunk --> embed --> store        (indexing, done once)
 question  --> embed --> retrieve top-k --> prompt the model   (per query)
 ```
 
-The indexing pass runs once over your corpus; ovals are the pipeline's entry
-and exit, and the violet and emerald borders mark the embed step and the
-vector store it fills.
+Zooming in on the first of those two lines — the indexing pass, run once over
+your corpus: ovals are the pipeline's entry and exit, and the violet and
+emerald borders mark the embed step and the vector store it fills.
 
 ```d2
 direction: right
@@ -662,10 +662,13 @@ model in a way that keeps it honest. Three rules do most of the work:
    sentinel beats prose ("Unfortunately I could not…") because your code
    can match it exactly and translate it to a UX-appropriate message.
 
-Here is the whole per-query path those rules govern. The dashed edges are the
-two lookups — the question is embedded, then matched against the index by
-similarity; the solid arrows are the answer path, and the colored borders
-mark retrieval, the LLM call, and the grounded answer.
+Here is the whole per-query path those rules govern. The dashed edges into
+retrieval are the two lookups — the question is embedded, then matched against
+the index by similarity. The solid arrows are the answer path; the red dashed
+edges are the two refusals — guard 1 bails out on weak scores *before* the LLM
+is ever called, guard 2 translates the model's `NOT_IN_CONTEXT` sentinel after
+it. Colored borders mark retrieval, the LLM call, the grounded answer, and the
+refusal exit.
 
 ```d2
 direction: right
@@ -675,9 +678,12 @@ idx: "vector\nindex"
 prompt: "build\nprompt"
 llm: "LLM" {style.stroke: "#a78bfa"; style.stroke-width: 2}
 ans: "answer\n+ cites" {shape: oval; style.stroke: "#34d399"; style.stroke-width: 2}
+refuse: "refusal" {shape: oval; style.stroke: "#dc2626"; style.stroke-width: 2}
 q -> retrieve: "embed" {style.stroke-dash: 4}
 idx -> retrieve: "similarity" {style.stroke-dash: 4}
 retrieve -> prompt -> llm -> ans
+retrieve -> refuse: "guard 1" {style.stroke: "#dc2626"; style.stroke-dash: 4}
+llm -> refuse: "guard 2" {style.stroke: "#dc2626"; style.stroke-dash: 4}
 ```
 
 Prompt assembly is plain string building, and the exact format is the

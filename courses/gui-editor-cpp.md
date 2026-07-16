@@ -74,20 +74,20 @@ the state, no screen required. Every graded challenge in this course works
 that way, and the final challenge drives a whole editor core with synthetic
 keystrokes and mouse clicks.
 
-The solid arrows are the per-frame cycle every backend runs; the dashed
-arrow is the one event that breaks out of it (`running = false`).
+The solid arrows run once per event — the loop blocks in the violet oval
+until something happens; the dashed arrow to the red oval is the one event
+that breaks out of it (`running = false`).
 
 ```d2
 direction: right
 
-wait: "wait_for_event()" {
+wait: "wait_for_next_event()" {
   shape: oval
   style.stroke: "#a78bfa"
   style.stroke-width: 2
 }
 dispatch: "handle(ev)\ndispatch by type"
-update: "update state"
-draw: "repaint damage"
+update: "update state,\nrepaint if needed"
 quit: "running = false" {
   shape: oval
   style.stroke: "#dc2626"
@@ -96,8 +96,7 @@ quit: "running = false" {
 
 wait -> dispatch: "event"
 dispatch -> update
-update -> draw
-draw -> wait: "loop"
+update -> wait: "loop"
 dispatch -> quit: "Quit" {style.stroke-dash: 4}
 ```
 
@@ -2720,9 +2719,9 @@ direction: right
 
 pieces: "piece list (the document)" {
   shape: sql_table
-  p0: "original  0..10   \"the quick \""
-  p1: "add       0..6    \"brown \""
-  p2: "original  10..3   \"fox\""
+  p0: "original · start 0 · len 10 · \"the quick \""
+  p1: "add · start 0 · len 6 · \"brown \""
+  p2: "original · start 10 · len 3 · \"fox\""
 }
 
 orig: "original buffer (read-only)" {
@@ -2736,8 +2735,8 @@ add: "add buffer (append-only)" {
 }
 
 pieces.p0 -> orig.t
-pieces.p2 -> orig.t
 pieces.p1 -> add.t {style.stroke: "#34d399"; style.stroke-width: 2}
+pieces.p2 -> orig.t
 ```
 
 The design rewards you three more times downstream:

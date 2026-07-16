@@ -1654,17 +1654,15 @@ usually one or two. The B-Tree is what "cache-line-friendly array" (lesson 1)
 looks like when generalized into a tree: pack as much decision-making as
 possible into each unit of I/O.
 
-The violet-bordered box is one node (its keys and child pointers interleave);
-each `page` shape below is the subtree a pointer leads to — three keys fan out
-to four children, and real nodes hold hundreds:
+The boxed table is one node — a single 4 KB page whose keys and child
+pointers interleave; each `page` shape below is the subtree a pointer leads
+to. Three keys fan out to four children, and real nodes hold hundreds:
 
 ```d2
 direction: down
 
-node: "B-Tree node = one 4 KB page" {
+node: "B-Tree node" {
   shape: sql_table
-  style.stroke: "#a78bfa"
-  style.stroke-width: 2
   c0: "child ptr"
   k1: "key 25"
   c1: "child ptr"
@@ -1675,8 +1673,8 @@ node: "B-Tree node = one 4 KB page" {
 }
 
 l0: "keys < 25" { shape: page }
-l1: "25 – 50" { shape: page }
-l2: "50 – 75" { shape: page }
+l1: "25 < keys < 50" { shape: page }
+l2: "50 < keys < 75" { shape: page }
 l3: "keys > 75" { shape: page }
 
 node.c0 -> l0
@@ -2642,15 +2640,15 @@ real database's execution pipeline: **parse** the text, **validate** it,
 miniature of what happens to every SQL statement — SQLite compiles SQL to
 bytecode for a virtual machine; our "bytecode" is just a dispatch on the verb.
 
-The pipeline reads left to right; the cyan-bordered stage is the "virtual
-machine" — for us, just a `switch` on the verb:
+The pipeline reads left to right; the cyan-bordered stage is the plan
+step — our whole "bytecode" is just a `switch` on the verb:
 
 ```d2
 direction: right
 
 cmd: "\"INSERT\nAlice 30\"" { shape: oval }
 parse: "parse +\nvalidate"
-dispatch: "dispatch\non verb (VM)" {
+dispatch: "plan: pick op\n(switch on verb)" {
   style.stroke: "#22d3ee"
   style.stroke-width: 2
 }

@@ -58,16 +58,16 @@ over your home network. Kubernetes doesn't care that its nodes live on two
 different hypervisors — to it they're just machines that can reach each
 other.
 
-The violet box is the cluster's brain; the greyed box is the services on
+The violet box is the cluster's brain; the grey box is the services on
 `pve-main` that stay untouched. The dashed arrows are the control plane
 managing workers *across* the two hypervisors, over your LAN.
 
 ```d2
 direction: right
 
-main: "pve-main · hypervisor" {
+main: "pve-main\nhypervisor" {
   jelly: "Jellyfin\n+ services" {
-    style.stroke-dash: 3
+    style.stroke: "#9ca3af"
     style.font-color: "#9ca3af"
   }
   cp: "k8s-cp-1\ncontrol plane\napi · scheduler · etcd" {
@@ -76,7 +76,7 @@ main: "pve-main · hypervisor" {
   }
 }
 
-worker: "pve-worker · hypervisor" {
+worker: "pve-worker\nhypervisor" {
   w1: "k8s-w-1\nworker"
   w2: "k8s-w-2\nworker"
 }
@@ -263,21 +263,22 @@ Note the node's own IP lives on the *bridge*, not the NIC. You don't need
 to edit this — the installer got it right — but when a VM config says
 `bridge=vmbr0`, this is what it's plugging into.
 
-`vmbr0` is a virtual switch: the node's own IP lives on the bridge, the
-physical NIC and every VM's virtual NIC are just ports on it, and the
-whole thing lands on your home LAN with no NAT.
+`vmbr0` is a virtual switch (cyan border): the node's own IP lives on the
+bridge, each VM's virtual NIC (the ovals) is a port on it, and the
+physical NIC is the port actually cabled to your LAN — the
+`bridge-ports enp3s0` line above. No NAT anywhere.
 
 ```d2
 direction: right
-nic: "enp3s0\nphysical NIC"
-br: "vmbr0\nLinux bridge\n.10" {style.stroke: "#22d3ee"; style.stroke-width: 2}
-lan: "home LAN\n192.168.1.0/24" {shape: cloud}
 cp: "cp-1 vnic" {shape: oval}
-w1: "w-1 vnic" {shape: oval}
+jf: "Jellyfin VM\nvnic" {shape: oval}
+br: "vmbr0\nLinux bridge\n.10" {style.stroke: "#22d3ee"; style.stroke-width: 2}
+nic: "enp3s0\nphysical NIC"
+lan: "home LAN\n192.168.1.0/24" {shape: cloud}
 cp -> br
-w1 -> br
-nic -> br
-br -> lan
+jf -> br
+br -> nic: "bridge-ports"
+nic -> lan
 ```
 
 If you have the second machine already, repeat this lesson on it now
@@ -893,16 +894,24 @@ to end: **your infrastructure is a git repo, and reality is disposable.**
 Everything from here on builds on that being actually true, not
 aspirationally true.
 
-Here's the whole chain you've built — every arrow is a command, and none
-of it required touching a machine by hand:
+Here's the chain you've built — every solid arrow is a command, and none
+of it required touching a machine by hand. The ovals are the chain's two
+ends: the frozen template it starts from, and (greyed, dashed) where it's
+headed — the k3s cluster the Kubernetes section installs next. Terraform's
+clone step is amber:
 
 ```d2
 direction: right
 tpl: "cloud-init\ntemplate\n(frozen)" {shape: oval}
 tf: "terraform\nclone N VMs" {style.stroke: "#d97706"; style.stroke-width: 2}
 ans: "ansible\nbaseline"
-k3s: "k3s cluster" {shape: oval; style.stroke: "#34d399"; style.stroke-width: 2}
-tpl -> tf -> ans -> k3s
+k3s: "k3s cluster\n(next section)" {
+  shape: oval
+  style.stroke-dash: 4
+  style.font-color: "#9ca3af"
+}
+tpl -> tf -> ans
+ans -> k3s: {style.stroke-dash: 4}
 ```
 
 ## Challenge: Rebuild From Nothing {#foundation-rebuild points=25}
@@ -1468,8 +1477,9 @@ replicas and self-healing *visible* — and route real HTTP to it from your
 LAN through the bundled Traefik ingress.
 
 The three rungs of the ladder you're about to write are one request path:
-your browser hits the Ingress by name, which forwards to a Service, which
-load-balances across the Deployment's pods wherever they landed.
+your browser hits the Ingress by name (`whoami.home.lan`, the amber
+Traefik box), which forwards to a Service, which load-balances across the
+Deployment's pods wherever they landed.
 
 ```d2
 direction: right
@@ -1478,7 +1488,7 @@ ing: "Ingress\nTraefik" {style.stroke: "#d97706"; style.stroke-width: 2}
 svc: "Service\nClusterIP"
 p1: "pod · w-1"
 p2: "pod · w-2"
-client -> ing: "app.lan"
+client -> ing: "whoami.home.lan"
 ing -> svc
 svc -> p1
 svc -> p2

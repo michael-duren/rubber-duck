@@ -1364,8 +1364,8 @@ char near the cursor, split/join a line, and read a screenful of
 consecutive lines.
 
 The cursor (amber oval, a `Pos{row, col}`) reaches a character in two
-steps — `row` picks the line, then `col` (the dashed edge) indexes into
-that line's own string:
+steps — the solid `row` edge picks the line, then the dashed `col` edge
+indexes into that line's own string (here landing on the `'r'`):
 
 ```d2
 direction: right
@@ -1383,8 +1383,10 @@ buf: "TextBuffer.lines_" {
   "row 2": "}"
 }
 
-cur -> buf."row 1": "row picks the line"
-cur -> buf."row 1": "col indexes its chars" {style.stroke-dash: 4}
+ch: "'r'" {shape: text}
+
+cur -> buf."row 1": "row"
+buf."row 1" -> ch: "col" {style.stroke-dash: 4}
 ```
 
 ### Positions, and the operations that edit

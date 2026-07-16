@@ -2339,9 +2339,11 @@ canonical description, reverse-engineered from real DEC hardware, is
 Paul Flo Williams' state diagram at vt100.net — linked in extended
 reading. Ours is a faithful subset.)
 
-The shape of that machine — each edge labelled with the byte that fires
-it. A violet border marks the resting **GROUND** state, amber the **CSI**
-parameter grinder (the two states you'll spend the most code on):
+The whole machine at a glance, before the state-by-state tour below —
+each edge labelled with the byte that fires it. A violet border marks the
+resting **GROUND** state (printable and C0 bytes loop there as PRINT and
+CTRL events), amber the **CSI** parameter grinder (the two states you'll
+spend the most code on):
 
 ```d2
 ground: "GROUND\n(resting)" {
@@ -2356,6 +2358,8 @@ csi: "CSI\n(param grinder)" {
 osc: "OSC"
 charset: "CHARSET"
 
+ground -> ground: "printable: emit PRINT"
+ground -> ground: "C0: emit CTRL"
 ground -> esc: "ESC"
 esc -> csi: "'['"
 esc -> osc: "']'"

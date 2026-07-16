@@ -363,6 +363,7 @@ direction: right
 sys: "system\n(kept)" { style.stroke: "#34d399"; style.stroke-width: 2 }
 
 old: "dropped" {
+  style.stroke: "#9ca3af"
   style.stroke-dash: 4
   u0: "user" { style.font-color: "#9ca3af" }
   a0: "asst" { style.font-color: "#9ca3af" }

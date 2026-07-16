@@ -45,27 +45,30 @@ canceled when the client disconnects, and every database call, RPC, and
 worker goroutine spawned under it unwinds automatically — provided each
 one actually selects on `ctx.Done()` while blocking.
 
-The amber-bordered root is the context you cancel; each arrow derives a
-child, and canceling any node cancels every context reachable below it.
+The amber-bordered root is the handler's context — canceled when the
+client disconnects. Each solid arrow derives a child context, and
+canceling a node cancels every context below it; the dashed arrows are
+worker goroutines, which are not contexts themselves — they observe
+cancellation by selecting on `ctx.Done()`.
 
 ```d2
 direction: right
 
-root: "handler ctx\n(client connects)" {
+root: "handler ctx" {
   style.stroke: "#d97706"
   style.stroke-width: 2
 }
 db: "DB call ctx"
 rpc: "RPC ctx"
 child: "WithTimeout child"
-w1: "worker"
-w2: "worker"
+w1: "worker\ngoroutine"
+w2: "worker\ngoroutine"
 
 root -> db
 root -> rpc
 rpc -> child
-child -> w1
-child -> w2
+child -> w1: {style.stroke-dash: 4}
+child -> w2: {style.stroke-dash: 4}
 ```
 
 Two rules keep this honest. First, `ctx` is always the first parameter,

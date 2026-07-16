@@ -25,16 +25,17 @@ tasks — the coordination patterns are the point, not raw CPU speedup.
 Concurrency is about *structuring* work as independent tasks; parallelism is
 about *running* them at once. The violet panel is concurrency (one core,
 tasks interleaved over time); the emerald panel is parallelism (many cores
-running tasks simultaneously). Because of the GIL, CPython threads sit in the
-violet picture for Python bytecode — interleaved, not truly parallel.
+running tasks simultaneously — read each core's row left to right, in step).
+Because of the GIL, CPython threads sit in the violet picture for Python
+bytecode — interleaved, not truly parallel.
 
 ```d2
 grid-rows: 2
 grid-gap: 30
 
 concurrency: "Concurrency" {
-  style.stroke: "#a78bfa"
-  style.stroke-width: 2
+  style.stroke: "#8b5cf6"
+  style.stroke-width: 3
   desc: "one core: A and B interleaved over time" {
     shape: text
   }
@@ -52,23 +53,29 @@ concurrency: "Concurrency" {
 
 parallelism: "Parallelism" {
   style.stroke: "#34d399"
-  style.stroke-width: 2
+  style.stroke-width: 3
   desc: "two cores: A and B run at the same time" {
     shape: text
   }
-  core1: "Core 1" {
-    grid-rows: 1
-    grid-gap: 0
-    a1: A
-    a2: A
-    a3: A
-  }
-  core2: "Core 2" {
-    grid-rows: 1
-    grid-gap: 0
-    b1: B
-    b2: B
-    b3: B
+  cores: "" {
+    grid-rows: 2
+    grid-gap: 8
+    style.stroke-width: 0
+    style.fill: transparent
+    core1: "Core 1" {
+      grid-rows: 1
+      grid-gap: 0
+      a1: A
+      a2: A
+      a3: A
+    }
+    core2: "Core 2" {
+      grid-rows: 1
+      grid-gap: 0
+      b1: B
+      b2: B
+      b3: B
+    }
   }
 }
 ```

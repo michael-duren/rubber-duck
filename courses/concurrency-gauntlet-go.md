@@ -264,14 +264,8 @@ lose a token.
 ```d2
 direction: right
 
-g1: "goroutine A\nAllow()" {
-  style.stroke: "#a78bfa"
-  style.stroke-width: 2
-}
-g2: "goroutine B\nAllow()" {
-  style.stroke: "#22d3ee"
-  style.stroke-width: 2
-}
+g1: "goroutine A\nAllow()"
+g2: "goroutine B\nAllow()"
 tokens: "tokens\nshared, no lock" {
   style.stroke: "#dc2626"
   style.stroke-width: 2
@@ -1485,34 +1479,31 @@ coordinator loop that launches ready jobs while a completion channel feeds
 back results. No mutex needed if only the coordinator touches the graph
 state.
 
-That shape is a worker pool: the coordinator (violet) launches at most
-`parallelism` ready jobs at a time; each worker reports to the completion
-channel, which feeds results back so the coordinator can unblock the next
-ready jobs.
+That shape looks like this: the coordinator loop (violet) launches a
+goroutine per ready job, keeping at most `parallelism` of them in flight;
+each finished job reports on the completion channel, which feeds results
+back so the coordinator can launch the next ready jobs.
 
 ```d2
-direction: right
+direction: down
 
-coord: "coordinator\n(owns graph state)" {
+coord: "coordinator loop (owns graph state)" {
   style.stroke: "#a78bfa"
   style.stroke-width: 2
 }
-ready: "ready jobs" {
-  shape: queue
-}
-w1: "worker 1"
-w2: "worker 2"
-w3: "worker 3"
-done: "completion\nchannel"
 
-coord -> ready: "launch <= P"
-ready -> w1
-ready -> w2
-ready -> w3
-w1 -> done
-w2 -> done
-w3 -> done
-done -> coord: "result feeds back"
+inflight: "at most parallelism in flight" {
+  grid-rows: 1
+  j1: "job Fn"
+  j2: "job Fn"
+  j3: "job Fn"
+}
+
+done: "completion channel"
+
+coord -> inflight: "launch ready"
+inflight -> done
+done -> coord: "unblocks next ready"
 ```
 
 ### Starter

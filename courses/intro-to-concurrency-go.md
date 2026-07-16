@@ -20,15 +20,18 @@ costs a few kilobytes of stack, so programs routinely run thousands of them.
 Concurrency is about *structuring* work as independent tasks; parallelism is
 about *running* them at once. The violet panel is concurrency (one core,
 tasks interleaved over time); the emerald panel is parallelism (many cores
-running tasks simultaneously).
+running tasks simultaneously — read each core's row left to right, in step).
+Goroutines always give you the violet picture, and when more than one core
+is available (`GOMAXPROCS` defaults to the core count) the runtime runs
+them in parallel too.
 
 ```d2
 grid-rows: 2
 grid-gap: 30
 
 concurrency: "Concurrency" {
-  style.stroke: "#a78bfa"
-  style.stroke-width: 2
+  style.stroke: "#8b5cf6"
+  style.stroke-width: 3
   desc: "one core: A and B interleaved over time" {
     shape: text
   }
@@ -46,23 +49,29 @@ concurrency: "Concurrency" {
 
 parallelism: "Parallelism" {
   style.stroke: "#34d399"
-  style.stroke-width: 2
+  style.stroke-width: 3
   desc: "two cores: A and B run at the same time" {
     shape: text
   }
-  core1: "Core 1" {
-    grid-rows: 1
-    grid-gap: 0
-    a1: A
-    a2: A
-    a3: A
-  }
-  core2: "Core 2" {
-    grid-rows: 1
-    grid-gap: 0
-    b1: B
-    b2: B
-    b3: B
+  cores: "" {
+    grid-rows: 2
+    grid-gap: 8
+    style.stroke-width: 0
+    style.fill: transparent
+    core1: "Core 1" {
+      grid-rows: 1
+      grid-gap: 0
+      a1: A
+      a2: A
+      a3: A
+    }
+    core2: "Core 2" {
+      grid-rows: 1
+      grid-gap: 0
+      b1: B
+      b2: B
+      b3: B
+    }
   }
 }
 ```
@@ -158,31 +167,30 @@ func TestSum(t *testing.T) {
 Channels connect goroutines: one sends, another receives. Unbuffered channels
 synchronize both sides — a send blocks until a receiver is ready.
 
-The amber producer sends values into the channel (violet); the cyan consumer
-receives them. This producer/consumer shape is the same idea Python models
-with a `queue.Queue`.
+The amber sender and the cyan receiver meet at the unbuffered channel
+(violet): the send blocks until a receiver is ready, then the value is
+handed straight over — nothing is stored in between.
 
 ```d2
 direction: right
 
-producer: "Producer\nsends / puts" {
+sender: "Sender\ngoroutine" {
   style.stroke: "#d97706"
   style.stroke-width: 2
 }
 
-chan: "channel (Go)\nqueue (Python)" {
-  shape: queue
+ch: "ch\nunbuffered channel" {
   style.stroke: "#a78bfa"
   style.stroke-width: 2
 }
 
-consumer: "Consumer\nreceives / gets" {
+receiver: "Receiver\ngoroutine" {
   style.stroke: "#22d3ee"
   style.stroke-width: 2
 }
 
-producer -> chan: "value"
-chan -> consumer: "value"
+sender -> ch: "ch <- 42\nblocks until a\nreceiver is ready"
+ch -> receiver: "<-ch\nhands the value over"
 ```
 
 ```go

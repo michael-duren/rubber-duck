@@ -274,12 +274,10 @@ kubectl get nodes    # one node... NotReady. Correct! See below.
 
 ## The tour — learn this layout cold
 
-The exam's troubleshooting tasks are largely "something in this layout is
-wrong, find it." Spend real time here:
-
-The kubelet is the bootstrap: it watches `/etc/kubernetes/manifests/` and
-runs the four control-plane components as **static pods** — which is why
-editing (or breaking) a file there makes that component restart (or vanish).
+The kubelet (amber border) is the bootstrap: it watches
+`/etc/kubernetes/manifests/` and runs the four control-plane components as
+**static pods** — which is why editing (or breaking) a file there makes
+that component restart (or vanish).
 
 ```d2
 kubelet: "kubelet\n(watches manifests/)" {style.stroke: "#fbbf24"; style.stroke-width: 2}
@@ -294,6 +292,9 @@ kubelet -> pods.etcd: runs
 kubelet -> pods.sched: runs
 kubelet -> pods.ctrl: runs
 ```
+
+The exam's troubleshooting tasks are largely "something in this layout is
+wrong, find it." Spend real time here:
 
 - **`/etc/kubernetes/manifests/`** — four YAML files: `etcd`,
   `kube-apiserver`, `kube-controller-manager`, `kube-scheduler`. These
@@ -360,10 +361,9 @@ Interface) and implements none of it. We install **Calico**: it's
 widely deployed, and — decisive for the exam — it *enforces
 NetworkPolicy*, which the simplest plugins silently don't.
 
-Two things happen in this lesson: workers register with the control plane
-via `kubeadm join` (dashed), and Calico lays a pod network
-(`10.244.0.0/16`) over every node so pods on different machines can route
-to each other.
+The dashed arrows are the one-time `kubeadm join` handshake that
+registers each worker with the control plane (violet border); the pod
+network itself is Calico's job, below.
 
 ```d2
 direction: right
@@ -472,17 +472,21 @@ alongside the other components, the three etcd members form a quorum
 (majority rules — three members tolerate one failure), and a TCP load
 balancer in front makes the API reachable when any one node is down.
 
+The amber hexagon is the TCP load balancer: each `:6443` edge is a plain
+TCP forward to a healthy **apiserver**, and the etcd members stacked
+alongside them form the 2-of-3 quorum.
+
 ```d2
 direction: right
 lb: "haproxy\nk8s-api:6443\n(TCP LB)" {shape: hexagon; style.stroke: "#fbbf24"; style.stroke-width: 2}
-quorum: "stacked etcd · quorum 2 of 3" {
+quorum: "quorum 2/3" {
   cp1: "cp-1\napiserver + etcd"
   cp2: "cp-2\napiserver + etcd"
   cp3: "cp-3\napiserver + etcd"
 }
-lb -> quorum.cp1
-lb -> quorum.cp2
-lb -> quorum.cp3
+lb -> quorum.cp1: ":6443"
+lb -> quorum.cp2: ":6443"
+lb -> quorum.cp3: ":6443"
 ```
 
 ## The load balancer
@@ -965,17 +969,20 @@ and procedures reward practice.
 
 ## etcd backup and restore — the marquee exam task
 
-The whole task is two commands with a file in between: `snapshot save`
-freezes cluster state to a `.db`; `snapshot restore` replays it into a
-fresh data-dir.
+`snapshot save` freezes the live cluster state (emerald cylinder) into a
+`.db` file (amber page); `snapshot restore` only unpacks that file into a
+fresh data-dir — etcd actually runs on it only after the third step,
+repointing `etcd.yaml`'s hostPath so the kubelet restarts etcd.
 
 ```d2
 direction: right
-live: "live etcd\ncluster state" {shape: cylinder; style.stroke: "#34d399"; style.stroke-width: 2}
+live: "live etcd" {shape: cylinder; style.stroke: "#34d399"; style.stroke-width: 2}
 snap: "snapshot.db" {shape: page; style.stroke: "#d97706"; style.stroke-width: 2}
-restored: "restored etcd\nnew data-dir" {shape: cylinder}
+restored: "restored etcd\n(new data-dir)" {shape: cylinder}
+manifest: "etcd.yaml" {shape: page}
 live -> snap: "snapshot save"
 snap -> restored: "snapshot restore"
+manifest -> restored: "hostPath repoint;\nkubelet restarts"
 ```
 
 All cluster state lives in etcd, so a cluster backup *is* an etcd

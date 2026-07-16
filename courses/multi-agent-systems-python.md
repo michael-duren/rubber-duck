@@ -371,6 +371,8 @@ isn't attached to it.
 
 The dashed edge back to the writer is the feedback loop; the amber note
 marks the hard cap (`max_rounds`) that keeps it from ping-ponging forever.
+When the budget runs out, the amber dashed exit ships the latest draft
+anyway — approval is not required to terminate.
 
 ```d2
 direction: right
@@ -382,14 +384,18 @@ critic: "critic\n(evaluate)" {
   style.stroke: "#a78bfa"
   style.stroke-width: 2
 }
-done: "APPROVED\nship draft" { shape: oval }
+done: "ship draft" { shape: oval }
 budget: "hard bound:\n<= max_rounds reviews" {
   shape: text
   style.font-color: "#d97706"
 }
 writer -> critic: "draft"
 critic -> writer: "feedback" { style.stroke-dash: 4 }
-critic -> done: "approve"
+critic -> done: "APPROVED"
+writer -> done: "rounds exhausted:\nship latest draft" {
+  style.stroke: "#d97706"
+  style.stroke-dash: 4
+}
 budget -- critic: { style.stroke: "#d97706"; style.stroke-dash: 4 }
 ```
 

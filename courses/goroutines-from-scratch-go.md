@@ -64,8 +64,8 @@ in `runtime/proc.go`:
   An M must hold a P to run Go code; an M without a P is parked or sitting
   in a syscall.
 
-The amber oval is an M (an OS thread); each violet box is a P holding its
-local run queue of runnable Gs; grey is the one shared global queue.
+The amber ovals are Ms (OS threads); each violet box is a P holding its
+local run queue of runnable Gs.
 
 ```d2
 direction: right
@@ -96,18 +96,8 @@ p2: "P — local run queue" {
   g4: "G"
 }
 
-glob: "global run queue" {
-  grid-rows: 1
-  style.stroke: "#9ca3af"
-  style.stroke-width: 2
-  g5: "G"
-  g6: "G"
-}
-
 m1 -- p1: "runs"
 m2 -- p2: "runs"
-p1 -- glob
-p2 -- glob
 ```
 
 `go f()` compiles to a call to `runtime.newproc`, which allocates (or
@@ -287,8 +277,8 @@ The runtime's answer is a pair of functions you'll see all over `proc.go`:
   It flips the G back to `_Grunnable` and pushes it onto a run queue. The M
   never stopped: after `gopark` it immediately picked up another runnable G.
 
-Each edge is labeled with the runtime routine that drives the transition; a
-G in `_Gwaiting` sits on no run queue at all.
+Each edge names what drives the transition — `gopark` and `goready` are the
+pair this lesson covers; a G in `_Gwaiting` sits on no run queue at all.
 
 ```d2
 direction: right
