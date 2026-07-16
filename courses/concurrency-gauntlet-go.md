@@ -75,13 +75,17 @@ go func() {
 The recursive shape is the one worth internalizing: each layer only ever
 looks at 2 or 3 concrete channels plus one recursive call, so the select
 statement stays a fixed size no matter how many inputs you started with —
-but the goroutine count that buys you is roughly N/2, not N/3. Only the
-top layer's three slots are all fresh inputs; every layer below it is
-also carrying an ancestor's `out` down through the recursion (that's what
-lets a close at the top retire every idle layer underneath), and that
-passenger occupies one of the three slots at each subsequent layer. Run
-the numbers and it lands exactly on `N/2` for the inputs this lesson
-cares about: 6 inputs cost 3 goroutines, 30 cost 15, 100 cost 50. The flat
+but the goroutine count that buys you is roughly N/2, not N/3. Each layer
+peels three channels off the front of its list into its select, then
+recurses on the rest with its own `out` appended to the tail — appending
+that `out` is what lets a close at the top retire every idle layer
+underneath. Because each layer strips three but adds one back, the list
+shrinks by two per layer, not three, so the recursion runs N/2 layers deep
+— N/2 goroutines. (Those trailing `out` passengers pile up at the tail and
+only surface as watched slots in the bottom layer or two; they never
+displace a fresh input higher up.) Run the numbers and it lands exactly on
+`N/2` for the inputs this lesson cares about: 6 inputs cost 3 goroutines,
+30 cost 15, 100 cost 50. The flat
 shape uses exactly one goroutine regardless of N, at the cost of building
 a `reflect.SelectCase` slice and paying reflection overhead on every
 call — worth it only if goroutine count matters more than that overhead.
@@ -227,8 +231,10 @@ func TestNoGoroutineLeak(t *testing.T) {
 
 # Lesson: Clocks You Can Control {#clocks-and-token-buckets}
 
-`time.After` in a hot loop allocates a timer per iteration; `time.Ticker`
-must be stopped or it lives forever. You know this. The deeper drill: **code
+`time.After` in a hot loop allocates a timer per iteration; a `time.Ticker`
+you forget to `Stop` keeps firing (Go 1.23+ can at least garbage-collect one
+you've dropped every reference to — older releases leaked it outright). You
+know this. The deeper drill: **code
 that reads the wall clock directly is untestable**, and rate limiters are
 where people learn that the hard way — the naive test for "2 requests per
 second" is a test that takes seconds and flakes in CI.
@@ -241,7 +247,7 @@ The token bucket itself is two lines of math. A bucket holds up to `burst`
 tokens and starts full. Tokens drip in continuously at `rate` per second:
 
 ```go
-elapsed := now.Sub(last)
+elapsed := now().Sub(last) // now is the injected func() time.Time
 tokens = min(tokens+elapsed.Seconds()*float64(rate), float64(burst))
 ```
 

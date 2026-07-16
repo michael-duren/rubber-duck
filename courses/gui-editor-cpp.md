@@ -3685,10 +3685,10 @@ Implement `wrap_line` per the algorithm above.
 - Break opportunities are *after each space* (`' '` only — no tabs here).
 - On overflow (running width + next char's width **>** `max_width`, and
   the row is non-empty): break at the last opportunity after the row
-  start if there is one, else before the current character. The space
-  ending an upper row may overhang `max_width`... no — the space was
-  *counted* when scanned; it can trigger overflow itself and wrap like
-  any character.
+  start if there is one, else before the current character. A space is
+  not free: it is measured like any other character when scanned, so
+  there is no "hanging space" exemption from the width budget — a run of
+  spaces can itself overflow and wrap (see `test_spaces_wrap_too`).
 - An empty line yields exactly one row, `{0, 0}`. All rows are
   contiguous: each begins where the previous ended, the first at 0, the
   last ending at `line.size()`.
@@ -5373,11 +5373,12 @@ challenge, pure logic, no server needed.
 Independent of transport, the three commands are selection-and-text
 algebra with firm conventions users rely on:
 
-- **Copy** with a non-empty selection stores its text; the selection
-  stays (you can copy, then keep typing to replace — er, no: copy does
-  *not* collapse the selection; watch any editor). Copy with an *empty*
-  selection is a no-op that must **not** clear the clipboard — nothing
-  is more rage-inducing than losing a clipboard to a stray Ctrl+C.
+- **Copy** with a non-empty selection stores its text and leaves the
+  document untouched — copy never collapses the selection, so the
+  highlight stays put and you can keep working with it (watch any
+  editor). Copy with an *empty* selection is a no-op that must **not**
+  clear the clipboard — nothing is more rage-inducing than losing a
+  clipboard to a stray Ctrl+C.
 - **Cut** = copy + delete selection + caret collapses where the text
   was.
 - **Paste** replaces the selection (if any) with the clipboard, caret
