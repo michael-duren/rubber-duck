@@ -82,7 +82,7 @@ func submitCmd(args []string) error {
 		form.Set("claimed_output", output)
 	}
 
-	token, err := loadToken()
+	token, tokenSource, err := loadToken()
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func submitCmd(args []string) error {
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized: token missing or revoked")
+		return unauthorizedErr(tokenSource, base)
 	}
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("submit: server said %s: %s", resp.Status, body)

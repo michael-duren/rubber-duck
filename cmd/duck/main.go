@@ -34,9 +34,9 @@ func run(args []string) error {
 		return helpCmd(args[1:])
 	}
 	// `duck <cmd> --help` / `duck <cmd> -h` → that command's detailed help.
-	// educator is excluded so its own dispatch can handle `--help` for both
-	// the group and its subcommands.
-	if args[0] != "educator" && args[0] != "ed" && hasHelpFlag(args[1:]) {
+	// The command groups (educator, auth) are excluded so their own dispatch
+	// can handle `--help` for both the group and its subcommands.
+	if args[0] != "educator" && args[0] != "ed" && args[0] != "auth" && hasHelpFlag(args[1:]) {
 		return helpCmd(args[:1])
 	}
 	switch args[0] {
@@ -46,8 +46,13 @@ func run(args []string) error {
 		return testCmd(args[1:])
 	case "submit":
 		return submitCmd(args[1:])
+	case "auth":
+		return authCmd(args[1:])
 	case "login":
-		return loginCmd(args[1:])
+		// Deprecated spelling, kept so existing muscle memory and scripts
+		// don't break the day auth grew subcommands.
+		fmt.Fprintln(os.Stderr, "duck: `duck login` is now `duck auth login` — this alias will be removed in a future release")
+		return authLoginCmd(args[1:])
 	case "version":
 		return versionCmd(args[1:])
 	case "educator", "ed":

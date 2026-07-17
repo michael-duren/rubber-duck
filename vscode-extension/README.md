@@ -19,7 +19,7 @@ at it).
   palette commands that detect the challenge from the active editor. Output
   streams into a shared `duck` terminal. `duck submit` grades locally and
   claims the verdict instantly; *Submit (Grade on Server)* uses `--remote`.
-- **Login**: *Duck: Login* opens a terminal running `duck login` (it prompts
+- **Login**: *Duck: Login* opens a terminal running `duck auth login` (it prompts
   for credentials interactively). The extension reads the same token the CLI
   uses — `$DUCK_TOKEN` or `~/.config/duck/token` — to browse the catalog.
 

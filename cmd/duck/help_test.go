@@ -13,7 +13,7 @@ func TestRenderMainHelpListsEveryCommand(t *testing.T) {
 	var buf bytes.Buffer
 	renderMainHelp(&buf)
 	out := buf.String()
-	for _, name := range []string{"pull", "test", "submit", "login", "educator", "version", "help"} {
+	for _, name := range []string{"pull", "test", "submit", "auth", "educator", "version", "help"} {
 		if !strings.Contains(out, name) {
 			t.Errorf("main help missing command %q", name)
 		}
@@ -48,6 +48,8 @@ func TestFindCmd(t *testing.T) {
 		{"pull", "pull"},
 		{"educator", "educator"},
 		{"ed", "educator"}, // alias resolves to the same entry
+		{"auth", "auth"},
+		{"login", "login"}, // deprecated alias resolves to the auth login sub
 		{"nope", ""},
 	}
 	for _, c := range cases {
@@ -70,6 +72,7 @@ func TestHelpCmdTopics(t *testing.T) {
 		{"top level", nil, false},
 		{"command", []string{"pull"}, false},
 		{"educator subcommand", []string{"educator", "push"}, false},
+		{"auth subcommand", []string{"auth", "status"}, false},
 		{"unknown command", []string{"bogus"}, true},
 		{"unknown subcommand", []string{"educator", "bogus"}, true},
 	}

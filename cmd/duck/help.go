@@ -90,7 +90,7 @@ var commands = []cmdHelp{
 			"submits the code together with the claimed pass/fail verdict, and\n" +
 			"prints the result immediately. The server re-grades in the\n" +
 			"background as an audit nobody waits on. Requires a saved token (see\n" +
-			"`duck login`). If the language's toolchain isn't installed, submit\n" +
+			"`duck auth login`). If the language's toolchain isn't installed, submit\n" +
 			"automatically falls back to synchronous server grading.",
 		flags: []flagHelp{
 			{"--remote", "skip the local run; grade on the server and wait for the result"},
@@ -101,19 +101,57 @@ var commands = []cmdHelp{
 		},
 	},
 	{
-		name:    "login",
-		title:   "duck login",
-		summary: "Authenticate and save an API token",
-		usage:   "duck login [--base URL]",
-		long: "Prompts for your username and password, mints an API token, and\n" +
-			"saves it to ~/.config/duck/token (mode 0600). `duck submit` and the\n" +
-			"`duck educator` commands read that token. As an alternative to\n" +
-			"logging in, set the DUCK_TOKEN environment variable to a token\n" +
-			"minted on the website's profile page.",
-		flags: []flagHelp{baseFlag},
+		name:    "auth",
+		title:   "duck auth",
+		summary: "Manage authentication: log in and check token status",
+		usage:   "duck auth <login|status> [args]",
+		long: "Authentication for the commands that write to the server (`duck\n" +
+			"submit`, all of `duck educator`). `login` mints a token and saves it\n" +
+			"to ~/.config/duck/token; `status` shows which token duck would send\n" +
+			"— DUCK_TOKEN beats the token file when both exist — and whether the\n" +
+			"server accepts it. When a submit says \"unauthorized\", start with\n" +
+			"`duck auth status`.",
 		examples: []example{
-			{"duck login", "log in to https://duckgc.com"},
-			{"duck login --base http://localhost:8080", "log in to a local dev server"},
+			{"duck auth login", "log in to https://duckgc.com and save a token"},
+			{"duck auth status", "show which token duck uses and whether it works"},
+		},
+		subs: []cmdHelp{
+			{
+				name:    "login",
+				title:   "duck auth login",
+				summary: "Authenticate and save an API token",
+				usage:   "duck auth login [--base URL]",
+				long: "Prompts for your username and password, mints an API token, and\n" +
+					"saves it to ~/.config/duck/token (mode 0600). `duck submit` and the\n" +
+					"`duck educator` commands read that token. As an alternative to\n" +
+					"logging in, set the DUCK_TOKEN environment variable to a token\n" +
+					"minted on the website's profile page — but note DUCK_TOKEN takes\n" +
+					"precedence over the saved file whenever it is set.",
+				flags: []flagHelp{baseFlag},
+				examples: []example{
+					{"duck auth login", "log in to https://duckgc.com"},
+					{"duck auth login --base http://localhost:8080", "log in to a local dev server"},
+				},
+			},
+			{
+				name:    "status",
+				title:   "duck auth status",
+				summary: "Show which token duck would use and whether the server accepts it",
+				usage:   "duck auth status [--base URL]",
+				long: "Reports the server, the token duck would send and where it came\n" +
+					"from (DUCK_TOKEN wins over ~/.config/duck/token when both are\n" +
+					"set), then asks the server whether it accepts that token. Exits\n" +
+					"non-zero when it doesn't. This is the first thing to run when a\n" +
+					"submit or push answers \"unauthorized\" right after a login: the\n" +
+					"usual culprits — a stale DUCK_TOKEN shadowing the fresh token\n" +
+					"file, or a token minted on a different server — are all visible\n" +
+					"here.",
+				flags: []flagHelp{baseFlag},
+				examples: []example{
+					{"duck auth status", "check the token against https://duckgc.com"},
+					{"duck auth status --base http://localhost:8080", "check against a local dev server"},
+				},
+			},
 		},
 	},
 	{
@@ -127,7 +165,7 @@ var commands = []cmdHelp{
 			"records its version; you edit locally; `lint` validates it without\n" +
 			"the server; `push` sends it back, using the recorded version for\n" +
 			"optimistic concurrency so you can't silently overwrite someone\n" +
-			"else's changes. All three need a saved token (see `duck login`).\n" +
+			"else's changes. All three need a saved token (see `duck auth login`).\n" +
 			"`ed` is an accepted alias for `educator`.",
 		examples: []example{
 			{"duck educator pull intro-to-go/go", "fetch the Go variant's markdown to edit"},
@@ -214,7 +252,7 @@ var commands = []cmdHelp{
 // globalEnv documents environment variables that affect duck as a whole,
 // shown at the bottom of the top-level help.
 var globalEnv = []flagHelp{
-	{"DUCK_BASE_URL", "default server base URL for pull/educator commands"},
+	{"DUCK_BASE_URL", "default server base URL for pull/auth/educator commands"},
 	{"DUCK_TOKEN", "API token, overriding ~/.config/duck/token"},
 }
 
@@ -227,6 +265,12 @@ func findCmd(name string) *cmdHelp {
 	}
 	if name == "ed" {
 		return findCmd("educator")
+	}
+	// `duck login` is a deprecated alias for `duck auth login`; keep its
+	// help topic resolving so `duck login --help` still teaches the new
+	// spelling instead of erroring.
+	if name == "login" {
+		return findSub(findCmd("auth"), "login")
 	}
 	return nil
 }
