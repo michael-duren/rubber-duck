@@ -90,11 +90,13 @@ test-integration: db
 # Seed writes straight to the local compose Postgres (no server round trip,
 # no credentials): the quickstart fixture plus every course in courses/, so
 # local dev has the same catalog as prod. Idempotent — unchanged documents
-# are skipped, so re-running never bumps variant versions.
+# are skipped, so re-running never bumps variant versions. --db is pinned to
+# the compose URL so an exported DATABASE_URL (say, a cloud-sql-proxy to
+# prod) can't silently redirect a "local" seed into another database.
 seed:
 	@for f in seed/intro-to-go.md courses/*.md; do \
 		echo "seeding $$f"; \
-		go run ./cmd/duckserver seed "$$f" || exit 1; \
+		go run ./cmd/duckserver seed --db "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable" "$$f" || exit 1; \
 	done
 
 # BREAK-GLASS ONLY: import courses/*.md straight into the prod database,

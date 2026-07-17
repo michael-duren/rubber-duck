@@ -306,10 +306,11 @@ func TestProposalEditProposerOnly(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/proposals/1" {
 		t.Errorf("bob GET edit = %d -> %q, want 303 to detail", rec.Code, rec.Header().Get("Location"))
 	}
-	// …and his POST is a 404 (the store scopes the update to the proposer).
+	// …and his POST bounces to the detail page the same way, before any
+	// parse work (the store's proposer-scoped update is the backstop).
 	rec = postForm(mux, "/proposals/1/edit", url.Values{"markdown": {seedMarkdown(t)}}, bob)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("bob POST edit = %d, want 404", rec.Code)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/proposals/1" {
+		t.Errorf("bob POST edit = %d -> %q, want 303 to detail", rec.Code, rec.Header().Get("Location"))
 	}
 	if fs.proposals[1].Revision != 1 {
 		t.Error("bob's edit must not be applied")
@@ -368,5 +369,197 @@ func TestMyProposalsFilter(t *testing.T) {
 	body := get(mux, "/proposals?mine=1", bob).Body.String()
 	if strings.Contains(body, "Great change") {
 		t.Error("bob's ?mine=1 must not list alice's proposal")
+	}
+}
+
+// TestNonAdminRejectNeitherClosesNorPublishes: a regular user's reject is
+// recorded and nothing else happens — the proposal stays open, unpublished.
+func TestNonAdminRejectNeitherClosesNorPublishes(t *testing.T) {
+	mux, fs := testMux(t)
+	seedProposal(t, mux, fs)
+	bob := loginAs(t, mux, "bob")
+
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"reject"}, "comment": {"needs work"}, "revision": {"1"}}, bob)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("bob reject = %d: %s", rec.Code, rec.Body)
+	}
+	if fs.proposals[1].Status != domain.ProposalOpen {
+		t.Errorf("status = %q, want still open", fs.proposals[1].Status)
+	}
+	if len(fs.published) != 0 {
+		t.Error("a non-admin reject must not publish")
+	}
+	if len(fs.reviews[1]) != 1 {
+		t.Error("the reject itself should be recorded")
+	}
+}
+
+// TestRejectAtThresholdDoesNotPublish pins the verdict gate in the publish
+// retry: a proposal already sitting at the approval threshold (a prior
+// publish attempt failed transiently) must not be published by a REJECT
+// arriving on top of the standing approvals.
+func TestRejectAtThresholdDoesNotPublish(t *testing.T) {
+	mux, fs := testMux(t)
+	seedProposal(t, mux, fs)
+	bob := loginAs(t, mux, "bob")
+	carol := loginAs(t, mux, "carol")
+	dave := loginAs(t, mux, "dave")
+	_, _ = bob, carol
+
+	// Standing approvals at the threshold, recorded directly — as if a
+	// prior threshold-tipping review committed but its publish failed.
+	fs.reviews[1] = map[int64]domain.ProposalReview{}
+	for _, name := range []string{"bob", "carol"} {
+		u := fs.users[name]
+		fs.reviews[1][u.id] = domain.ProposalReview{
+			ProposalID: 1, ReviewerID: u.id, ReviewerUsername: name,
+			Verdict: domain.VerdictApprove, Revision: 1,
+		}
+	}
+
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"reject"}, "revision": {"1"}}, dave)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("dave reject = %d: %s", rec.Code, rec.Body)
+	}
+	if len(fs.published) != 0 {
+		t.Error("a reject must never trigger the publish retry")
+	}
+	if fs.proposals[1].Status != domain.ProposalOpen {
+		t.Errorf("status = %q, want still open", fs.proposals[1].Status)
+	}
+}
+
+// TestPublishInvalidDocumentBanner: a proposal that reached approval but
+// whose document no longer parses (the ingest contract tightened since it
+// was authored) renders the explanatory banner instead of publishing.
+func TestPublishInvalidDocumentBanner(t *testing.T) {
+	mux, fs := testMux(t)
+	seedProposal(t, mux, fs)
+	p := fs.proposals[1]
+	p.ProposedMD = "not a course document"
+	fs.proposals[1] = p
+
+	admin := loginAs(t, mux, "root")
+	fs.promote("root", domain.RoleAdmin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approve on rotten doc = %d, want 200 (re-render)", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "no longer validates") {
+		t.Errorf("expected validation banner, got: %s", rec.Body.String())
+	}
+	if fs.proposals[1].Status != domain.ProposalOpen || len(fs.published) != 0 {
+		t.Error("invalid document must not publish or close the proposal")
+	}
+	if len(fs.reviews[1]) != 1 {
+		t.Error("the review itself should still be recorded")
+	}
+}
+
+// TestPublishBrokenDiagramBanner: same degraded path for a document whose
+// d2 diagram no longer compiles.
+func TestPublishBrokenDiagramBanner(t *testing.T) {
+	mux, fs := testMux(t)
+	seedProposal(t, mux, fs)
+	broken := strings.Replace(seedMarkdown(t),
+		"# Lesson: Goroutines Basics {#goroutines-basics}\n",
+		"# Lesson: Goroutines Basics {#goroutines-basics}\n\n```d2\na -> : {{{ not d2\n```\n", 1)
+	p := fs.proposals[1]
+	p.ProposedMD = broken
+	fs.proposals[1] = p
+
+	admin := loginAs(t, mux, "root")
+	fs.promote("root", domain.RoleAdmin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approve on broken diagram = %d, want 200 (re-render)", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "no longer compiles") {
+		t.Errorf("expected diagram banner, got: %s", rec.Body.String())
+	}
+	if fs.proposals[1].Status != domain.ProposalOpen || len(fs.published) != 0 {
+		t.Error("broken diagram must not publish or close the proposal")
+	}
+}
+
+// TestPublishRaceLoserRedirects: losing a double-publish race
+// (ErrProposalClosed) or hitting a concurrent proposer revision
+// (ErrStaleRevision) redirects to the detail page rather than 500ing.
+func TestPublishRaceLoserRedirects(t *testing.T) {
+	for _, raceErr := range []error{domain.ErrProposalClosed, domain.ErrStaleRevision} {
+		mux, fs := testMux(t)
+		seedProposal(t, mux, fs)
+		fs.publishErr = raceErr
+
+		admin := loginAs(t, mux, "root")
+		fs.promote("root", domain.RoleAdmin)
+		rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/proposals/1" {
+			t.Errorf("%v: approve = %d -> %q, want 303 to detail", raceErr, rec.Code, rec.Header().Get("Location"))
+		}
+		if len(fs.published) != 0 {
+			t.Errorf("%v: nothing should be published", raceErr)
+		}
+	}
+}
+
+// TestPreviewMarkdownStripsRawHTML pins that the live-preview endpoint
+// never reflects raw HTML back: goldmark (without WithUnsafe) must strip
+// script/event-handler content. If someone adds html.WithUnsafe to
+// internal/markdown, this becomes a reflected-XSS endpoint and this test
+// is the tripwire.
+func TestPreviewMarkdownStripsRawHTML(t *testing.T) {
+	mux, _ := testMux(t)
+	alice := loginAs(t, mux, "alice")
+
+	rec := postForm(mux, "/preview/markdown", url.Values{"markdown": {
+		"hello <script>alert(1)</script>\n\n<img src=x onerror=alert(2)>\n\n[link](javascript:alert(3))",
+	}}, alice)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, bad := range []string{"<script>", "onerror", "javascript:"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("preview reflected %q: %s", bad, body)
+		}
+	}
+}
+
+// TestDuplicateProposalCollapsesIntoEditor: proposing a second time for the
+// same variant redirects into the existing proposal's editor with the
+// explanatory notice.
+func TestDuplicateProposalCollapsesIntoEditor(t *testing.T) {
+	mux, fs := testMux(t)
+	alice := seedProposal(t, mux, fs)
+
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}}, alice)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/proposals/1/edit?dup=1" {
+		t.Fatalf("duplicate propose = %d -> %q, want 303 to editor with dup=1", rec.Code, rec.Header().Get("Location"))
+	}
+	body := get(mux, "/proposals/1/edit?dup=1", alice).Body.String()
+	if !strings.Contains(body, "already had an open proposal") {
+		t.Error("editor should explain the duplicate collapsed into this proposal")
+	}
+}
+
+// TestProposalsStatusFilter: the queue defaults to open proposals and
+// ?status= filters (or shows everything with all).
+func TestProposalsStatusFilter(t *testing.T) {
+	mux, fs := testMux(t)
+	alice := seedProposal(t, mux, fs)
+	if rec := postForm(mux, "/proposals/1/withdraw", url.Values{}, alice); rec.Code != http.StatusSeeOther {
+		t.Fatalf("withdraw = %d", rec.Code)
+	}
+
+	if body := get(mux, "/proposals", nil).Body.String(); strings.Contains(body, "Great change") {
+		t.Error("default (open) queue must not list the withdrawn proposal")
+	}
+	if body := get(mux, "/proposals?status=withdrawn", nil).Body.String(); !strings.Contains(body, "Great change") {
+		t.Error("?status=withdrawn should list it")
+	}
+	if body := get(mux, "/proposals?status=all", nil).Body.String(); !strings.Contains(body, "Great change") {
+		t.Error("?status=all should list it")
 	}
 }

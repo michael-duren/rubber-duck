@@ -19,6 +19,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# One sync at a time: overlapping runs (schedule + manual dispatch) would
+# race the force-push and the PR create/merge sequence.
+concurrency:
+  group: course-sync
+  cancel-in-progress: true
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -42,19 +48,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
         run: |
-          if git diff --quiet -- courses; then
+          # Stage first, then diff the index: `git diff` alone ignores
+          # untracked files, so a drift consisting only of a brand-new
+          # course file would read as "up to date" and never sync.
+          git add -A courses
+          if git diff --cached --quiet -- courses; then
             echo "mirror is up to date"
             exit 0
           fi
           git config user.name "course-sync"
           git config user.email "course-sync@users.noreply.github.com"
           git checkout -B course-sync
-          git add courses
           git commit -m "chore: sync courses/ mirror from production"
           git push -f origin course-sync
-          # Create the PR if none exists for this branch; otherwise the
-          # force-push above already updated it.
-          if ! gh pr view course-sync --json number >/dev/null 2>&1; then
+          # Create the PR only if no OPEN one exists for this branch (an
+          # open one was just updated by the force-push). The state filter
+          # matters: bare `gh pr view` falls back to resolving MERGED and
+          # CLOSED PRs for non-default branches, which after the first
+          # merged sync would skip the create and then fail the merge —
+          # bricking every later sync.
+          if [ "$(gh pr list --head course-sync --state open --json number --jq length)" = "0" ]; then
             gh pr create \
               --head course-sync \
               --title "chore: sync courses/ mirror from production" \

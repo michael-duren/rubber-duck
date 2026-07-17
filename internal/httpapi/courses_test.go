@@ -368,3 +368,27 @@ func TestListChallengesPublic(t *testing.T) {
 		t.Errorf("unknown variant status = %d, want 404", rec2.Code)
 	}
 }
+
+// TestRemovedAgentWriteEndpointsAreDead pins that the pre-proposal agent
+// write surface stays gone: no /api/v1 route accepts course writes, with or
+// without a credential. In this API-only mux an unmatched method is a 405
+// (behind the full server the web catch-all 404s them); what matters is
+// that nothing succeeds — a refactor re-registering a write handler under
+// /api/v1/courses would fail this test.
+func TestRemovedAgentWriteEndpointsAreDead(t *testing.T) {
+	mux, fs := testAPI(t)
+	fs.seedVariant(t, seedDoc(t))
+
+	cases := []struct{ method, path string }{
+		{"PUT", "/api/v1/courses/intro-to-concurrency/variants/go"},
+		{"DELETE", "/api/v1/courses/intro-to-concurrency"},
+		{"DELETE", "/api/v1/courses/intro-to-concurrency/variants/go"},
+		{"POST", "/api/v1/courses"},
+	}
+	for _, c := range cases {
+		rec := doJSONAs(mux, c.method, c.path, "gc_oldagentkey", map[string]string{"markdown": "x"})
+		if rec.Code != http.StatusMethodNotAllowed && rec.Code != http.StatusNotFound {
+			t.Errorf("%s %s = %d, want 405 or 404", c.method, c.path, rec.Code)
+		}
+	}
+}

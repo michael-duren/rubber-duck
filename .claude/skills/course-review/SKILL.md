@@ -86,7 +86,8 @@ README.md ("Course document format"). One file per course × language in
   disagree, work out which is right and fix the wrong one.
 - Keep required frontmatter intact: `course`, `title`, `language`,
   `description`. `language` must match the filename suffix.
-- Don't publish. Review lands as a branch + PR against `courses/*.md`;
-  `make publish` happens after merge, by the operator.
+- Don't publish. `courses/*.md` is a mirror of the server; content changes
+  go through the in-app proposal workflow (web editor or `duck propose`),
+  so land improvements as a proposal, not a direct edit to the mirror.
 - One course per review pass. If you notice a defect in a *different*
   course while reviewing, note it in your report instead of editing it.

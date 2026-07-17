@@ -29,10 +29,11 @@ type fakeStore struct {
 	rateLimit      func(userID, challengeID int64) bool // nil = never limited
 	courses        []domain.CourseSummary               // returned by ListCourses (catalog tests)
 
-	proposals map[int64]domain.Proposal
-	reviews   map[int64]map[int64]domain.ProposalReview // proposal id -> reviewer id -> review
-	nextProp  int64
-	published []int64 // proposal IDs PublishProposal applied, in order
+	proposals  map[int64]domain.Proposal
+	reviews    map[int64]map[int64]domain.ProposalReview // proposal id -> reviewer id -> review
+	nextProp   int64
+	published  []int64 // proposal IDs PublishProposal applied, in order
+	publishErr error   // non-nil: PublishProposal fails with it (simulates races the fake can't interleave)
 }
 
 type fakeUser struct {
@@ -344,13 +345,19 @@ func (f *fakeStore) AddReview(_ context.Context, proposalID, reviewerID int64, v
 	return domain.ReviewOutcome{Proposal: f.refreshProposal(p), ReviewerIsAdmin: isAdmin, Closed: closed}, nil
 }
 
-func (f *fakeStore) PublishProposal(_ context.Context, proposalID int64, course domain.Course, variant domain.Variant) (int, error) {
+func (f *fakeStore) PublishProposal(_ context.Context, proposalID int64, expectedRevision int, course domain.Course, variant domain.Variant) (int, error) {
+	if f.publishErr != nil {
+		return 0, f.publishErr
+	}
 	p, ok := f.proposals[proposalID]
 	if !ok {
 		return 0, domain.ErrNotFound
 	}
 	if p.Status != domain.ProposalOpen {
 		return 0, domain.ErrProposalClosed
+	}
+	if p.Revision != expectedRevision {
+		return 0, domain.ErrStaleRevision
 	}
 	if p.BaseVersion != f.liveVersion(p.CourseSlug, p.Language) {
 		return 0, domain.ErrVersionConflict

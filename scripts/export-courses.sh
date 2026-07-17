@@ -37,8 +37,11 @@ fi
 expected="$(mktemp)"
 trap 'rm -f "$expected"' EXIT
 for i in $(seq 0 $((count - 1))); do
-    course="$(jq -r ".variants[$i].course" <<<"$export_json")"
-    language="$(jq -r ".variants[$i].language" <<<"$export_json")"
+    # -e: a missing/null field is a hard failure. Plain -r renders null as
+    # the literal string "null", which passes the kebab-case guard below and
+    # would auto-merge a null-null.md into the mirror on any schema drift.
+    course="$(jq -er ".variants[$i].course" <<<"$export_json")"
+    language="$(jq -er ".variants[$i].language" <<<"$export_json")"
     # Defense in depth: ingest already rejects non-kebab-case course/language
     # frontmatter, but these strings become filenames in a job with push
     # rights, so a name that could escape courses/ means the server-side
@@ -49,8 +52,9 @@ for i in $(seq 0 $((count - 1))); do
     fi
     file="$course-$language.md"
     # -j (not -r): raw output with no added trailing newline, so the file is
-    # byte-identical to the stored source_md and re-imports diff as unchanged.
-    jq -j ".variants[$i].markdown" <<<"$export_json" >"$courses_dir/$file"
+    # byte-identical to the stored source_md and re-imports diff as
+    # unchanged. -e for the same schema-drift reason as above.
+    jq -ej ".variants[$i].markdown" <<<"$export_json" >"$courses_dir/$file"
     echo "$file" >>"$expected"
 done
 

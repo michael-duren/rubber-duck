@@ -89,9 +89,9 @@ func (h *handlers) getCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
-	// version lets a human caller round-trip it back as expected_version
-	// on a subsequent PUT (see putVariant), the same optimistic-concurrency
-	// pattern the web editor's hidden form field already uses.
+	// version is the live variant version a caller authoring a proposal
+	// records as its base — the optimistic-concurrency check publishing
+	// runs (see store.PublishProposal).
 	src, version, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "no such course variant", nil)

@@ -3,7 +3,9 @@
 // recurse between anchors — rather than a classic LCS dynamic program,
 // because course documents run to ~16k lines and an O(n·m) table at that
 // size is hundreds of millions of cells. Patience is near-linear on real
-// edits and degrades to a plain replace block, never to quadratic work.
+// edits; a region with no unique common lines degrades to a plain replace
+// block rather than an LCS table (adversarially nested duplicate structure
+// can still cost extra recursion passes, but nothing near n·m).
 package diff
 
 import "strings"
@@ -171,8 +173,9 @@ func patienceAnchors(old, new []string) []anchor {
 
 // Hunks groups a diff into unified-diff-style hunks: runs of changes plus
 // up to context equal lines on each side, with untouched stretches between
-// hunks dropped. Changes closer than 2×context merge into one hunk. A diff
-// with no changes yields no hunks.
+// hunks dropped. Changes 2×context lines apart or closer merge into one
+// hunk (their kept context runs touch). A diff with no changes yields no
+// hunks.
 func Hunks(lines []Line, context int) [][]Line {
 	// Keep every line within context distance of a change, in either
 	// direction; consecutive kept lines form a hunk.

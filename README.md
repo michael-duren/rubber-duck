@@ -442,19 +442,27 @@ cd infra && tofu apply -var project_id=<project-id> -var image_tag=$(git rev-par
 
 The `service_url` output is your site; the first visit runs migrations.
 
-### Seed a course
+### Seed courses
 
-`apikey create` needs database access; `make apikey-prod` wires up
-cloud-sql-proxy and the tofu outputs for you:
+A fresh deploy has an empty catalog. `make import-courses-prod` wires up
+cloud-sql-proxy and the tofu outputs and imports every course in `courses/`
+straight into the prod database — the documented break-glass path, which is
+exactly what bootstrapping is:
 
 ```sh
-make apikey-prod KEY_NAME=seed
-GC_API_KEY=<printed key> go run ./cmd/duckserver seed --url <service_url> seed/intro-to-go.md
+make import-courses-prod
 ```
 
 (The manual equivalent: run `bin/cloud-sql-proxy <connection-name> --port
-5433`, then `apikey create --db "postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable"`,
-with both values from `tofu -chdir=infra output`.)
+5433`, then `go run ./cmd/duckserver seed --db
+"postgres://getcracked:<password>@localhost:5433/getcracked?sslmode=disable"
+courses/<file>.md` per course, with both values from `tofu -chdir=infra
+output`.)
+
+After bootstrap, content changes go through the in-app proposal workflow —
+mint your first admin with `go run ./cmd/duckserver user promote --username
+<you> --db <proxy URL>` so approvals can publish instantly while the
+community is small.
 
 ### Redeploy
 

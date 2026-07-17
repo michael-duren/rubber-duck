@@ -57,7 +57,8 @@ const (
 )
 
 // ProposalReview is one reviewer's standing verdict on a proposal. A
-// reviewer has at most one row per proposal; re-reviewing replaces it.
+// reviewer has at most one row per proposal; re-reviewing replaces the
+// verdict (moving UpdatedAt) but keeps CreatedAt as the first review's time.
 type ProposalReview struct {
 	ID               int64
 	ProposalID       int64
@@ -68,6 +69,7 @@ type ProposalReview struct {
 	CommentMD        string
 	Revision         int
 	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Stale reports whether the review was left on an older revision of the

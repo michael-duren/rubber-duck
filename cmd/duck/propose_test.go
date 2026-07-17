@@ -126,6 +126,138 @@ func TestPropose(t *testing.T) {
 		}
 	})
 
+	t.Run("gone sidecar proposal falls back to POST", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		var calls []string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls = append(calls, r.Method+" "+r.URL.Path)
+			switch {
+			case r.Method == http.MethodPut && r.URL.Path == "/api/v1/proposals/7":
+				w.WriteHeader(http.StatusNotFound)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+					"code": "not_found", "message": "no such proposal",
+				}})
+			case r.Method == http.MethodPost && r.URL.Path == "/api/v1/proposals":
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(proposalResponse{
+					ID: 20, Course: "intro-to-concurrency", Language: "go",
+					Revision: 1, Status: "open", URL: "/proposals/20",
+				})
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		defer srv.Close()
+
+		mdPath := pushFixture(t, dir, educatorMeta{
+			BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3, ProposalID: 7,
+		}, validCourseMD)
+
+		if err := proposeCmd([]string{mdPath}); err != nil {
+			t.Fatalf("proposeCmd: %v", err)
+		}
+		want := []string{"PUT /api/v1/proposals/7", "POST /api/v1/proposals"}
+		if len(calls) != 2 || calls[0] != want[0] || calls[1] != want[1] {
+			t.Errorf("calls = %v, want %v", calls, want)
+		}
+		if meta, err := readEducatorMeta(mdPath); err != nil || meta.ProposalID != 20 {
+			t.Errorf("sidecar proposal_id = %d (%v), want 20", meta.ProposalID, err)
+		}
+	})
+
+	t.Run("closed sidecar proposal recovers into another open proposal", func(t *testing.T) {
+		// The remembered proposal closed (published), but the user meanwhile
+		// opened proposal 12 for the same variant in the web editor: the
+		// fallback POST 409s and must find-and-update 12, not die.
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		var putPaths []string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodPut && r.URL.Path == "/api/v1/proposals/7":
+				putPaths = append(putPaths, r.URL.Path)
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+					"code": "proposal_closed", "message": "no longer open",
+				}})
+			case r.Method == http.MethodPost && r.URL.Path == "/api/v1/proposals":
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+					"code": "duplicate_proposal", "message": "already open",
+				}})
+			case r.Method == http.MethodGet && r.URL.Path == "/api/v1/proposals":
+				_ = json.NewEncoder(w).Encode(map[string]any{"proposals": []proposalResponse{
+					{ID: 12, Course: "intro-to-concurrency", Language: "go", Status: "open"},
+				}})
+			case r.Method == http.MethodPut && r.URL.Path == "/api/v1/proposals/12":
+				putPaths = append(putPaths, r.URL.Path)
+				_ = json.NewEncoder(w).Encode(proposalResponse{
+					ID: 12, Course: "intro-to-concurrency", Language: "go",
+					Revision: 2, Status: "open", URL: "/proposals/12",
+				})
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		defer srv.Close()
+
+		mdPath := pushFixture(t, dir, educatorMeta{
+			BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3, ProposalID: 7,
+		}, validCourseMD)
+
+		if err := proposeCmd([]string{mdPath}); err != nil {
+			t.Fatalf("proposeCmd: %v", err)
+		}
+		if len(putPaths) != 2 || putPaths[1] != "/api/v1/proposals/12" {
+			t.Errorf("PUTs = %v, want the recovery to update proposal 12", putPaths)
+		}
+		if meta, err := readEducatorMeta(mdPath); err != nil || meta.ProposalID != 12 {
+			t.Errorf("sidecar proposal_id = %d (%v), want 12", meta.ProposalID, err)
+		}
+	})
+
+	t.Run("explicit --base overrides the sidecar server", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("sidecar server must not be called, got %s %s", r.Method, r.URL.Path)
+		}))
+		defer other.Close()
+
+		var got string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = r.Method + " " + r.URL.Path
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(proposalResponse{
+				ID: 1, Course: "intro-to-concurrency", Language: "go",
+				Revision: 1, Status: "open", URL: "/proposals/1",
+			})
+		}))
+		defer srv.Close()
+
+		// Sidecar remembers proposal 7 on the OTHER server; --base must win,
+		// and the remembered id (meaningless on this server) must be dropped
+		// in favor of a fresh POST.
+		mdPath := pushFixture(t, dir, educatorMeta{
+			BaseURL: other.URL, Course: "intro-to-concurrency", Language: "go", Version: 3, ProposalID: 7,
+		}, validCourseMD)
+
+		if err := proposeCmd([]string{mdPath, "--base", srv.URL}); err != nil {
+			t.Fatalf("proposeCmd: %v", err)
+		}
+		if got != "POST /api/v1/proposals" {
+			t.Errorf("request = %q, want POST to the --base server", got)
+		}
+		meta, err := readEducatorMeta(mdPath)
+		if err != nil || meta.BaseURL != srv.URL || meta.ProposalID != 1 {
+			t.Errorf("sidecar = %+v (%v), want re-pinned to the --base server with the new proposal", meta, err)
+		}
+	})
+
 	t.Run("locally-invalid markdown never hits the network", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
@@ -226,5 +358,14 @@ func TestProposalsList(t *testing.T) {
 	}
 	if err := proposalsCmd([]string{"status", "notanumber", "--base", srv.URL}); err == nil {
 		t.Fatal("want error for non-numeric id")
+	}
+
+	// An empty list is a normal state, not an error.
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"proposals": []proposalResponse{}})
+	}))
+	defer empty.Close()
+	if err := proposalsCmd([]string{"--base", empty.URL}); err != nil {
+		t.Fatalf("empty proposals list: %v", err)
 	}
 }

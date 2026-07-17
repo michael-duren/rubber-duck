@@ -3,7 +3,6 @@ package diff
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -175,15 +174,13 @@ func TestHunks(t *testing.T) {
 	}
 }
 
-// TestLargeFile is the performance smoke test: the biggest real course
-// document (~16k lines) diffed against an edited copy of itself must not
-// take quadratic time or memory.
+// TestLargeFile is the performance smoke test: a course-document-sized
+// input (~16k lines) diffed against an edited copy of itself must not take
+// quadratic time or memory. The document is synthesized — the mirror in
+// courses/ shifts with what's published, so pinning the test to a real
+// file would let it silently vanish along with the file.
 func TestLargeFile(t *testing.T) {
-	src, err := os.ReadFile("../../courses/educational-os-c.md")
-	if err != nil {
-		t.Skipf("course file not available: %v", err)
-	}
-	old := string(src)
+	old := syntheticCourseDoc(16000)
 	// Sprinkle edits: change every 500th line, insert a block in the middle.
 	lines := strings.Split(old, "\n")
 	for i := 250; i < len(lines); i += 500 {
@@ -215,4 +212,31 @@ func TestLargeFile(t *testing.T) {
 		t.Errorf("hunks cover %d lines of a %d-line file — context trimming failed", total, len(lines))
 	}
 	_ = fmt.Sprintf("%d", total)
+}
+
+// syntheticCourseDoc builds an n-line markdown-shaped document with the
+// duplicate-heavy texture of a real course file — blank lines, repeated
+// fence markers and code lines, recurring transition sentences — the shape
+// that stresses patience diff's unique-anchor selection.
+func syntheticCourseDoc(n int) string {
+	lines := make([]string, 0, n)
+	for i := 0; len(lines) < n; i++ {
+		switch i % 8 {
+		case 0:
+			lines = append(lines, "")
+		case 1:
+			lines = append(lines, fmt.Sprintf("# Lesson: Section %d {#sec-%d}", i, i))
+		case 2, 3:
+			lines = append(lines, fmt.Sprintf("Prose line %d about goroutines and channels.", i))
+		case 4:
+			lines = append(lines, "```go")
+		case 5:
+			lines = append(lines, "\tfmt.Println(\"hello\")")
+		case 6:
+			lines = append(lines, "```")
+		case 7:
+			lines = append(lines, "The next section builds on this.")
+		}
+	}
+	return strings.Join(lines, "\n")
 }

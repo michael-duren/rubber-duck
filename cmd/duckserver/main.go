@@ -52,6 +52,22 @@ func databaseURL() string {
 	return envOr("DATABASE_URL", "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable")
 }
 
+// approvalThreshold reads GC_APPROVAL_THRESHOLD — how many community
+// approvals publish a proposal (an admin approval always publishes
+// immediately). Unset defaults to 3; anything but a positive integer is a
+// startup error, not a silent fallback.
+func approvalThreshold() (int, error) {
+	v := os.Getenv("GC_APPROVAL_THRESHOLD")
+	if v == "" {
+		return 3, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("GC_APPROVAL_THRESHOLD must be a positive integer, got %q", v)
+	}
+	return n, nil
+}
+
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	// Cloud Run's contract is the PORT env var; GC_ADDR/-addr still win.
@@ -84,15 +100,9 @@ func serve(args []string) error {
 		return fmt.Errorf("requeue pending submissions: %w", err)
 	}
 
-	// How many community approvals publish a proposal (an admin approval
-	// always publishes immediately).
-	threshold := 3
-	if v := os.Getenv("GC_APPROVAL_THRESHOLD"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			return fmt.Errorf("GC_APPROVAL_THRESHOLD must be a positive integer, got %q", v)
-		}
-		threshold = n
+	threshold, err := approvalThreshold()
+	if err != nil {
+		return err
 	}
 
 	mux := http.NewServeMux()
@@ -202,7 +212,9 @@ func userCmd(args []string) error {
 	defer st.Close()
 
 	if err := st.PromoteUser(ctx, *username, *role); err != nil {
-		return err
+		// Name the user: a bare "not found" from a typo'd --username (or the
+		// wrong --db) is unactionable at an operator's terminal.
+		return fmt.Errorf("promote %q: %w", *username, err)
 	}
 	fmt.Printf("user %q is now role %q\n", *username, *role)
 	return nil

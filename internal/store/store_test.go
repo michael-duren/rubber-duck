@@ -73,6 +73,23 @@ func TestUsers(t *testing.T) {
 	if err := s.PromoteUser(ctx, "nobody", domain.RoleAdmin); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("promote missing user err = %v, want ErrNotFound", err)
 	}
+
+	// The promoted role must reach the request-time loaders too — they are
+	// what actually gates admin review powers.
+	_, sessHash := auth.NewSessionToken()
+	if err := s.CreateSession(ctx, sessHash, u.ID, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if got, err := s.UserBySession(ctx, sessHash); err != nil || !got.IsAdmin() {
+		t.Errorf("UserBySession after promote = %+v, %v; want admin", got, err)
+	}
+	token, tokHash := auth.NewUserToken()
+	if _, err := s.CreateUserToken(ctx, u.ID, "cli", tokHash); err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	if got, err := s.UserByToken(ctx, auth.HashToken(token)); err != nil || !got.IsAdmin() {
+		t.Errorf("UserByToken after promote = %+v, %v; want admin", got, err)
+	}
 }
 
 func TestSessions(t *testing.T) {

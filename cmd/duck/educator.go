@@ -142,21 +142,29 @@ type lintProblem struct {
 // returns the problems found, or nil if the document is valid. Shared by
 // `duck educator lint` and the pre-flight check in `duck educator push`.
 func lintSource(src []byte) []lintProblem {
-	_, err := ingest.Parse(src)
+	_, probs := lintParse(src)
+	return probs
+}
+
+// lintParse is lintSource returning the parse result too, so a caller that
+// needs the parsed document (duck propose reads the frontmatter) doesn't
+// parse twice. Exactly one of the returns is non-nil/non-empty.
+func lintParse(src []byte) (*ingest.Result, []lintProblem) {
+	res, err := ingest.Parse(src)
 	if err == nil {
-		return nil
+		return res, nil
 	}
 	verr, ok := errors.AsType[*ingest.ValidationError](err)
 	if !ok {
 		// Not a validation error (shouldn't happen for well-formed input,
 		// but surface it rather than silently reporting "valid").
-		return []lintProblem{{Message: err.Error()}}
+		return nil, []lintProblem{{Message: err.Error()}}
 	}
 	probs := make([]lintProblem, len(verr.Problems))
 	for i, p := range verr.Problems {
 		probs[i] = lintProblem{Line: p.Line, Message: p.Message}
 	}
-	return probs
+	return nil, probs
 }
 
 // printProblems prints line-numbered validation problems in one format,

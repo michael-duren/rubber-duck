@@ -28,7 +28,7 @@ type ProposalStore interface {
 	// the proposal revision the verdict was formed against; a mismatch with
 	// the current revision is ErrStaleRevision.
 	AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string, seenRevision int) (domain.ReviewOutcome, error)
-	PublishProposal(ctx context.Context, proposalID int64, course domain.Course, variant domain.Variant) (int, error)
+	PublishProposal(ctx context.Context, proposalID int64, expectedRevision int, course domain.Course, variant domain.Variant) (int, error)
 	WithdrawProposal(ctx context.Context, proposalID, proposerID int64) error
 }
 
@@ -166,9 +166,11 @@ func (h *handlers) createReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shouldPublish := !out.Closed &&
-		((out.ReviewerIsAdmin && verdict == domain.VerdictApprove) ||
-			out.Proposal.Approvals >= h.threshold)
+	// Only an approval can trigger publishing — without the verdict guard a
+	// reject landing on a proposal already sitting at the threshold (a prior
+	// publish attempt failed transiently) would retry the publish.
+	shouldPublish := !out.Closed && verdict == domain.VerdictApprove &&
+		(out.ReviewerIsAdmin || out.Proposal.Approvals >= h.threshold)
 	if shouldPublish {
 		h.publishProposal(w, r, out.Proposal)
 		return
@@ -200,13 +202,20 @@ func (h *handlers) publishProposal(w http.ResponseWriter, r *http.Request, p dom
 		return
 	}
 
-	_, err = h.proposals.PublishProposal(r.Context(), p.ID, course, variant)
+	_, err = h.proposals.PublishProposal(r.Context(), p.ID, p.Revision, course, variant)
 	switch {
 	case errors.Is(err, domain.ErrVersionConflict):
 		// The live variant moved past the proposal's base since it was
 		// authored. The review stands; the detail page's stale banner tells
 		// the proposer to rebase (edit the proposal, which re-captures the
 		// base version) — publishing retries on the next qualifying review.
+		http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
+		return
+	case errors.Is(err, domain.ErrStaleRevision):
+		// The proposer revised between the approval being counted and this
+		// publish — the parsed content is no longer the proposal's current
+		// document. The revision bump reset the approvals, so the fresh
+		// detail page shows the new revision awaiting review.
 		http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
 		return
 	case errors.Is(err, domain.ErrProposalClosed):
@@ -250,8 +259,21 @@ func (h *handlers) updateProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := currentUser(r)
+	// Not the proposer's open proposal: bounce to the detail page before
+	// doing any parse work, same as editProposalPage. The store re-checks
+	// ownership inside the update, so this is UX, not the security boundary.
+	if p.ProposerID != user.ID || p.Status != domain.ProposalOpen {
+		http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
+		return
+	}
 	mdText := r.FormValue("markdown")
-	title, summary := formTitleSummary(r, p.CourseSlug, p.Language)
+	// An emptied title keeps the proposal's current one rather than
+	// silently renaming to the generic default.
+	title := r.FormValue("title")
+	if title == "" {
+		title = p.Title
+	}
+	summary := r.FormValue("summary")
 
 	form := proposalEditorForm(p, mdText, "", nil)
 	form.Title, form.Summary = title, summary
@@ -336,8 +358,10 @@ func proposalEditorForm(p domain.Proposal, markdown, notice string, problems []v
 	}
 }
 
-// formTitleSummary reads the shared title/summary editor fields, defaulting
-// an empty title the same way the JSON API does.
+// formTitleSummary reads the title/summary editor fields for a NEW
+// proposal, defaulting an empty title the same way the JSON API does.
+// Updates default differently — an empty title keeps the proposal's
+// current one (see updateProposal).
 func formTitleSummary(r *http.Request, slug, lang string) (title, summary string) {
 	title = r.FormValue("title")
 	if title == "" {

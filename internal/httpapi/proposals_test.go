@@ -277,3 +277,23 @@ func TestProposalUpdateGetWithdraw(t *testing.T) {
 		}
 	})
 }
+
+// TestProposalSubtreeRequiresAuth walks every proposal route — including
+// the /api/v1/proposals/ trailing-slash mount the id routes live under —
+// unauthenticated, pinning the requireUser wrap around the whole subtree.
+func TestProposalSubtreeRequiresAuth(t *testing.T) {
+	mux, _ := testAPI(t)
+
+	cases := []struct{ method, path string }{
+		{"GET", "/api/v1/proposals"},
+		{"GET", "/api/v1/proposals/1"},
+		{"PUT", "/api/v1/proposals/1"},
+		{"POST", "/api/v1/proposals/1/withdraw"},
+	}
+	for _, c := range cases {
+		rec := doJSONAs(mux, c.method, c.path, "", nil)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s unauthenticated = %d, want 401", c.method, c.path, rec.Code)
+		}
+	}
+}

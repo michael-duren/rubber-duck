@@ -32,7 +32,7 @@ func proposalUsers(t *testing.T, s *Store) (proposer, rev1, rev2, admin domain.U
 func TestCreateProposal(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	proposer, _, _, _ := proposalUsers(t, s)
+	proposer, rev1, _, _ := proposalUsers(t, s)
 	course, variant := loadSeedCourse(t)
 
 	// Against a variant that doesn't exist yet: base_version 0.
@@ -50,6 +50,12 @@ func TestCreateProposal(t *testing.T) {
 	// Second open proposal for the same variant by the same user: rejected.
 	if _, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "again", "", variant.SourceMD); !errors.Is(err, domain.ErrDuplicateProposal) {
 		t.Errorf("duplicate create err = %v, want ErrDuplicateProposal", err)
+	}
+
+	// The open-proposal limit is per user: another user proposing against
+	// the same variant is fine.
+	if _, err := s.CreateProposal(ctx, rev1.ID, course.Slug, variant.Language, "their take", "", variant.SourceMD); err != nil {
+		t.Errorf("second user's proposal on same variant: %v", err)
 	}
 
 	// Against a live variant: base_version captures its current version.
@@ -82,6 +88,15 @@ func TestProposalReviewsAndThresholdCounting(t *testing.T) {
 	// Proposer may not review their own proposal (they're not an admin).
 	if _, err := s.AddReview(ctx, p.ID, proposer.ID, domain.VerdictApprove, "", 1); !errors.Is(err, domain.ErrSelfReview) {
 		t.Errorf("self review err = %v, want ErrSelfReview", err)
+	}
+
+	// A verdict outside approve/reject is refused by the guard, not the
+	// CHECK constraint, and records nothing.
+	if _, err := s.AddReview(ctx, p.ID, rev1.ID, "maybe", "", 1); err == nil {
+		t.Error("invalid verdict accepted")
+	}
+	if reviews, err := s.ListProposalReviews(ctx, p.ID); err != nil || len(reviews) != 0 {
+		t.Errorf("reviews after invalid verdict = %+v, %v; want none", reviews, err)
 	}
 
 	out, err := s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "lgtm", 1)
@@ -191,7 +206,7 @@ func TestPublishProposal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	version, err := s.PublishProposal(ctx, p.ID, course, variant)
+	version, err := s.PublishProposal(ctx, p.ID, p.Revision, course, variant)
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -208,8 +223,44 @@ func TestPublishProposal(t *testing.T) {
 
 	// Publishing a closed proposal reports ErrProposalClosed (double-publish
 	// race loser).
-	if _, err := s.PublishProposal(ctx, p.ID, course, variant); !errors.Is(err, domain.ErrProposalClosed) {
+	if _, err := s.PublishProposal(ctx, p.ID, p.Revision, course, variant); !errors.Is(err, domain.ErrProposalClosed) {
 		t.Errorf("re-publish err = %v, want ErrProposalClosed", err)
+	}
+}
+
+func TestPublishProposalStaleRevision(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	proposer, _, _, _ := proposalUsers(t, s)
+	course, variant := loadSeedCourse(t)
+
+	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "t", "", variant.SourceMD)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The proposer revises after the publisher read revision 1: publishing
+	// the revision-1 content must fail rather than ship it and mark the
+	// revision-2 proposal published.
+	if _, err := s.UpdateProposalMarkdown(ctx, p.ID, proposer.ID, "t", "", variant.SourceMD+"\n<!-- v2 -->"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PublishProposal(ctx, p.ID, p.Revision, course, variant); !errors.Is(err, domain.ErrStaleRevision) {
+		t.Fatalf("stale-revision publish err = %v, want ErrStaleRevision", err)
+	}
+	got, err := s.ProposalByID(ctx, p.ID)
+	if err != nil || got.Status != domain.ProposalOpen {
+		t.Errorf("proposal after refused publish = %+v, %v; want open", got, err)
+	}
+	if _, _, err := s.VariantSource(ctx, course.Slug, variant.Language); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("variant published despite stale revision: err = %v", err)
+	}
+
+	// Publishing the current revision's content succeeds.
+	v2 := variant
+	v2.SourceMD = variant.SourceMD + "\n<!-- v2 -->"
+	if v, err := s.PublishProposal(ctx, p.ID, got.Revision, course, v2); err != nil || v != 1 {
+		t.Errorf("current-revision publish = %d, %v; want version 1", v, err)
 	}
 }
 
@@ -236,7 +287,7 @@ func TestPublishProposalStaleBase(t *testing.T) {
 
 	// Stale publish is rejected atomically and the proposal stays open for
 	// a rebase (an UpdateProposalMarkdown, which re-captures base_version).
-	if _, err := s.PublishProposal(ctx, p.ID, course, variant); !errors.Is(err, domain.ErrVersionConflict) {
+	if _, err := s.PublishProposal(ctx, p.ID, p.Revision, course, variant); !errors.Is(err, domain.ErrVersionConflict) {
 		t.Fatalf("stale publish err = %v, want ErrVersionConflict", err)
 	}
 	got, err := s.ProposalByID(ctx, p.ID)
@@ -254,7 +305,7 @@ func TestPublishProposalStaleBase(t *testing.T) {
 	}
 	rebased := variant
 	rebased.SourceMD = variant.SourceMD + "\n<!-- proposed v2 -->"
-	if v, err := s.PublishProposal(ctx, p.ID, course, rebased); err != nil || v != 3 {
+	if v, err := s.PublishProposal(ctx, p.ID, p.Revision+1, course, rebased); err != nil || v != 3 {
 		t.Errorf("rebased publish = %d, %v; want version 3", v, err)
 	}
 }

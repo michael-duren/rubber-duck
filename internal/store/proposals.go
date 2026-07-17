@@ -68,7 +68,8 @@ func (s *Store) CreateProposal(ctx context.Context, proposerID int64, courseSlug
 		proposerID, courseSlug, language, title, summary, markdown,
 	).Scan(&id)
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // one_open_proposal_per_user_variant
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "one_open_proposal_per_user_variant" {
 		return domain.Proposal{}, domain.ErrDuplicateProposal
 	}
 	if err != nil {
@@ -116,10 +117,15 @@ func (s *Store) ProposalByID(ctx context.Context, id int64) (domain.Proposal, er
 }
 
 // ListProposals returns proposals newest-first, filtered to one status when
-// status is non-empty ("" lists all).
+// status is non-empty ("" lists all). Two query shapes rather than one
+// status-or-empty OR predicate so the filtered case can use the
+// proposals_status index.
 func (s *Store) ListProposals(ctx context.Context, status string) ([]domain.Proposal, error) {
+	if status == "" {
+		return s.listProposals(ctx, proposalCols+` ORDER BY p.created_at DESC`)
+	}
 	return s.listProposals(ctx,
-		proposalCols+` WHERE ($1 = '' OR p.status = $1) ORDER BY p.created_at DESC`, status)
+		proposalCols+` WHERE p.status = $1 ORDER BY p.created_at DESC`, status)
 }
 
 // ListProposalsByUser returns one user's proposals newest-first, every
@@ -147,17 +153,18 @@ func (s *Store) listProposals(ctx context.Context, query string, args ...any) ([
 	return proposals, rows.Err()
 }
 
-// ListProposalReviews returns a proposal's reviews newest-first, with the
-// reviewer's username and role joined in (the UI badges admin verdicts and
-// stale-revision reviews).
+// ListProposalReviews returns a proposal's reviews latest-activity-first,
+// with the reviewer's username and role joined in (the UI badges admin
+// verdicts and stale-revision reviews). created_at is the first review's
+// time; updated_at moves when the reviewer re-reviews.
 func (s *Store) ListProposalReviews(ctx context.Context, proposalID int64) ([]domain.ProposalReview, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.id, r.proposal_id, r.reviewer_id, u.username, u.role = 'admin',
-		       r.verdict, r.comment_md, r.revision, r.created_at
+		       r.verdict, r.comment_md, r.revision, r.created_at, r.updated_at
 		FROM proposal_reviews r
 		JOIN users u ON u.id = r.reviewer_id
 		WHERE r.proposal_id = $1
-		ORDER BY r.created_at DESC`, proposalID)
+		ORDER BY r.updated_at DESC`, proposalID)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +174,7 @@ func (s *Store) ListProposalReviews(ctx context.Context, proposalID int64) ([]do
 	for rows.Next() {
 		var rv domain.ProposalReview
 		if err := rows.Scan(&rv.ID, &rv.ProposalID, &rv.ReviewerID, &rv.ReviewerUsername,
-			&rv.ReviewerIsAdmin, &rv.Verdict, &rv.CommentMD, &rv.Revision, &rv.CreatedAt); err != nil {
+			&rv.ReviewerIsAdmin, &rv.Verdict, &rv.CommentMD, &rv.Revision, &rv.CreatedAt, &rv.UpdatedAt); err != nil {
 			return nil, err
 		}
 		reviews = append(reviews, rv)
@@ -228,6 +235,8 @@ func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, ver
 		return domain.ReviewOutcome{}, domain.ErrSelfReview
 	}
 
+	// created_at survives the upsert (it's the first review's timestamp);
+	// updated_at is what re-reviewing moves.
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO proposal_reviews (proposal_id, reviewer_id, verdict, comment_md, revision)
 		VALUES ($1, $2, $3, $4, $5)
@@ -235,7 +244,7 @@ func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, ver
 			verdict = EXCLUDED.verdict,
 			comment_md = EXCLUDED.comment_md,
 			revision = EXCLUDED.revision,
-			created_at = now()`,
+			updated_at = now()`,
 		proposalID, reviewerID, verdict, comment, revision); err != nil {
 		return domain.ReviewOutcome{}, fmt.Errorf("upsert review: %w", err)
 	}
@@ -262,15 +271,19 @@ func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, ver
 
 // PublishProposal makes an open proposal's content live and closes it, all
 // in one transaction. The caller has already parsed the proposal's markdown
-// into the course/variant pair (the store doesn't import ingest). The write
-// goes through the same upsert path as every publish, attributed to the
-// proposer, with the proposal's base_version as expectedVersion — so a
+// into the course/variant pair (the store doesn't import ingest), and
+// passes the revision that content came from: if the proposer revised the
+// proposal after the caller read it, the parsed content no longer matches
+// the stored document and publishing fails with ErrStaleRevision instead of
+// shipping the older revision and marking the newer one published. The
+// write goes through the same upsert path as every publish, attributed to
+// the proposer, with the proposal's base_version as expectedVersion — so a
 // proposal whose base the live variant has moved past fails with
 // ErrVersionConflict ("needs rebase": the proposer updates, which
 // re-captures base_version) rather than overwriting newer content. Losing a
 // double-publish race surfaces as ErrProposalClosed, which callers can
 // treat as already-done.
-func (s *Store) PublishProposal(ctx context.Context, proposalID int64, course domain.Course, variant domain.Variant) (int, error) {
+func (s *Store) PublishProposal(ctx context.Context, proposalID int64, expectedRevision int, course domain.Course, variant domain.Variant) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -279,10 +292,11 @@ func (s *Store) PublishProposal(ctx context.Context, proposalID int64, course do
 
 	var proposerID int64
 	var baseVersion int
+	var revision int
 	var status string
 	err = tx.QueryRow(ctx,
-		`SELECT proposer_id, base_version, status FROM proposals WHERE id = $1 FOR UPDATE`,
-		proposalID).Scan(&proposerID, &baseVersion, &status)
+		`SELECT proposer_id, base_version, revision, status FROM proposals WHERE id = $1 FOR UPDATE`,
+		proposalID).Scan(&proposerID, &baseVersion, &revision, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, domain.ErrNotFound
 	}
@@ -291,6 +305,9 @@ func (s *Store) PublishProposal(ctx context.Context, proposalID int64, course do
 	}
 	if status != domain.ProposalOpen {
 		return 0, domain.ErrProposalClosed
+	}
+	if revision != expectedRevision {
+		return 0, domain.ErrStaleRevision
 	}
 
 	version, err := upsertVariantTx(ctx, tx, course, variant, &proposerID, &baseVersion)

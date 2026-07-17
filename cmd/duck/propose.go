@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 // proposalResponse is the API shape of one proposal, shared by
@@ -47,8 +45,17 @@ func proposeCmd(args []string) error {
 		return err
 	}
 	if len(rest) > 1 {
-		return fmt.Errorf("usage: duck propose [file] [--title T] [--summary S]")
+		return fmt.Errorf("usage: duck propose [file] [--base URL] [--title T] [--summary S]")
 	}
+	// An explicit --base must win over the sidecar's remembered server —
+	// otherwise a user pointing at a dev server would silently send the
+	// proposal (and their token) wherever the file was last pulled from.
+	baseSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "base" {
+			baseSet = true
+		}
+	})
 	mdPath, err := resolveEducatorFile(rest)
 	if err != nil {
 		return err
@@ -61,13 +68,10 @@ func proposeCmd(args []string) error {
 
 	// Cheap local pre-flight before spending a network round trip: same
 	// checks the server would run, same output shape either way.
-	if probs := lintSource(src); len(probs) > 0 {
+	res, probs := lintParse(src)
+	if len(probs) > 0 {
 		printProblems(mdPath, probs)
 		return fmt.Errorf("%d problem(s) found — fix before proposing", len(probs))
-	}
-	res, err := ingest.Parse(src)
-	if err != nil {
-		return fmt.Errorf("%s: %w", mdPath, err)
 	}
 	course, language := res.Course.Course, res.Course.Language
 
@@ -78,9 +82,15 @@ func proposeCmd(args []string) error {
 	haveMeta := false
 	if m, err := readEducatorMeta(mdPath); err == nil {
 		meta, haveMeta = m, true
-		if m.BaseURL != "" {
+		if m.BaseURL != "" && !baseSet {
 			baseURL = strings.TrimRight(m.BaseURL, "/")
 		}
+	}
+
+	// A remembered proposal ID only means anything on the server it was
+	// created against; when --base points somewhere else, start fresh there.
+	if meta.ProposalID != 0 && strings.TrimRight(meta.BaseURL, "/") != baseURL {
+		meta.ProposalID = 0
 	}
 
 	token, tokenSource, err := loadToken()
@@ -93,29 +103,36 @@ func proposeCmd(args []string) error {
 		"title": *title, "summary": *summary, "markdown": string(src),
 	}
 
+	// createProposal POSTs a fresh proposal, recovering from the server's
+	// 409 duplicate_proposal by locating the existing open proposal (e.g.
+	// one opened in the web editor) and updating it instead.
+	createProposal := func() (proposalResponse, error) {
+		p, err := sendProposal(http.MethodPost, baseURL+"/api/v1/proposals", token, tokenSource, baseURL, mdPath, reqBody)
+		if _, isDup := errors.AsType[*duplicateProposalError](err); isDup {
+			id, findErr := findMyOpenProposal(baseURL, token, course, language)
+			if findErr != nil {
+				return proposalResponse{}, fmt.Errorf("%w (and finding the existing proposal failed: %v)", err, findErr)
+			}
+			return sendProposal(http.MethodPut, fmt.Sprintf("%s/api/v1/proposals/%d", baseURL, id), token, tokenSource, baseURL, mdPath, reqBody)
+		}
+		return p, err
+	}
+
 	var p proposalResponse
 	if haveMeta && meta.ProposalID != 0 {
 		p, err = sendProposal(http.MethodPut, fmt.Sprintf("%s/api/v1/proposals/%d", baseURL, meta.ProposalID), token, tokenSource, baseURL, mdPath, reqBody)
 		// Fall through to creating a fresh proposal only when the remembered
 		// one is genuinely unusable — gone, closed, or now targeting a
-		// different variant because this file's frontmatter changed. A
-		// transient failure (network, 5xx, auth) surfaces as-is; retrying it
-		// as a POST would just stack a second confusing error on top.
+		// different variant because this file's frontmatter changed (the
+		// create still recovers if a different open proposal already holds
+		// this variant). A transient failure (network, 5xx, auth) surfaces
+		// as-is; retrying it as a POST would just stack a second confusing
+		// error on top.
 		if proposalGone(err) {
-			p, err = sendProposal(http.MethodPost, baseURL+"/api/v1/proposals", token, tokenSource, baseURL, mdPath, reqBody)
+			p, err = createProposal()
 		}
 	} else {
-		p, err = sendProposal(http.MethodPost, baseURL+"/api/v1/proposals", token, tokenSource, baseURL, mdPath, reqBody)
-		var dup *duplicateProposalError
-		if errors.As(err, &dup) {
-			// The server knows we already have an open proposal for this
-			// variant; find it and update it instead.
-			id, findErr := findMyOpenProposal(baseURL, token, course, language)
-			if findErr != nil {
-				return fmt.Errorf("%w (and finding the existing proposal failed: %v)", err, findErr)
-			}
-			p, err = sendProposal(http.MethodPut, fmt.Sprintf("%s/api/v1/proposals/%d", baseURL, id), token, tokenSource, baseURL, mdPath, reqBody)
-		}
+		p, err = createProposal()
 	}
 	if err != nil {
 		return err

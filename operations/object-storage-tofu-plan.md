@@ -86,7 +86,8 @@ S3_SECRET_ACCESS_KEY / S3_FORCE_PATH_STYLE
 
 **Layer 4 — data migration + decommission.** Not tofu, but sequenced
 here: `rclone sync` GCS → Garage for anything not reproducible; course
-content re-renders from `courses/*.md` via `make publish`, so the real
+content lives in the database (with `courses/*.md` as a re-importable
+mirror via `make import-courses-prod`), so the real
 migration is mostly grader-staging (ephemeral, can start empty) and any
 future course assets. Then GCS resources get removed from `infra/` last,
 after prod traffic proves the Garage path.
