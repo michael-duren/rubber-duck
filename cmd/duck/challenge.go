@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 // challengeDirNames names the local directories for a pulled course's
@@ -52,28 +53,12 @@ func challengeDirNames(challenges []challengeJSON) []string {
 
 // challengeSlug recovers the API slug from a directory name by stripping
 // the ordering prefix challengeDirNames adds. Directories from older pulls
-// (no prefix) pass through unchanged — a bare slug never starts with
-// "final-" or two-plus digits (plus at most one letter) and a dash,
-// because those come only from us. README's authoring conventions forbid
-// slugs shaped like the prefixes, so the ambiguity stays theoretical.
+// (no prefix) pass through unchanged: ingest rejects challenge slugs shaped
+// like a prefix (same predicate, so the rules can't drift), except a final
+// challenge named "final-…" — whose directory gets a second "final-"
+// prepended, so stripping one still recovers the slug.
 func challengeSlug(dir string) string {
-	if rest, ok := strings.CutPrefix(dir, "final-"); ok {
-		return rest
-	}
-	i := 0
-	for i < len(dir) && dir[i] >= '0' && dir[i] <= '9' {
-		i++
-	}
-	if i < 2 {
-		return dir
-	}
-	if i < len(dir) && dir[i] >= 'a' && dir[i] <= 'z' {
-		i++
-	}
-	if i < len(dir) && dir[i] == '-' {
-		return dir[i+1:]
-	}
-	return dir
+	return dir[ingest.OrderingPrefixLen(dir):]
 }
 
 // resolveChallenge maps what the user typed — a challenge slug or a
