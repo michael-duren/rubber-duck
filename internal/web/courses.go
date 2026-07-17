@@ -225,6 +225,12 @@ func (h *handlers) lessonPage(w http.ResponseWriter, r *http.Request) {
 				next = &variant.Lessons[i+1]
 			}
 
+			// Completion marks for the sidebar lesson list (nil when anonymous).
+			completed, err := h.completedChallenges(w, r, variant.ID)
+			if err != nil {
+				return
+			}
+
 			// Fetch latest submission codes and submission history for logged-in users
 			latestCodeByChallenge := make(map[int64]string)
 			submissionsByChallenge := make(map[int64][]domain.Submission)
@@ -248,7 +254,7 @@ func (h *handlers) lessonPage(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			h.render(w, r, views.Lesson(currentUser(r), course, variant, l, next, latestCodeByChallenge, submissionsByChallenge))
+			h.render(w, r, views.Lesson(currentUser(r), course, variant, l, i+1, next, completed, latestCodeByChallenge, submissionsByChallenge))
 			return
 		}
 	}

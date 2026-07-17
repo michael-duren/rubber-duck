@@ -78,11 +78,11 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\"><span class=\"font-mono\">duck submit</span> authenticates every request with a bearer token. The easiest setup is <span class=\"font-mono\">duck login</span>, which prompts for your username and password, mints a token, and saves it where the CLI looks for it:</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\"><span class=\"font-mono\">duck submit</span> authenticates every request with a bearer token. The easiest setup is <span class=\"font-mono\">duck auth login</span>, which prompts for your username and password, mints a token, and saves it where the CLI looks for it:</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = shell("duck login").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = shell("duck auth login").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -123,7 +123,7 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">Tokens never expire on their own. Revoke one anytime from the same profile section (lost laptop, leaked shell history) — revocation is immediate, and the CLI will start getting <span class=\"font-mono\">401 unauthorized</span>. Mint one token per machine so you can revoke them individually.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">Tokens never expire on their own. Revoke one anytime from the same profile section (lost laptop, leaked shell history) — revocation is immediate, and the CLI will start getting <span class=\"font-mono\">401 unauthorized</span>. Mint one token per machine so you can revoke them individually. If the CLI reports \"unauthorized\" and you don't know why, run <span class=\"font-mono\">duck auth status</span> — it shows which token duck is sending (a set <span class=\"font-mono\">DUCK_TOKEN</span> silently outranks the saved file) and whether the server accepts it.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

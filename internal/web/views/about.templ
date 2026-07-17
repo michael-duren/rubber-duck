@@ -110,12 +110,14 @@ templ CLI(user *domain.User) {
 				The easy way — prompts for your username and password, mints a token,
 				and saves it to <span class="font-mono">~/.config/duck/token</span>:
 			</p>
-			@shell("duck login")
+			@shell("duck auth login")
 			<p class="mt-3 text-slate-700 dark:text-slate-300">
 				Or mint one by hand on your <a href="/profile" class={ docLink }>profile page</a>
 				("Create CLI token") and either export it as
 				<span class="font-mono">DUCK_TOKEN</span> or save it to
-				<span class="font-mono">~/.config/duck/token</span>.
+				<span class="font-mono">~/.config/duck/token</span>. If a submit ever
+				answers "unauthorized", <span class="font-mono">duck auth status</span>
+				shows which token duck is sending and whether the server accepts it.
 				<a href="/tokens" class={ docLink }>Everything about tokens →</a>
 			</p>
 			@docHeading("Work a course")
@@ -155,7 +157,8 @@ templ CLI(user *domain.User) {
 						@cmdRow("duck pull <course>/<language>", "Scaffold the course's challenges into ./<course>-<language>/ from "+prodURL+".")
 						@cmdRow("duck test [challenge-slug]", "Run one challenge's tests locally — or every challenge's, with no slug. No submission, no points.")
 						@cmdRow("duck submit <challenge-slug> [--remote]", "Run the tests locally and submit solution + result; the score is immediate and the server audits in the background. --remote skips the local run and waits for server grading instead (also the automatic fallback when the language toolchain isn't installed).")
-						@cmdRow("duck login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
+						@cmdRow("duck auth login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.")
+						@cmdRow("duck auth status", "Show which token duck would send and whether the server accepts it.")
 						@cmdRow("duck version", "Print the CLI version.")
 					</tbody>
 				</table>

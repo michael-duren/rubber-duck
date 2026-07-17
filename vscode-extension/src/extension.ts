@@ -32,9 +32,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("duck.refreshCourses", () => provider.refresh()),
 
     vscode.commands.registerCommand("duck.login", () => {
-      const term = vscode.window.createTerminal("duck login");
+      const term = vscode.window.createTerminal("duck auth login");
       term.show();
-      term.sendText([duckPath(), "login", ...baseArgs()].join(" "));
+      term.sendText([duckPath(), "auth", "login", ...baseArgs()].join(" "));
       vscode.window
         .showInformationMessage(
           "Complete the login in the terminal, then refresh the course list.",

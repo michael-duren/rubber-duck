@@ -57,7 +57,7 @@
     "viewsWelcome": [
       {
         "view": "duckCourses",
-        "contents": "Sign in to browse the course catalog.\n[Run duck login](command:duck.login)\nThe extension reads the same token the CLI uses ($DUCK_TOKEN or ~/.config/duck/token).\n[Refresh](command:duck.refreshCourses)",
+        "contents": "Sign in to browse the course catalog.\n[Run duck auth login](command:duck.login)\nThe extension reads the same token the CLI uses ($DUCK_TOKEN or ~/.config/duck/token).\n[Refresh](command:duck.refreshCourses)",
         "when": "!duck.signedIn"
       }
     ],
@@ -70,7 +70,7 @@
       },
       {
         "command": "duck.login",
-        "title": "Login (duck login)",
+        "title": "Login (duck auth login)",
         "category": "Duck"
       },
       {
