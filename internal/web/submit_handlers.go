@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,12 @@ func (h *handlers) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, err := h.submissions.CreateSubmission(r.Context(), user.ID, challengeID, code)
+	if errors.Is(err, domain.ErrNotFound) {
+		// The challenge was archived or never existed — a stale form, not a
+		// server fault.
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return
@@ -72,8 +79,7 @@ func (h *handlers) submissionPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := r.Referer()
-	h.render(w, r, views.SubmissionPage(currentUser(r), sub, back))
+	h.render(w, r, views.SubmissionPage(currentUser(r), sub, backLink(r)))
 }
 
 // submissionFragment serves the polled status partial.
@@ -83,6 +89,19 @@ func (h *handlers) submissionFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render(w, r, views.SubmissionResult(sub))
+}
+
+// backLink derives the submission page's "back to the challenge" href from
+// the Referer, reduced to a same-host path — an off-site or otherwise odd
+// Referer yields "" (no link) rather than a link off the site. A path
+// starting "//" is rejected too: emitted as an href it would be
+// protocol-relative (a link to another host), not a path.
+func backLink(r *http.Request) string {
+	ref, err := url.Parse(r.Referer())
+	if err != nil || !strings.HasPrefix(ref.Path, "/") || strings.HasPrefix(ref.Path, "//") || (ref.Host != "" && ref.Host != r.Host) {
+		return ""
+	}
+	return ref.RequestURI()
 }
 
 func (h *handlers) loadSubmission(w http.ResponseWriter, r *http.Request) (domain.Submission, bool) {
@@ -156,6 +175,11 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 
 	if claimedStatus == "" {
 		id, err := h.submissions.CreateSubmission(r.Context(), user.ID, challenge.ID, code)
+		if errors.Is(err, domain.ErrNotFound) {
+			// Challenge archived between the variant lookup and the insert.
+			http.NotFound(w, r)
+			return
+		}
 		if err != nil {
 			h.serverError(w, r, err)
 			return
@@ -174,6 +198,11 @@ func (h *handlers) submitBySlug(w http.ResponseWriter, r *http.Request) {
 		Status: claimedStatus, TestsPassed: passed, TestsTotal: total,
 	})
 	id, err := h.submissions.CreateClaimedSubmission(r.Context(), user.ID, challenge.ID, code, claimedStatus, output, score, passed, total)
+	if errors.Is(err, domain.ErrNotFound) {
+		// Challenge archived between the variant lookup and the insert.
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return

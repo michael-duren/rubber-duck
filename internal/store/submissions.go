@@ -38,34 +38,45 @@ func (s *Store) SubmissionRateLimited(ctx context.Context, userID, challengeID i
 
 // CreateSubmission stamps the challenge's current variant version onto the
 // submission (via the SELECT feeding the INSERT), so later reads can tell
-// whether the submission predates a course update.
+// whether the submission predates a course update. A missing or archived
+// challenge returns domain.ErrNotFound: archived rows keep their submission
+// history but are hidden from every read path, so a new submission against
+// one can only come from a crafted or stale request — and letting it through
+// would let users keep earning points on content the course has removed.
 func (s *Store) CreateSubmission(ctx context.Context, userID, challengeID int64, code string) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO submissions (user_id, challenge_id, code, variant_version)
 		SELECT $1, ch.id, $3, v.version
 		FROM challenges ch JOIN course_variants v ON v.id = ch.variant_id
-		WHERE ch.id = $2
+		WHERE ch.id = $2 AND ch.archived_at IS NULL
 		RETURNING id`,
 		userID, challengeID, code,
 	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, domain.ErrNotFound
+	}
 	return id, err
 }
 
 // CreateClaimedSubmission stores a submission whose verdict the CLI already
 // established locally: it lands graded, with the claimed status and score,
 // and waits only for its background audit. Like CreateSubmission it stamps
-// the challenge's current variant version.
+// the challenge's current variant version and rejects missing or archived
+// challenges with domain.ErrNotFound.
 func (s *Store) CreateClaimedSubmission(ctx context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO submissions (user_id, challenge_id, code, status, output, score, tests_passed, tests_total, claimed, graded_at, variant_version)
 		SELECT $1, ch.id, $3, $4, $5, $6, $7, $8, true, now(), v.version
 		FROM challenges ch JOIN course_variants v ON v.id = ch.variant_id
-		WHERE ch.id = $2
+		WHERE ch.id = $2 AND ch.archived_at IS NULL
 		RETURNING id`,
 		userID, challengeID, code, status, output, score, testsPassed, testsTotal,
 	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, domain.ErrNotFound
+	}
 	return id, err
 }
 

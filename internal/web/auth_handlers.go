@@ -83,9 +83,7 @@ func validateCredentials(username, password string) string {
 	switch {
 	case len(username) < 3 || len(username) > 32:
 		return "Username must be 3-32 characters."
-	case len(password) < 8:
-		return "Password must be at least 8 characters."
 	default:
-		return ""
+		return validatePassword(password)
 	}
 }

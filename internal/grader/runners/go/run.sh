@@ -16,7 +16,11 @@ else
 	tar -xf -
 fi
 go mod init challenge > /dev/null 2>&1
-goimports -w solution.go
+# || true: goimports exits non-zero on code that doesn't parse. Under
+# `set -e` that would abort the script before the result upload, turning a
+# submission's syntax error into an infra failure in cloud-run mode; let
+# `go test` report the compile error as an ordinary failing run instead.
+goimports -w solution.go 2> /dev/null || true
 if [ -z "$OUTPUT_URL" ]; then
 	exec go test -v ./...
 fi

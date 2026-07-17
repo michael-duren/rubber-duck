@@ -118,6 +118,14 @@ func (d2Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(kindD2Block, renderD2Block)
 }
 
+// DiagramError reports a ```d2 fence whose source failed to compile: the
+// document's fault, not the renderer's. Callers can errors.AsType for it to
+// report the failure as invalid input rather than an internal error.
+type DiagramError struct{ Err error }
+
+func (e *DiagramError) Error() string { return "d2 diagram: " + e.Err.Error() }
+func (e *DiagramError) Unwrap() error { return e.Err }
+
 func renderD2Block(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
@@ -128,7 +136,7 @@ func renderD2Block(w util.BufWriter, _ []byte, node ast.Node, entering bool) (as
 		// Abort the whole render so ingest surfaces the bad diagram (with
 		// d2's own "line:col: message") rather than serving a page with a
 		// silently missing figure.
-		return ast.WalkStop, fmt.Errorf("d2 diagram: %w", err)
+		return ast.WalkStop, &DiagramError{Err: err}
 	}
 	_, _ = w.WriteString(`<div class="d2-diagram"><div class="d2-light">`)
 	_, _ = w.Write(light)

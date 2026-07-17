@@ -30,6 +30,12 @@ type objectStore interface {
 
 const jobTaskTimeout = 90 * time.Second
 
+// maxResultBytes caps how much of the result object is read into memory.
+// The object is uploaded through a signed URL from inside the job, so its
+// size is under the submission's influence; the exit-code first line and
+// the summary lines the count parsers need all fit well within this.
+const maxResultBytes = 4 << 20
+
 type runJobs struct {
 	client  *run.JobsClient
 	project string
@@ -77,7 +83,7 @@ func (g *gcsStore) Get(ctx context.Context, key string) ([]byte, error) {
 		return nil, err
 	}
 	defer func() { _ = r.Close() }()
-	return io.ReadAll(r)
+	return io.ReadAll(io.LimitReader(r, maxResultBytes))
 }
 
 func (g *gcsStore) Delete(ctx context.Context, key string) error {

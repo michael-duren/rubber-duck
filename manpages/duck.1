@@ -55,8 +55,8 @@ A single graded exercise within a course, addressed by its slug (e.g.
 .B Token
 Your API credential.
 .B duck auth login
-mints and saves one; commands that write to the server
-.RB ( submit ", all of " educator )
+mints and saves one; commands that talk to the server as you
+.RB ( submit ", " "educator pull" ", " "educator push" )
 require it.
 .B duck auth status
 shows which token would be sent and whether the server accepts it.
@@ -136,8 +136,13 @@ Supports subcommands, e.g.
 .B duck educator
 (alias
 .BR "duck ed" )
-round\-trips a course variant's markdown with the server. All three
-subcommands require a token.
+round\-trips a course variant's markdown with the server.
+.B pull
+and
+.B push
+require a token;
+.B lint
+runs entirely offline.
 .TP
 .BI "duck educator pull " "course/language"
 Fetch the variant's markdown to

@@ -1,12 +1,15 @@
 package web
 
 import (
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
 // catalogFixture seeds two courses distinct enough that every filter axis
@@ -180,5 +183,24 @@ func TestLessonPageCourseUpdatedNotice(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if strings.Contains(rec.Body.String(), notice) {
 		t.Errorf("notice should not appear once the user has passed the current version")
+	}
+}
+
+// TestCourseExtendedReadingURLSanitized: extended-reading URLs come from
+// course frontmatter, which any logged-in user can edit, so the course page
+// must run them through templ's URL sanitizer — a javascript: URL must never
+// come out as a live href (regression: the template used templ.SafeURL,
+// which bypasses sanitization).
+func TestCourseExtendedReadingURLSanitized(t *testing.T) {
+	course := domain.Course{
+		Slug: "c", Title: "C",
+		ExtendedReading: []domain.Reading{{Title: "evil", URL: "javascript:alert(1)"}},
+	}
+	var buf bytes.Buffer
+	if err := views.Course(nil, course, nil, nil).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render course page: %v", err)
+	}
+	if strings.Contains(buf.String(), `href="javascript:`) {
+		t.Error("javascript: reading URL escaped the sanitizer into a live href")
 	}
 }

@@ -49,7 +49,9 @@ async function getJSON(url: string, token?: string): Promise<any> {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const resp = await fetch(url, { headers });
+  // Without a deadline an unreachable server leaves the tree view spinning
+  // forever; time out so the user gets an error node instead.
+  const resp = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
   if (resp.status === 401) {
     throw new AuthError("unauthorized: token missing or revoked — run duck auth login");
   }

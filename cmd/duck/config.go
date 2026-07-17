@@ -3,10 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// apiClient is the shared HTTP client for the API-calling commands
+// (pull/submit/educator). Unlike http.DefaultClient it has a timeout, so a
+// hung server can't stall the CLI forever; login and auth status build their
+// own clients (cookie jar, redirect policy) with their own timeouts.
+var apiClient = &http.Client{Timeout: 60 * time.Second}
 
 const courseMetaFile = ".duck-course.json"
 

@@ -25,7 +25,11 @@ files=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--dry-run | -n) dry_run=1 ;;
-	--base) BASE_URL="$2" && shift ;;
+	--base)
+		[ $# -ge 2 ] || { echo "sync-courses: --base needs a URL" >&2; exit 2; }
+		BASE_URL=$2
+		shift
+		;;
 	-h | --help)
 		sed -n '2,17p' "$0" | cut -c3-
 		exit 0

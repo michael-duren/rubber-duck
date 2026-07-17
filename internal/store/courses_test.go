@@ -337,6 +337,16 @@ func TestUpsertVariantArchiveAndRevive(t *testing.T) {
 		t.Fatalf("submissions on archived challenge = %d, %v; want 1 (history preserved)", len(subs), err)
 	}
 
+	// Archived challenges keep their history but accept no new submissions:
+	// they're hidden from every read path, so a new submission can only be a
+	// crafted or stale request.
+	if _, err := s.CreateSubmission(ctx, u.ID, ids[removed.Slug], "package x"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("CreateSubmission on archived challenge err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.CreateClaimedSubmission(ctx, u.ID, ids[removed.Slug], "package x", "passed", "ok", 1, nil, nil); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("CreateClaimedSubmission on archived challenge err = %v, want ErrNotFound", err)
+	}
+
 	// Earned points survive the archival; possible points shrink to the
 	// live content.
 	scores, err := s.UserCourseScores(ctx, u.ID)

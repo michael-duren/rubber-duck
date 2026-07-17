@@ -22,7 +22,7 @@ Requirements: Go 1.26+, Docker (with the compose plugin), `templ`.
 make tools            # fetch tailwind standalone binary, install templ
 make runner-images    # build gc-runner-go, gc-runner-python, gc-runner-c
 make dev              # postgres via compose + live-reloading server on :8080
-make seed             # publish seed/intro-to-go.md through the agent API
+make seed             # publish seed/intro-to-go.md + courses/*.md through the agent API
 ```
 
 Or fully containerized:
@@ -132,7 +132,7 @@ Agents translating a course to another language submit a second document with
 the same `course:` slug and a different `language:`. See
 [`seed/intro-to-go.md`](seed/intro-to-go.md) for a complete example.
 
-```markdown
+````markdown
 ---
 course: intro-to-concurrency        # required, stable course slug
 title: Introduction to Concurrency  # required
@@ -170,7 +170,7 @@ package challenge
 # Final Challenge: Build a Pipeline {#final points=50}
 
 Exactly one per document, same Starter/Tests structure.
-```
+````
 
 Conventions:
 
@@ -279,8 +279,9 @@ through.
 
 Prebuilt binaries (linux/darwin/windows, amd64/arm64) are published to
 [GitHub Releases](https://github.com/michael-duren/rubber-duck/releases/latest)
-by CD's `release-cli` job on every deploy; `duck version` reports the release
-tag (or the module version for `go install` builds):
+by the `cli-release` workflow when a semver tag (`v*`) is pushed by hand —
+deliberately decoupled from CD's per-merge deploys; `duck version` reports the
+release tag (or the module version for `go install` builds):
 
 ```sh
 go install github.com/michael-duren/rubber-duck/cmd/duck@latest
@@ -300,7 +301,7 @@ to `--remote` behavior automatically.
 mint one from your profile page ("Create CLI token") and either set
 `DUCK_TOKEN` or save it to `~/.config/duck/token`. The `/tokens` page on any
 deployment documents both credential kinds (user CLI tokens vs agent API
-keys) end to end. `duck pull` defaults to `http://localhost:8080`;
+keys) end to end. `duck pull` defaults to `https://duckgc.com`;
 override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
 the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
 
@@ -349,7 +350,7 @@ This writes two files in the current directory:
   silently overwritten (see below).
 
 Like the learner flow's `duck pull`, `educator pull` defaults to
-`http://localhost:8080`; override with `--base` or `DUCK_BASE_URL` — the
+`https://duckgc.com`; override with `--base` or `DUCK_BASE_URL` — the
 resolved base is recorded in the sidecar so `push` targets the same server.
 And it protects local work the same way `push` protects the server's: if the
 markdown file already exists with different content (say, unpushed edits),

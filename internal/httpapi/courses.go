@@ -8,6 +8,7 @@ import (
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/markdown"
 )
 
 const maxDocumentBytes = 2 << 20 // 2 MiB per course document
@@ -75,6 +76,13 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	course, variant, err := ingest.ToDomain(res, src)
+	if _, ok := errors.AsType[*markdown.DiagramError](err); ok {
+		// A ```d2 fence that doesn't compile is the document's problem,
+		// not the server's: report it like any other validation failure
+		// (the wrapped error names the lesson/challenge and d2's line:col).
+		writeError(w, http.StatusUnprocessableEntity, "invalid_course_markdown", err.Error(), nil)
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return

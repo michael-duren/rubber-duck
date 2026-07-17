@@ -165,7 +165,8 @@ var commands = []cmdHelp{
 			"records its version; you edit locally; `lint` validates it without\n" +
 			"the server; `push` sends it back, using the recorded version for\n" +
 			"optimistic concurrency so you can't silently overwrite someone\n" +
-			"else's changes. All three need a saved token (see `duck auth login`).\n" +
+			"else's changes. `pull` and `push` need a saved token (see\n" +
+			"`duck auth login`); `lint` runs entirely offline.\n" +
 			"`ed` is an accepted alias for `educator`.",
 		examples: []example{
 			{"duck educator pull intro-to-go/go", "fetch the Go variant's markdown to edit"},

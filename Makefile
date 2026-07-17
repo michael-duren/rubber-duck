@@ -2,11 +2,15 @@ TAILWIND_VERSION := v4.1.11
 TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
+# Pinned to the go.mod/Dockerfile version (renovate keeps all three in
+# sync): CI installs templ via this target, and an @latest drift would
+# regenerate *_templ.go differently and trip `make check`'s staleness gate.
+TEMPL_VERSION := v0.3.1020
 
-.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish sync-courses apikey apikey-prod check clean editor-bundle
+.PHONY: tools generate css build duck install uninstall db dev prune runner-images test test-integration seed publish sync-courses apikey apikey-prod psql psql-prod check push-images deploy infra-validate clean lint editor-bundle
 
 tools: $(TAILWIND) $(SQL_PROXY)
-	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
+	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
 $(TAILWIND):
 	mkdir -p bin
@@ -106,7 +110,7 @@ apikey-prod: $(SQL_PROXY)   ## mint against prod via cloud-sql-proxy (needs gclo
 	conn=$$(tofu -chdir=infra output -raw sql_connection_name); \
 	pass=$$(tofu -chdir=infra output -raw db_password); \
 	$(SQL_PROXY) "$$conn" --port 5433 & proxy=$$!; \
-	trap 'kill $$proxy 2>/dev/null' EXIT; \
+	trap 'kill $$proxy 2>/dev/null || true' EXIT; \
 	sleep 3; \
 	go run ./cmd/duckserver apikey create --name $(KEY_NAME) \
 		--db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable"

@@ -59,6 +59,11 @@ func runChallenge(dir, language string) (runResult, error) {
 		return runResult{}, fmt.Errorf("unsupported language %q", language)
 	}
 	cmd.Dir = dir
+	// The timeout kill only reaches the direct child (sh, go test); a
+	// deadlocked descendant (the compiled C test binary, a spawned Go test
+	// binary) still holds the output pipe, and without WaitDelay
+	// CombinedOutput would block on it forever — defeating testTimeout.
+	cmd.WaitDelay = time.Second
 	out, runErr := cmd.CombinedOutput()
 
 	res := runResult{output: string(out)}
