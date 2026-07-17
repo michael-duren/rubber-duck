@@ -19,6 +19,8 @@ type SubmissionStore interface {
 	CreateClaimedSubmission(ctx context.Context, userID, challengeID int64, code, status, output string, score int, testsPassed, testsTotal *int) (int64, error)
 	SubmissionForUser(ctx context.Context, id, userID int64) (domain.Submission, error)
 	UserCourseScores(ctx context.Context, userID int64) ([]domain.CourseScore, error)
+	UserStats(ctx context.Context, userID int64) (domain.UserStats, error)
+	UserVariantProgress(ctx context.Context, userID int64) ([]domain.VariantProgress, error)
 	SubmissionRateLimited(ctx context.Context, userID, challengeID int64) (bool, error)
 	CompletedChallenges(ctx context.Context, userID, variantID int64) (map[int64]bool, error)
 	LatestSubmissionCodesByVariant(ctx context.Context, userID, variantID int64) (map[int64]string, error)

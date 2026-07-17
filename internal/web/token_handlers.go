@@ -50,10 +50,15 @@ func (h *handlers) renderProfile(w http.ResponseWriter, r *http.Request, newToke
 		h.serverError(w, r, err)
 		return
 	}
+	stats, err := h.submissions.UserStats(r.Context(), user.ID)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
 	tokens, err := h.store.ListUserTokens(r.Context(), user.ID)
 	if err != nil {
 		h.serverError(w, r, err)
 		return
 	}
-	h.render(w, r, views.Profile(user, scores, tokens, newToken))
+	h.render(w, r, views.Profile(user, scores, stats, tokens, newToken))
 }

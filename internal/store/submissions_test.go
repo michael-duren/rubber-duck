@@ -198,6 +198,81 @@ func TestClaimedSubmissionLifecycle(t *testing.T) {
 	}
 }
 
+// UserStats and UserVariantProgress power the profile stat tiles and the
+// catalog progress bars / resume banner.
+func TestUserStatsAndVariantProgress(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	seedChallenges(t, s)
+	_, v, err := s.VariantDetail(ctx, "intro-to-concurrency", "go")
+	if err != nil {
+		t.Fatalf("variant detail: %v", err)
+	}
+	if len(v.Lessons) < 2 || len(v.Lessons[0].Challenges) == 0 || len(v.Lessons[1].Challenges) == 0 {
+		t.Fatalf("seed course shape changed; need 2 lessons with challenges")
+	}
+
+	u, err := s.CreateUser(ctx, "alice", "hash1")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	// A fresh user has zero stats and no progress rows.
+	stats, err := s.UserStats(ctx, u.ID)
+	if err != nil || stats != (domain.UserStats{}) {
+		t.Fatalf("fresh stats = %+v, %v; want zero", stats, err)
+	}
+	if prog, err := s.UserVariantProgress(ctx, u.ID); err != nil || len(prog) != 0 {
+		t.Fatalf("fresh progress = %v, %v; want empty", prog, err)
+	}
+
+	submit := func(challengeID int64, status string) {
+		t.Helper()
+		id, err := s.CreateSubmission(ctx, u.ID, challengeID, "package x")
+		if err != nil {
+			t.Fatalf("create submission: %v", err)
+		}
+		if err := s.CompleteSubmission(ctx, id, status, "out", 0, nil, nil); err != nil {
+			t.Fatalf("complete submission: %v", err)
+		}
+	}
+
+	// Pass every challenge in lesson 1 (twice for one of them — solved
+	// counts distinct challenges), fail one in lesson 2.
+	for _, ch := range v.Lessons[0].Challenges {
+		submit(ch.ID, "passed")
+	}
+	submit(v.Lessons[0].Challenges[0].ID, "passed")
+	submit(v.Lessons[1].Challenges[0].ID, "failed")
+
+	wantSolved := len(v.Lessons[0].Challenges)
+	wantSubs := wantSolved + 2
+	stats, err = s.UserStats(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("stats: %v", err)
+	}
+	if stats.ChallengesSolved != wantSolved || stats.TotalSubmissions != wantSubs {
+		t.Errorf("stats = %+v, want solved=%d submissions=%d", stats, wantSolved, wantSubs)
+	}
+
+	// Lesson 1 is done (all challenges passed); lesson 2 isn't (only a
+	// failed attempt); the total spans all lessons, attempted or not.
+	prog, err := s.UserVariantProgress(ctx, u.ID)
+	if err != nil || len(prog) != 1 {
+		t.Fatalf("progress = %v, %v; want 1 row", prog, err)
+	}
+	p := prog[0]
+	if p.CourseSlug != "intro-to-concurrency" || p.Language != "go" {
+		t.Errorf("progress course = %s/%s, want intro-to-concurrency/go", p.CourseSlug, p.Language)
+	}
+	if p.LessonsDone != 1 || p.LessonsTotal != len(v.Lessons) {
+		t.Errorf("lessons = %d/%d, want 1/%d", p.LessonsDone, p.LessonsTotal, len(v.Lessons))
+	}
+	if p.LastActivity.IsZero() {
+		t.Errorf("LastActivity is zero, want the latest submission time")
+	}
+}
+
 func TestCompletedChallenges(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

@@ -12,13 +12,20 @@ import (
 // the output — and each section owns one color of the site's ANSI palette
 // (amber = points, violet = depth, cyan = languages, emerald = the prompt).
 // featured is a small slice of real catalog courses for the teaser strip;
-// empty is fine (the strip is skipped).
-templ Home(user *domain.User, featured []domain.CourseSummary) {
+// empty is fine (the strip is skipped). resume/progress personalize the
+// page for logged-in users: a "pick up where you left off" banner up top
+// and lesson-progress bars on any featured card they've started.
+templ Home(user *domain.User, featured []domain.CourseSummary, resume *domain.VariantProgress, progress map[string]domain.VariantProgress) {
 	@Layout("Learn how software really works", user) {
 		// Reveal styles only hide content when JS is present to reveal it
 		// again (see .js .reveal in assets/input.css). This runs before the
 		// sections below parse, so nothing flashes.
 		<script>document.documentElement.classList.add("js")</script>
+		if resume != nil {
+			<div class="mt-6">
+				@resumeBanner(resume)
+			</div>
+		}
 		<section class="hero-aura py-14 text-center sm:py-20">
 			<p class="reveal font-mono text-sm text-emerald-600 dark:text-emerald-400">$ man duck <span class="tui-cursor" aria-hidden="true">▊</span></p>
 			<h1 class="reveal mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-6xl" style="--reveal-delay:.08s">
@@ -156,6 +163,9 @@ templ Home(user *domain.User, featured []domain.CourseSummary) {
 										<span class="font-mono text-xs text-slate-500 dark:text-slate-400">~{ fmt.Sprintf("%g", c.DurationHours) }h</span>
 									}
 								</div>
+								if p, ok := progress[c.Slug]; ok {
+									@lessonProgress(p)
+								}
 							</div>
 						</a>
 					}
