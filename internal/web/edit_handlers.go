@@ -194,6 +194,14 @@ func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, views.EditVariant(currentUser(r), form))
 		return
 	}
+	if msg, err := renderCheckMsg(res, mdText); err != nil {
+		h.serverError(w, r, err)
+		return
+	} else if msg != "" {
+		form.ErrMsg = msg
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
 
 	user := currentUser(r) // non-nil: this route is behind h.requireUser
 	p, err := h.proposals.CreateProposal(r.Context(), user.ID, slug, lang, title, summary, mdText)

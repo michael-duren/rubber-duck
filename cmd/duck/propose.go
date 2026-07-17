@@ -153,7 +153,7 @@ func sendProposal(method, url, token, tokenSource, baseURL, mdPath string, body 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return proposalResponse{}, fmt.Errorf("propose: %w", err)
 	}
@@ -210,7 +210,7 @@ func findMyOpenProposal(baseURL, token, course, language string) (int64, error) 
 		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return 0, err
 	}

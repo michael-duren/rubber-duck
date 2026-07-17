@@ -58,3 +58,19 @@ func TestCSRFRejectsPostWithoutToken(t *testing.T) {
 		t.Errorf("bearer request got 403 from CSRF check, want exemption")
 	}
 }
+
+// TestFormBodyLimit covers withCSRF's MaxBytesReader cap: a form body over
+// maxFormBytes is refused with 413 before any handler buffers it.
+func TestFormBodyLimit(t *testing.T) {
+	mux, _ := testMux(t)
+	csrf := fetchCSRFCookie(mux)
+	body := "csrf_token=" + csrf.Value + "&markdown=" + strings.Repeat("a", maxFormBytes+1)
+	req := httptest.NewRequest("POST", "/signup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrf)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized form body: status = %d, want 413", rec.Code)
+	}
+}

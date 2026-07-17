@@ -8,7 +8,7 @@ import (
 )
 
 func (h *handlers) settingsPage(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, views.Settings("", ""))
+	h.render(w, r, views.Settings(currentUser(r), "", ""))
 }
 
 func (h *handlers) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -22,11 +22,11 @@ func (h *handlers) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.CheckPassword(hash, current) {
-		h.render(w, r, views.Settings("Current password is wrong.", ""))
+		h.render(w, r, views.Settings(user, "Current password is wrong.", ""))
 		return
 	}
 	if fail := validatePassword(newPassword); fail != "" {
-		h.render(w, r, views.Settings(fail, ""))
+		h.render(w, r, views.Settings(user, fail, ""))
 		return
 	}
 
@@ -50,12 +50,19 @@ func (h *handlers) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.render(w, r, views.Settings("", "Password changed. Other sessions have been logged out."))
+	h.render(w, r, views.Settings(user, "", "Password changed. Other sessions have been logged out."))
 }
 
+// validatePassword bounds both ends: bcrypt (auth.HashPassword) rejects
+// inputs over 72 bytes, so without the upper check a long passphrase would
+// surface as a 500 instead of a form message. Shared with signup.
 func validatePassword(password string) string {
-	if len(password) < 8 {
-		return "New password must be at least 8 characters."
+	switch {
+	case len(password) < 8:
+		return "Password must be at least 8 characters."
+	case len(password) > 72:
+		return "Password must be at most 72 characters."
+	default:
+		return ""
 	}
-	return ""
 }

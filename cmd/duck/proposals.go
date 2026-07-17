@@ -96,7 +96,7 @@ func getProposalsJSON(url, token, tokenSource, baseURL string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch proposals: %w", err)
 	}

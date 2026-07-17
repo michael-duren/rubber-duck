@@ -73,7 +73,11 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 					<ul class="mt-2 flex flex-col gap-2 text-sm">
 						for _, rd := range course.ExtendedReading {
 							<li>
-								<a href={ templ.SafeURL(rd.URL) } rel="noopener" target="_blank" class="text-emerald-700 hover:underline dark:text-emerald-400">{ rd.Title } ↗</a>
+								// Deliberately NOT templ.SafeURL: reading URLs come from
+								// course frontmatter, which any logged-in user can edit, so
+								// they must go through templ's URL sanitizer (which blocks
+								// javascript: and friends), not around it.
+								<a href={ rd.URL } rel="noopener" target="_blank" class="text-emerald-700 hover:underline dark:text-emerald-400">{ rd.Title } ↗</a>
 							</li>
 						}
 					</ul>

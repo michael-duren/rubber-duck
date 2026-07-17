@@ -66,7 +66,13 @@ const DEFAULTS = { fontSize: 14, tabSize: 4, lineWrap: false, vim: false, relati
 
 function loadSettings() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+    const s = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+    // Stored values may be hand-edited or from an older schema; clamp the
+    // numbers so a bad tabSize/fontSize can't throw during mount (e.g.
+    // " ".repeat(-1)) and break every editor on the page.
+    s.fontSize = clamp(parseInt(s.fontSize, 10) || DEFAULTS.fontSize, 10, 24);
+    s.tabSize = clamp(parseInt(s.tabSize, 10) || DEFAULTS.tabSize, 1, 8);
+    return s;
   } catch {
     return { ...DEFAULTS };
   }

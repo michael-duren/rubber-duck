@@ -535,6 +535,8 @@ func TestSignup(t *testing.T) {
 		{"ok", "alice", "supersecret", false, http.StatusSeeOther, ""},
 		{"short username", "ab", "supersecret", false, http.StatusOK, "3-32 characters"},
 		{"short password", "alice", "short", false, http.StatusOK, "at least 8"},
+		// bcrypt rejects >72-byte inputs; the form must catch that first.
+		{"long password", "alice", strings.Repeat("p", 73), false, http.StatusOK, "at most 72"},
 		{"taken", "alice", "supersecret", true, http.StatusOK, "taken"},
 	}
 	for _, c := range cases {

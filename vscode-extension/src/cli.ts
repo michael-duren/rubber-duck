@@ -21,6 +21,15 @@ export function baseArgs(): string[] {
 
 let terminal: vscode.Terminal | undefined;
 
+// shellQuote joins command parts into a single line, single-quoting anything
+// the shell could interpret. Every sendText of config-derived values (duck.path,
+// duck.baseUrl) must go through this — those settings are attacker-influenced
+// text as far as the shell is concerned.
+export function shellQuote(parts: string[]): string {
+  const quote = (s: string) => (/[^\w@%+=:,./-]/.test(s) ? `'${s.replace(/'/g, `'\\''`)}'` : s);
+  return parts.map(quote).join(" ");
+}
+
 // runInTerminal runs a duck command in a shared, visible terminal so test
 // and submit output streams where the user can read and rerun it.
 export function runInTerminal(cwd: string, args: string[]): void {
@@ -28,8 +37,7 @@ export function runInTerminal(cwd: string, args: string[]): void {
     terminal = vscode.window.createTerminal({ name: "duck", cwd });
   }
   terminal.show(true);
-  const quote = (s: string) => (/[^\w@%+=:,./-]/.test(s) ? `'${s.replace(/'/g, `'\\''`)}'` : s);
-  terminal.sendText(`cd ${quote(cwd)} && ${quote(duckPath())} ${args.map(quote).join(" ")}`);
+  terminal.sendText(`cd ${shellQuote([cwd])} && ${shellQuote([duckPath(), ...args])}`);
 }
 
 export function disposeTerminal(t: vscode.Terminal): void {

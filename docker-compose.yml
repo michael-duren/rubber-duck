@@ -2,7 +2,9 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
+      # Loopback only: dev creds are weak and the app mounts the docker
+      # socket — don't expose either service to the LAN.
+      - "127.0.0.1:8080:8080"
     environment:
       DATABASE_URL: postgres://duckserver:duckserver@postgres:5432/duckserver?sslmode=disable
     volumes:
@@ -20,7 +22,7 @@ services:
       POSTGRES_PASSWORD: duckserver
       POSTGRES_DB: duckserver
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

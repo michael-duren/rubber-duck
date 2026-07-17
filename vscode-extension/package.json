@@ -27,11 +27,13 @@
         "duck.path": {
           "type": "string",
           "default": "duck",
+          "scope": "machine",
           "description": "Path to the duck CLI binary."
         },
         "duck.baseUrl": {
           "type": "string",
           "default": "https://duckgc.com",
+          "scope": "machine",
           "description": "Rubber Duck server base URL (also passed to duck pull/login as --base)."
         }
       }

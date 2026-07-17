@@ -8,7 +8,9 @@ package views
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-func Settings(errMsg, okMsg string) templ.Component {
+import "github.com/michael-duren/rubber-duck/internal/domain"
+
+func Settings(user *domain.User, errMsg, okMsg string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -53,7 +55,7 @@ func Settings(errMsg, okMsg string) templ.Component {
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 8, Col: 145}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 10, Col: 145}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -72,7 +74,7 @@ func Settings(errMsg, okMsg string) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(okMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 11, Col: 168}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 13, Col: 168}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -91,13 +93,13 @@ func Settings(errMsg, okMsg string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<label class=\"flex flex-col gap-1 text-sm font-medium\">Current password <input type=\"password\" name=\"current_password\" required autocomplete=\"current-password\" class=\"border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <label class=\"flex flex-col gap-1 text-sm font-medium\">New password <input type=\"password\" name=\"new_password\" required minlength=\"8\" autocomplete=\"new-password\" class=\"border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Change password</button></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<label class=\"flex flex-col gap-1 text-sm font-medium\">Current password <input type=\"password\" name=\"current_password\" required autocomplete=\"current-password\" class=\"border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <label class=\"flex flex-col gap-1 text-sm font-medium\">New password <input type=\"password\" name=\"new_password\" required minlength=\"8\" maxlength=\"72\" autocomplete=\"new-password\" class=\"border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900\"></label> <button type=\"submit\" class=\"bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500\">Change password</button></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Settings", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Settings", user).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -118,6 +118,33 @@ func TestProposalCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("bad d2 diagram is 422, not a 500", func(t *testing.T) {
+		mux, fs := testAPI(t)
+		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})
+		// Parses fine (ingest doesn't compile diagrams) but the ```d2
+		// fence fails to compile when the render check runs ToDomain.
+		badD2 := "---\ncourse: c\ntitle: T\nlanguage: go\ndescription: d\n---\n\n" +
+			"# Lesson: One {#one}\n\n```d2\nx -> \n```\n\n" +
+			"## Challenge: A {#a points=5}\n\nPrompt.\n\n" +
+			"### Starter\n\n```go\ncode\n```\n\n### Tests\n\n```go\ntests\n```\n\n" +
+			"# Final Challenge: F {#fin points=9}\n\n" +
+			"### Starter\n\n```go\ns\n```\n\n### Tests\n\n```go\nt\n```\n"
+		rec := doJSONAs(mux, "POST", "/api/v1/proposals", "gc_u_alice", map[string]string{"markdown": badD2})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d body %s, want 422", rec.Code, rec.Body)
+		}
+		var resp struct {
+			Error struct{ Code, Message string }
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp.Error.Code != "invalid_course_markdown" || !strings.Contains(resp.Error.Message, "d2") {
+			t.Errorf("error = %+v, want invalid_course_markdown mentioning d2", resp.Error)
+		}
+		if len(fs.proposals) != 0 {
+			t.Errorf("bad-diagram document must not create a proposal")
+		}
+	})
+
 	t.Run("empty markdown is 400", func(t *testing.T) {
 		mux, fs := testAPI(t)
 		fs.addUser("gc_u_alice", domain.User{ID: 42, Username: "alice"})

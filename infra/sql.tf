@@ -12,7 +12,11 @@ resource "google_sql_database_instance" "postgres" {
     }
   }
 
-  deletion_protection = false
+  # Provider-side guard only (no API change): makes a plan that would
+  # destroy/replace this instance fail instead of silently dropping user
+  # data — CD applies with -auto-approve. Flip to false in the same PR as
+  # an intentional decommission.
+  deletion_protection = true
 
   depends_on = [google_project_service.apis["sqladmin.googleapis.com"]]
 }

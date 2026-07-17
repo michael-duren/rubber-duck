@@ -10,6 +10,7 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/diff"
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/markdown"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
@@ -161,9 +162,10 @@ func (h *handlers) createReview(w http.ResponseWriter, r *http.Request) {
 }
 
 // publishProposal parses the proposal's document and makes it live. The
-// document was linted when the proposal was created/updated, so a
-// validation failure here means the ingest contract tightened since — rare,
-// but surfaced honestly rather than 500ing.
+// document was linted and render-checked when the proposal was
+// created/updated, so a failure here means the ingest contract (or the d2
+// compiler) tightened since — rare, but surfaced honestly rather than
+// 500ing.
 func (h *handlers) publishProposal(w http.ResponseWriter, r *http.Request, p domain.Proposal) {
 	src := []byte(p.ProposedMD)
 	res, err := ingest.Parse(src)
@@ -173,6 +175,11 @@ func (h *handlers) publishProposal(w http.ResponseWriter, r *http.Request, p dom
 		return
 	}
 	course, variant, err := ingest.ToDomain(res, src)
+	if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
+		h.renderProposal(w, r, p,
+			"This proposal reached approval but a diagram in it no longer compiles — the author needs to update it. "+err.Error())
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return
@@ -247,6 +254,14 @@ func (h *handlers) updateProposal(w http.ResponseWriter, r *http.Request) {
 	if res.Course.Course != p.CourseSlug || res.Course.Language != p.Language {
 		form.ErrMsg = fmt.Sprintf("This proposal is for %s/%s but the document's frontmatter says %s/%s — a proposal can't change which course variant it targets.",
 			p.CourseSlug, p.Language, res.Course.Course, res.Course.Language)
+		h.render(w, r, views.EditVariant(user, form))
+		return
+	}
+	if msg, err := renderCheckMsg(res, mdText); err != nil {
+		h.serverError(w, r, err)
+		return
+	} else if msg != "" {
+		form.ErrMsg = msg
 		h.render(w, r, views.EditVariant(user, form))
 		return
 	}
@@ -333,4 +348,19 @@ func parseForEditor(mdText string) (*ingest.Result, []views.EditProblem, error) 
 		return nil, nil, err
 	}
 	return res, nil, nil
+}
+
+// renderCheckMsg runs the full render pipeline publishing will run
+// (ingest.ToDomain), purely as validation, so document-level problems the
+// line-numbered Parse pass can't catch — today a ```d2 fence that doesn't
+// compile — are rejected when the proposal is authored, not after it has
+// collected approvals. ("", nil) means the document renders; a non-empty
+// message is user-facing (the wrapped error names the lesson/challenge and
+// d2's line:col).
+func renderCheckMsg(res *ingest.Result, mdText string) (string, error) {
+	_, _, err := ingest.ToDomain(res, []byte(mdText))
+	if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
+		return err.Error(), nil
+	}
+	return "", err
 }

@@ -8,6 +8,10 @@ import (
 	"strconv"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/ingest"
+	// Aliased: decodeProposalBody's named "markdown" return would shadow
+	// the package name.
+	md "github.com/michael-duren/rubber-duck/internal/markdown"
 )
 
 // proposalJSON is the API shape of a proposal. The document itself is only
@@ -87,6 +91,20 @@ func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (c
 		writeError(w, http.StatusConflict, "slug_mismatch",
 			fmt.Sprintf("request names %s/%s but frontmatter says %s/%s",
 				body.Course, body.Language, course, language), nil)
+		return
+	}
+
+	// Run the full render pipeline publishing will run, purely as
+	// validation: a ```d2 fence that doesn't compile is the document's
+	// problem (the wrapped error names the lesson/challenge and d2's
+	// line:col), and it must be rejected here — not after the proposal has
+	// collected approvals and publishing chokes on it.
+	if _, _, err := ingest.ToDomain(res, []byte(body.Markdown)); err != nil {
+		if _, isDiagram := errors.AsType[*md.DiagramError](err); isDiagram {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_course_markdown", err.Error(), nil)
+			return
+		}
+		h.serverError(w, r, err)
 		return
 	}
 

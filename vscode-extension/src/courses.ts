@@ -60,8 +60,8 @@ export class ChallengeItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon(
       localDir ? "file-code" : "circle-large-outline",
     );
-    if (localDir) {
-      const file = languageFiles[language]?.code ?? "";
+    const file = languageFiles[language]?.code;
+    if (localDir && file) {
       this.command = {
         command: "vscode.open",
         title: "Open Solution",

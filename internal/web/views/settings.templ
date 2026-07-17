@@ -1,7 +1,9 @@
 package views
 
-templ Settings(errMsg, okMsg string) {
-	@Layout("Settings", nil) {
+import "github.com/michael-duren/rubber-duck/internal/domain"
+
+templ Settings(user *domain.User, errMsg, okMsg string) {
+	@Layout("Settings", user) {
 		<div class="mx-auto mt-12 max-w-sm">
 			<h1 class="text-2xl font-bold">Change password</h1>
 			if errMsg != "" {
@@ -19,7 +21,7 @@ templ Settings(errMsg, okMsg string) {
 				</label>
 				<label class="flex flex-col gap-1 text-sm font-medium">
 					New password
-					<input type="password" name="new_password" required minlength="8" autocomplete="new-password"
+					<input type="password" name="new_password" required minlength="8" maxlength="72" autocomplete="new-password"
 						class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"/>
 				</label>
 				<button type="submit" class="bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Change password</button>

@@ -106,6 +106,25 @@ Prompt.
 ` + "```go\nt\n```" + `
 `
 
+// TestParseSectionBoundaries pins down where a section's markdown ends: at
+// the start of the next boundary heading's line. A regression here leaks the
+// next heading's "#"/"##"/"###" marker characters into the stored content.
+func TestParseSectionBoundaries(t *testing.T) {
+	res, err := Parse([]byte(validHeader + validLessonAndFinal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got := res.Lessons[0].ContentMD; got != "Body." {
+		t.Errorf("lesson content = %q, want %q", got, "Body.")
+	}
+	if got := res.Lessons[0].Challenges[0].PromptMD; got != "Prompt." {
+		t.Errorf("challenge prompt = %q, want %q", got, "Prompt.")
+	}
+	if got := res.Final.PromptMD; got != "" {
+		t.Errorf("final prompt = %q, want empty", got)
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	cases := []struct {
 		name    string

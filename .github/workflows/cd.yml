@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
 
+# Default for jobs without their own block (the reusable test job); the
+# deploy job widens this itself with id-token: write.
+permissions:
+  contents: read
+
 jobs:
   test:
     uses: ./.github/workflows/test.yml
@@ -25,25 +30,25 @@ jobs:
       PROJECT: ${{ vars.GCP_PROJECT_ID }}
       REGION: us-central1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.26.4"
           cache: true
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
-      - uses: opentofu/setup-opentofu@v1
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
 
       - name: Build and push images
         run: make push-images PROJECT="$PROJECT" REGION="$REGION"

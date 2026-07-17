@@ -151,6 +151,13 @@ func migrateCmd(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	// stdlib flag stops parsing at the first positional, so anything after
+	// the direction ("migrate down --db URL") would be silently ignored —
+	// and a down migration against the wrong database is not a mistake to
+	// let slide. Flags must come first.
+	if fs.NArg() > 1 {
+		return fmt.Errorf("usage: duckserver migrate [--db URL] [up|down] (flags go before the direction)")
+	}
 	dir := fs.Arg(0)
 	switch dir {
 	case "up", "":
@@ -158,7 +165,7 @@ func migrateCmd(args []string) error {
 	case "down":
 		return store.Migrate(*dbURL, true)
 	default:
-		return fmt.Errorf("usage: duckserver migrate [up|down]")
+		return fmt.Errorf("usage: duckserver migrate [--db URL] [up|down]")
 	}
 }
 
@@ -177,7 +184,10 @@ func userCmd(args []string) error {
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *username == "" {
+	// Leftover positionals mean flags after them were silently ignored
+	// (stdlib flag stops at the first positional) — refuse rather than,
+	// say, promoting against the default DB because --db came last.
+	if *username == "" || fs.NArg() != 0 {
 		return fmt.Errorf("usage: duckserver user promote --username <username> [--role admin|user]")
 	}
 	if *role != "admin" && *role != "user" {

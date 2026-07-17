@@ -207,7 +207,7 @@ func educatorPullCmd(args []string) error {
 	if token, _, err := loadToken(); err == nil {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch variant: %w", err)
 	}

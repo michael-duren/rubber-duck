@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,8 +42,8 @@ func pullCmd(args []string) error {
 		return fmt.Errorf("unsupported language %q", language)
 	}
 
-	url := strings.TrimRight(*base, "/") + "/api/v1/courses/" + course + "/variants/" + language + "/challenges"
-	resp, err := http.Get(url)
+	listURL := strings.TrimRight(*base, "/") + "/api/v1/courses/" + url.PathEscape(course) + "/variants/" + url.PathEscape(language) + "/challenges"
+	resp, err := apiClient.Get(listURL)
 	if err != nil {
 		return fmt.Errorf("fetch challenges: %w", err)
 	}
@@ -70,6 +71,12 @@ func pullCmd(args []string) error {
 	}
 
 	for _, c := range listing.Challenges {
+		// The slug names a local directory, and it came off the network:
+		// never let a malicious or broken server walk it out of root
+		// (e.g. a slug of "../../.bashrc").
+		if c.Slug == "" || c.Slug == "." || c.Slug == ".." || c.Slug != filepath.Base(c.Slug) {
+			return fmt.Errorf("server returned unsafe challenge slug %q", c.Slug)
+		}
 		dir := filepath.Join(root, c.Slug)
 		if _, err := os.Stat(dir); err == nil {
 			fmt.Printf("skip %s (already exists)\n", dir)

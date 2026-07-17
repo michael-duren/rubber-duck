@@ -19,7 +19,8 @@ optional**: `infra/network.tf` is already on `main`, deliberately un-applied
 pending manual review (`issues/ops/03-job-egress-lockdown.md`) — without
 the gate, the first CD run applies it unreviewed.
 
-One-time setup, in addition to the steps under "One-time setup" above:
+One-time setup, in addition to the steps under "One-time setup" in the
+README's "Deploying to GCP" section:
 
 ```sh
 PROJECT_ID=getcracked-touch-grass

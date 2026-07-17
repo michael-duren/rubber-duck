@@ -87,7 +87,8 @@ func submitCmd(args []string) error {
 		return err
 	}
 	base := strings.TrimRight(meta.BaseURL, "/")
-	submitURL := fmt.Sprintf("%s/courses/%s/%s/challenges/%s/submissions", base, meta.Course, meta.Language, slug)
+	submitURL := fmt.Sprintf("%s/courses/%s/%s/challenges/%s/submissions",
+		base, url.PathEscape(meta.Course), url.PathEscape(meta.Language), url.PathEscape(slug))
 
 	req, err := http.NewRequest("POST", submitURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -95,7 +96,7 @@ func submitCmd(args []string) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("submit: %w", err)
 	}
@@ -131,15 +132,22 @@ func submitCmd(args []string) error {
 	return fmt.Errorf("tests failed")
 }
 
+// pollTimeout bounds how long `duck submit --remote` waits for the server to
+// grade before giving up: a submission stuck in "pending" (say the server's
+// grading pool died) must not hang the CLI forever. The submission itself is
+// unaffected — its page keeps updating server-side.
+const pollTimeout = 15 * time.Minute
+
 func pollSubmission(base, path, token string) error {
 	statusURL := base + path + "/status"
+	deadline := time.Now().Add(pollTimeout)
 	for {
 		req, err := http.NewRequest("GET", statusURL, nil)
 		if err != nil {
 			return err
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := apiClient.Do(req)
 		if err != nil {
 			return fmt.Errorf("poll status: %w", err)
 		}
@@ -169,6 +177,9 @@ func pollSubmission(base, path, token string) error {
 			fmt.Println(status.Output)
 			return fmt.Errorf("grading error")
 		default:
+			if time.Now().After(deadline) {
+				return fmt.Errorf("submission still %q after %s — check %s%s in the browser", status.Status, pollTimeout, base, path)
+			}
 			time.Sleep(1500 * time.Millisecond)
 		}
 	}
