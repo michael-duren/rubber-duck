@@ -133,25 +133,62 @@ arbitrary, but a convention keeps the UI readable a year from now.
 
 Substitute your own subnet everywhere the course shows `192.168.1.x`.
 
+## Lay out the repo
+
+Create the git repo now, on your workstation, and give every future file a
+home before any tool asks for one. Three tools will write files into this
+repo — Terraform, Ansible, and `kubectl` manifests — and they stay sane in
+separate directories:
+
+```bash
+mkdir homelab && cd homelab
+git init
+mkdir infra ansible manifests
+```
+
+```text
+homelab/
+├── README.md      # your blueprint — this lesson's challenge
+├── infra/         # Terraform: *which VMs exist* (the Terraform lessons)
+├── ansible/       # inventory + playbooks: *what's installed on them*
+└── manifests/     # Kubernetes YAML: *what runs on the cluster* (last section)
+```
+
+(Git doesn't track empty directories — they'll show up in `git status`
+once the first file lands in each.) From here on, when a lesson says
+"create `main.tf`" it means `infra/main.tf`, playbooks go in `ansible/`,
+and Kubernetes YAML goes in `manifests/`. The lessons spell the full path
+out each time.
+
 ## Challenge: Commit to the Blueprint {#blueprint-checkpoint points=5}
 
 Write down your plan: hostnames, IPs, VM IDs, and which machine plays
-which role. Put it in a `README.md` in a fresh git repo — that repo is
-about to accumulate Terraform and Ansible code and becomes the single
-source of truth for your lab.
+which role. Put it in the repo's `README.md` — that repo is about to
+accumulate Terraform and Ansible code and becomes the single source of
+truth for your lab. Then fill in the same routing table in the starter
+below with your real values: your router's IP, its DHCP range, and an
+address + VM ID for every machine in the blueprint.
 
 ### Starter
 
 ```python
 # Self-attested checkpoint — flip DONE once you've honestly done the work.
 
-# I created a git repo for my homelab and wrote an IP / VM-ID / role plan
-# for both machines into its README.
+# I created the homelab repo with infra/, ansible/ and manifests/
+# directories, and my README holds the plan I filled in below.
 DONE = False
 
-# For your own record (not validated): your IP plan, e.g.
-# "pve-main=192.168.1.10 pve-worker=.11 cp=.60 workers=.61+"
-NOTES = """
+# Fill in your routing table — the same plan as the lesson's, with your
+# network's real numbers. The static IPs must sit OUTSIDE the DHCP range.
+PLAN = """
+| host       | ip          | vm id | role                                    |
+|------------|-------------|-------|-----------------------------------------|
+| router     |             |   —   | gateway; DHCP range: ___ - ___          |
+| pve-main   |             |   —   | hypervisor: services + control plane VM |
+| pve-worker |             |   —   | hypervisor: worker VMs                  |
+| k8s-cp-1   |             |       | Kubernetes control plane (VM)           |
+| k8s-w-1    |             |       | Kubernetes worker (VM)                  |
+| k8s-w-2    |             |       | Kubernetes worker (VM)                  |
 """
 ```
 
@@ -229,33 +266,54 @@ apt update && apt full-upgrade -y
 ## The network bridge: how VMs get on your LAN
 
 One piece of the installer's work is worth understanding now, because
-Terraform will reference it later. Proxmox created a **Linux bridge**
-called `vmbr0` — a virtual switch. Your physical NIC is plugged into one
-port of that switch, and every VM you create gets a virtual NIC plugged
-into another. Result: VMs appear on your home LAN as first-class machines
-with their own IPs, no NAT involved.
+Terraform will reference it later. Two terms first:
 
-`/etc/network/interfaces` on the node shows the shape (yours will name a
-different physical NIC):
+- A **NIC** (network interface card) is a machine's physical network
+  port — the thing the Ethernet cable plugs into. Linux names NICs by
+  where they sit on the motherboard, so yours will be something like
+  `enp3s0` or `eno1`.
+- A **Linux bridge** is a virtual network switch that lives inside the
+  kernel. Like a physical switch, it has ports and forwards traffic
+  between them — but its ports connect *interfaces* (real or virtual)
+  instead of cables.
 
-```text
-auto lo
-iface lo inet loopback
+The installer created a bridge called `vmbr0` and plugged your physical
+NIC into it. Every VM you create gets a *virtual* NIC plugged into
+another port of the same bridge. Result: VMs appear on your home LAN as
+first-class machines with their own IPs, no NAT involved — to your
+router, a VM is just one more device on the network.
 
-iface enp3s0 inet manual
+See it for yourself. SSH to the node and print its network config:
 
-auto vmbr0
-iface vmbr0 inet static
-    address 192.168.1.10/24
-    gateway 192.168.1.1
-    bridge-ports enp3s0
-    bridge-stp off
-    bridge-fd 0
+```bash
+ssh root@192.168.1.10
+cat /etc/network/interfaces
 ```
 
-Note the node's own IP lives on the *bridge*, not the NIC. You don't need
-to edit this — the installer got it right — but when a VM config says
-`bridge=vmbr0`, this is what it's plugging into.
+Line by line (yours will name a different physical NIC):
+
+```text
+auto lo                     # bring "lo" up automatically at boot
+iface lo inet loopback      # lo is the loopback device — 127.0.0.1
+
+iface enp3s0 inet manual    # the physical NIC; "manual" = it gets no IP
+                            # of its own, it only feeds the bridge
+
+auto vmbr0                  # bring the bridge up at boot
+iface vmbr0 inet static     # the bridge holds a fixed ("static") IP...
+    address 192.168.1.10/24 # ...the management IP you gave the installer
+    gateway 192.168.1.1     # your router — where non-local traffic goes
+    bridge-ports enp3s0     # the physical NIC plugged into this switch
+    bridge-stp off          # spanning-tree protocol: loop detection for
+                            # networks of many switches; pointless here
+    bridge-fd 0             # forwarding delay: seconds to wait before
+                            # passing traffic — 0, don't wait
+```
+
+Note the node's own IP lives on the *bridge*, not the NIC — the NIC is
+`manual`, just a dumb uplink. You don't need to edit any of this — the
+installer got it right — but when a VM config says `bridge=vmbr0`, this
+is the switch it's plugging into.
 
 `vmbr0` is a virtual switch (cyan border): the node's own IP lives on the
 bridge, each VM's virtual NIC (the ovals) is a port on it, and the
@@ -319,26 +377,41 @@ through that API, so first we give them an identity to do it with.
 
 ## Users, realms, and why not root
 
-Proxmox authenticates users against *realms*. Your `root` login uses the
-**PAM realm** (`root@pam`) — real Linux users on the node. There's also
-the **PVE realm** (`@pve`), users that exist only inside Proxmox's own
-database. Automation belongs in the PVE realm: it can't log into the box
+Proxmox authenticates users against *realms* — separate databases of who
+can log in. The `USER@REALM` suffix you saw on the login screen names
+which database a user lives in:
+
+- **`@pam`** — **PAM** is *Pluggable Authentication Modules*, the
+  standard mechanism Linux itself uses for logins. Users in this realm
+  are real Linux accounts on the node; `root@pam` is the same `root` you
+  SSH in as.
+- **`@pve`** — **PVE** is just *Proxmox Virtual Environment*, the
+  product's name. Users in this realm exist only inside Proxmox's own
+  user database — the OS underneath has never heard of them.
+
+Automation belongs in the PVE realm: a `@pve` user can't log into the box
 over SSH, and it can be deleted without touching the OS.
 
 Never feed your root password to a tool. Instead: a dedicated user plus an
 **API token** — a revocable credential you can scope, rotate, and keep in
 one place.
 
-SSH into the node and create both:
+Create both with `pveum` — the **P**roxmox **VE** **U**ser **M**anager,
+the node's CLI for users, permissions, and tokens (everything it does is
+also under **Datacenter → Permissions** in the UI). These three commands
+run **on the node**, so SSH in first (`ssh root@192.168.1.10`):
 
 ```bash
-# a user for infrastructure-as-code tooling
+# create the user "terraform" in the pve realm
 pveum user add terraform@pve --comment "Terraform/Ansible automation"
 
-# give it rights on the whole resource tree ("/")
+# aclmod edits the access-control list: grant terraform@pve the built-in
+# Administrator role on "/" — the root of the resource tree, so the grant
+# covers every VM, datastore, and network on this node
 pveum aclmod / -user terraform@pve -role Administrator
 
-# mint a token; --privsep 0 means the token inherits the user's full rights
+# mint an API token named "tf" belonging to that user; --privsep 0 means
+# the token inherits the user's full rights (more on that below)
 pveum user token add terraform@pve tf --privsep 0
 ```
 
@@ -354,9 +427,12 @@ than its user; with one token for one purpose it has nothing to separate.
 
 ## Talk to the API by hand once
 
-The token authenticates as a header of the form
-`PVEAPIToken=USER@REALM!TOKENID=SECRET`. Prove the plumbing works from
-your workstation before handing it to any tool:
+The token authenticates as an HTTP header of the form
+`PVEAPIToken=USER@REALM!TOKENID=SECRET`. Prove the plumbing works before
+handing the token to any tool — and prove it **from your workstation**,
+because that's where Terraform will run. Type `exit` to leave the SSH
+session on the node, then (substituting your token's real secret for the
+`aaaa...` placeholder):
 
 ```bash
 curl -k -H 'Authorization: PVEAPIToken=terraform@pve!tf=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' \
@@ -364,9 +440,12 @@ curl -k -H 'Authorization: PVEAPIToken=terraform@pve!tf=aaaaaaaa-bbbb-cccc-dddd-
 ```
 
 (`-k` skips certificate verification — same self-signed cert you accepted
-in the browser.) You should get a JSON list containing your node, with its
-uptime and load. When Terraform misbehaves later, this one-liner is your
-"is it me or the API?" bisector.
+in the browser; `python3 -m json.tool` just pretty-prints the response.)
+You should get a JSON list containing your node, with its uptime and
+load. Running it from the workstation matters: it proves the token,
+the network path, and the API all work from where your tools will live.
+When Terraform misbehaves later, this one-liner is your "is it me or the
+API?" bisector.
 
 ## Challenge: An Identity for Your Tools {#api-checkpoint points=10}
 
@@ -417,8 +496,15 @@ Everything here also works verbatim with OpenTofu, the open-source fork —
 ## The provider
 
 Terraform itself knows nothing about Proxmox; a **provider** plugin
-translates resources into API calls. We use `bpg/proxmox`, the actively
-maintained Proxmox provider. In your homelab repo, create `main.tf`:
+translates resources into API calls. Providers are named
+`publisher/name`, and Proxmox has no official one — the two candidates
+are community projects named after their maintainers' GitHub handles.
+We use `bpg/proxmox` (bpg is Pavel Boldyrev, its author), the actively
+maintained option; you'll also see the older `telmate/proxmox` in
+tutorials, which has lagged behind Proxmox releases for years.
+
+Terraform files go in the `infra/` directory you created in the first
+lesson. Create `infra/main.tf`:
 
 ```hcl
 terraform {
@@ -459,17 +545,37 @@ That's exactly the trap a naive `~> 0.70` falls into: it resolves to
 gitignore below) freeze the exact build your teammates and future self
 resolve to.
 
-The `ssh` block is a bpg quirk worth knowing: a few operations (uploading
-cloud-init snippet files, some disk imports) aren't fully covered by the
-Proxmox API, so the provider falls back to SSHing into the node. With
-`agent = true` it uses your ssh-agent — make sure `ssh root@192.168.1.10`
-works from your workstation without a password prompt (use
-`ssh-copy-id root@192.168.1.10` to install your key).
+The `ssh` block is a quirk of this provider worth knowing: a few
+operations (uploading cloud-init snippet files, some disk imports) aren't
+fully covered by the Proxmox API, so for those the provider falls back to
+SSHing into the node as root and doing the work there. `agent = true`
+tells it to authenticate using your **ssh-agent** — the background
+process that holds your unlocked private keys so programs can use them
+without prompting.
+
+That means key-based SSH from workstation to node has to work *before*
+Terraform needs it. Set it up now, from your workstation:
+
+```bash
+# 1. if you've never made an SSH key, create one (accept the defaults)
+ssh-keygen -t ed25519
+
+# 2. install your public key on the node (enter the root password one
+#    last time)
+ssh-copy-id root@192.168.1.10
+
+# 3. verify: this must log you in with NO password prompt
+ssh root@192.168.1.10 hostname
+```
+
+If step 3 still prompts for a *key passphrase*, your agent isn't holding
+the key — run `ssh-add` and try again. Once step 3 is silent, the
+provider's SSH fallback will be too.
 
 ## Secrets stay out of git
 
 That `var.proxmox_api_token` is a Terraform *variable*, declared in
-`variables.tf`:
+`infra/variables.tf`:
 
 ```hcl
 variable "proxmox_api_token" {
@@ -479,24 +585,61 @@ variable "proxmox_api_token" {
 }
 ```
 
-Supply the value outside version control — either a `credentials.auto.tfvars`
-file that you **gitignore**:
+Supply the value outside version control, one of two ways:
 
-```hcl
-proxmox_api_token = "terraform@pve!tf=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+- A `credentials.auto.tfvars` file next to `main.tf` in `infra/`, which
+  you **gitignore**. Terraform automatically loads any `*.auto.tfvars`
+  file in the working directory:
+
+  ```hcl
+  proxmox_api_token = "terraform@pve!tf=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  ```
+
+- An environment variable. Terraform automatically resolves any variable
+  named `TF_VAR_<name>` to the Terraform variable `<name>` — no flag, no
+  file, nothing to reference. Export it and every `plan`/`apply` in that
+  shell just has it:
+
+  ```bash
+  export TF_VAR_proxmox_api_token='terraform@pve!tf=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+  ```
+
+Create the repo's `.gitignore` now, with three entries:
+
+```text
+*.tfvars
+.terraform/
+terraform.tfstate*
 ```
 
-or an environment variable (`TF_VAR_proxmox_api_token=...`). Add
-`*.tfvars` and `.terraform/` to `.gitignore` now. Also gitignore
-`terraform.tfstate*`: the **state file** is Terraform's record of what it
-has created and it can contain secrets. (Real teams put state in remote
-storage; for a homelab, local state plus gitignore is fine.)
+The first is your credentials file; `.terraform/` is just the downloaded
+provider cache (bulk, not secret). The third deserves a real explanation,
+because it's the one that bites people: the **state file**
+(`terraform.tfstate`) is Terraform's record of everything it has created,
+and it stores resource attributes **in plaintext — including sensitive
+ones like your API token**. `sensitive = true` only redacts values from
+Terraform's *output*; it does not encrypt them in state. So treat the
+state file itself like a credential:
+
+- It must never land in git — not even a private repo.
+- On a single-operator homelab, local state on your workstation's disk
+  is an accepted trade-off, but know what you're trading: anyone who can
+  read `infra/terraform.tfstate` has your Proxmox token. Keep the repo on
+  a disk only you use, and if you back it up, back it up encrypted.
+- The production answer is a **remote state backend** (an S3/GCS bucket
+  with encryption, or Terraform Cloud): state lives encrypted at rest,
+  off your laptop, with locking so two applies can't collide. It's worth
+  doing the day a second person — or a CI job — touches this repo; it's
+  ceremony you don't need today.
 
 ## init, plan, apply
 
-The workflow you'll run hundreds of times:
+Terraform operates on the `.tf` files in the *current directory*, so
+these commands always run from `infra/`. The workflow you'll run hundreds
+of times:
 
 ```bash
+cd infra
 terraform init      # downloads the provider; once per repo (and after version bumps)
 terraform plan      # dry run: shows what WOULD change, changes nothing
 terraform apply     # shows the plan again, asks, then does it
@@ -504,7 +647,7 @@ terraform apply     # shows the plan again, asks, then does it
 
 Let's manage something real but harmless first — a **resource pool**, a
 folder-like grouping in the Proxmox UI that our cluster VMs will live in.
-Add to `main.tf`:
+Add to `infra/main.tf`:
 
 ```hcl
 resource "proxmox_virtual_environment_pool" "k8s" {
@@ -608,7 +751,7 @@ boots; it exists to be copied.
 
 ## Clone it with Terraform
 
-Now the payoff. In `main.tf`, define the control-plane VM from your
+Now the payoff. In `infra/main.tf`, define the control-plane VM from your
 blueprint — but treat it as a **dry run for the whole idea**; we'll
 destroy and recreate it on purpose in a minute:
 
@@ -634,8 +777,8 @@ resource "proxmox_virtual_environment_vm" "k8s_cp_1" {
   }
 
   agent {
-    enabled = false # see the gotcha below — Ansible flips this later
-  }
+    enabled = false # see the gotcha below — you flip this after Ansible
+  }                 # installs the agent next lesson
 
   initialization {
     ip_config {
@@ -660,7 +803,7 @@ the user it creates). Apply, give it a minute to boot, then from your
 workstation:
 
 ```bash
-terraform apply
+terraform apply              # from infra/, like every terraform command
 ssh ops@192.168.1.60
 ```
 
@@ -724,20 +867,50 @@ def test_checkpoint_claimed():
 # Lesson: Ansible — Configuring the Machines Code Built {#ansible-baseline}
 
 Terraform answers "what machines exist?"; it's the wrong tool for "what's
-installed *on* them?". That's Ansible's job: it SSHes into hosts from an
-inventory and pushes them toward a described state — packages present,
-services running, files in place. Like Terraform it's **idempotent**: a
-task that's already true does nothing, so you rerun playbooks freely.
+installed *on* them?". That's Ansible's job: configuration management —
+pushing machines toward a described state: packages present, services
+running, files in place.
 
-Install it on your workstation (`pipx install ansible` or your package
-manager). No agent goes on the VMs — Ansible only needs the SSH access
-cloud-init already gave you.
+## How Ansible actually works
+
+There's no magic in Ansible, and knowing the machinery makes every error
+message legible. Ansible is a program that runs **entirely on your
+workstation** (the *control node* in its docs). It reads two files you
+write:
+
+- an **inventory** — the list of machines to manage and how to reach them
+- a **playbook** — the state you want those machines in
+
+Then, for every task in the playbook, against every host the task
+targets, it does the same dumb-simple thing:
+
+1. **SSH in** — the same `ssh ops@...` you'd type by hand. No agent, no
+   daemon, nothing listening on the VM beyond sshd.
+2. **Copy over a module** — a small Python program that implements the
+   task type (`apt`, `copy`, `command`, ...) — bundled with your
+   arguments.
+3. **Run it there.** The module checks current state *first*: the `apt`
+   module asks dpkg whether the package is already installed, and only
+   acts if reality differs from what you described.
+4. **Read back a JSON result** and print it as `ok` (already true),
+   `changed` (had to act), or `failed`.
+
+That's the whole trick. It's why the guests need Python but no Ansible
+anything; why everything rides over plain SSH; and where **idempotency**
+comes from — not magic, just modules that look before they touch. It's
+also the real difference between a playbook and a shell script: a script
+says "run `apt-get install`", a playbook says "this package is present",
+and the module decides whether that means doing anything at all. So you
+rerun playbooks freely, the way you rerun `terraform apply`.
+
+Install Ansible on your workstation (`pipx install ansible` or your
+package manager). The VMs need nothing new — cloud-init already gave you
+SSH, and Debian's cloud image ships Python.
 
 ## Inventory: the machines you manage
 
-Create `inventory.ini` in your repo. Groups (in brackets) let one playbook
-target many hosts; ours mirror the blueprint so the Kubernetes section can
-target `k8s_control` and `k8s_workers` separately later:
+Create `ansible/inventory.ini`. The format is INI: `[bracketed]` section
+headers with lines underneath them:
 
 ```ini
 [k8s_control]
@@ -754,21 +927,53 @@ k8s_workers
 ansible_user=ops
 ```
 
-Smoke-test connectivity:
+Line by line:
+
+- `[k8s_control]` — a plain section header defines a **group**. Group
+  names are yours to invent, and playbooks target groups, so the
+  grouping *is* a design decision: ours mirror the blueprint, because
+  the Kubernetes lessons will need to treat the control plane and the
+  workers differently.
+- `k8s-cp-1 ansible_host=192.168.1.60` — one **host** per line. The
+  first word is the host's *inventory name*: the label Ansible prints in
+  output and the key you'll use to reference it later
+  (`hostvars['k8s-cp-1']` in the worker-join lesson). It doesn't need to
+  resolve in DNS, because everything after it is `key=value` **host
+  variables**, and `ansible_host=` supplies the actual address to SSH
+  to.
+- `[k8s:children]` — the `:children` suffix makes `k8s` a **group of
+  groups**: its members are other group names, not hosts. Now
+  `hosts: k8s` in a playbook means "every machine in the cluster", while
+  `k8s_control` and `k8s_workers` still exist for targeting a subset.
+- `[k8s:vars]` — the `:vars` suffix sets variables on **every host in
+  the group**. `ansible_user=ops` is a *connection variable*: which user
+  to SSH as, exactly like the `ops@` in `ssh ops@...`. Declared once
+  here instead of repeated on every host line; siblings like
+  `ansible_port` and `ansible_ssh_private_key_file` exist for hosts
+  that ever need them.
+
+Smoke-test connectivity (run ansible commands from the repo root — the
+paths point into `ansible/`):
 
 ```bash
-ansible -i inventory.ini k8s -m ping
+ansible -i ansible/inventory.ini k8s -m ping
 ```
 
-`ping` here isn't ICMP — it SSHes in and runs a module end-to-end.
-`"pong"` means inventory, DNS/IPs, SSH keys, and Python on the guest all
-work.
+Reading that command: `ansible` (as opposed to `ansible-playbook`) runs
+a single module ad hoc, no playbook file needed; `-i` says which
+inventory to use; `k8s` is the target group; `-m ping` picks the module.
+And `ping` isn't ICMP — it exercises the full machinery from the section
+above: SSH in as `ops`, copy the module over, run it under the guest's
+Python, marshal the JSON back. So `"pong"` proves the inventory address,
+the SSH key, the user, and Python on the guest, all in one shot — which
+makes it the first thing to reach for whenever a later playbook can't
+connect.
 
 ## The baseline playbook
 
 Every VM cloned from the template should get the same baseline. Create
-`baseline.yml` — and note the first task pays off last lesson's debt by
-installing the QEMU guest agent:
+`ansible/baseline.yml` — and note the first task pays off last lesson's
+debt by installing the QEMU guest agent:
 
 ```yaml
 - name: Baseline for all cluster VMs
@@ -783,29 +988,83 @@ installing the QEMU guest agent:
           - vim
         update_cache: true
 
-    - name: Enable and start the guest agent
-      ansible.builtin.systemd_service:
-        name: qemu-guest-agent
-        state: started
-        enabled: true
-
     - name: Upgrade everything
       ansible.builtin.apt:
         upgrade: dist
 ```
 
-`become: true` means "use sudo" — which works passwordless because
-cloud-init set the `ops` user up that way. Run it, twice:
+This file is a **playbook**, and the unit of structure inside it is the
+**play**. Anatomy, top to bottom:
+
+- The leading `-` makes the file a YAML *list*: a playbook is a list of
+  plays, run in order. This one has a single play; the worker-join
+  playbook later in the course has two, and you'll see why.
+- A **play** binds a set of hosts to a list of tasks. `hosts: k8s` names
+  the inventory group from above — Ansible runs every task in this play
+  on every host in that group (several hosts in parallel, task by task).
+- `become: true` — run the tasks with privilege escalation, i.e. sudo.
+  We SSH in as `ops`, but installing packages needs root, so Ansible
+  "becomes" root for each task. No password prompt, because cloud-init
+  set `ops` up with passwordless sudo.
+- Each entry under `tasks:` is one **task**, and one task = one module
+  call. `name:` is a purely human label, echoed as the task runs — write
+  names as statements of state, not actions, and the run output reads
+  like a checklist being verified.
+- `ansible.builtin.apt` is the module, by fully qualified name
+  (`namespace.collection.module` — `builtin` ships with Ansible; the
+  `community.general` collection appears later this lesson). Everything
+  nested under the module name is its **arguments**: a description of
+  desired state — this list of packages present (present is `apt`'s
+  default state), refresh the package index first (`update_cache: true`,
+  the module's `apt update`) — not a command line. The module computes
+  the difference between that description and the machine and issues
+  only the apt operations that close it.
+
+Conspicuously absent: any task to start the `qemu-guest-agent` service —
+and adding one is a trap. The agent talks to the hypervisor over a
+virtio-serial device that Proxmox only attaches to the VM when the VM's
+agent option is on, and our Terraform still says
+`agent { enabled = false }`. Until that device exists,
+`systemctl start qemu-guest-agent` fails outright — the unit is bound to
+the missing device. You can't `enable` it either: Debian ships it as a
+*static* unit with no install config, started by a udev rule the moment
+the device appears. So the playbook installs the package and stops
+there; the service takes care of itself once the device arrives, next
+step. Run the playbook, twice:
 
 ```bash
-ansible-playbook -i inventory.ini baseline.yml
-ansible-playbook -i inventory.ini baseline.yml
+ansible-playbook -i ansible/inventory.ini ansible/baseline.yml
+ansible-playbook -i ansible/inventory.ini ansible/baseline.yml
 ```
 
-The first run reports `changed` tasks; the second should be all `ok` —
-idempotency you can see. With the agent now running, go flip
-`agent { enabled = true }` in `main.tf` and `terraform apply`: from here
-on Proxmox can see guest IPs and shut VMs down cleanly.
+Reading the output: the first task Ansible runs is one you didn't write —
+`TASK [Gathering Facts]`. Before doing anything, it collects the host's
+OS, addresses, CPU count and so on into per-host variables called
+**facts**, so tasks and templates can branch on them ("is this Debian or
+RHEL?"). Then your tasks, each printing its `name:` and a per-host
+status; and finally `PLAY RECAP`, one line per host with `ok=`,
+`changed=` and `failed=` counts. On the first run both tasks report
+`changed` — the modules had to act. On the second, everything is `ok`:
+each module looked at the machine, found reality already matching the
+description, and touched nothing. That's idempotency you can watch
+happen.
+
+Now hand the agent its device. Flip `agent { enabled = true }` in
+`infra/main.tf` and `terraform apply` (from `infra/`). Attaching the
+agent device is a config change the VM only picks up across a power
+cycle, so the provider reboots the VM as part of the apply — its
+`reboot_after_update` setting defaults to `true`, and this is the case
+it exists for. When the VM comes back, udev sees the new device and
+starts the agent; no Ansible involved. Verify both ends of the
+conversation:
+
+```bash
+ssh ops@192.168.1.60 systemctl is-active qemu-guest-agent   # → active
+```
+
+and in the web UI the VM's **Summary** tab now shows its IP addresses —
+that's the agent reporting in. From here on Proxmox can see guest IPs
+and shut VMs down cleanly.
 
 Your rebuild story is now two commands: `terraform apply` creates the
 machine, `ansible-playbook` makes it yours.
@@ -900,16 +1159,18 @@ ans -> k3s: {style.stroke-dash: 4}
 Do a full cold rebuild of the control-plane VM, from nothing to
 configured, using only the repo:
 
-1. `terraform destroy -target=proxmox_virtual_environment_vm.k8s_cp_1`
+1. From `infra/`:
+   `terraform destroy -target=proxmox_virtual_environment_vm.k8s_cp_1`
    — and confirm in the web UI that it's gone.
 2. `terraform apply` — the VM comes back: right ID, right pool, right IP,
    your SSH key, no console interaction.
-3. `ansible-playbook -i inventory.ini baseline.yml` — the fresh VM gets
-   its baseline; run it again and see all `ok`.
+3. From the repo root:
+   `ansible-playbook -i ansible/inventory.ini ansible/baseline.yml` — the
+   fresh VM gets its baseline; run it again and see all `ok`.
 4. Commit everything (except the gitignored secrets and state) and read
    the repo as a stranger would: `README.md` with the blueprint,
-   `main.tf`, `variables.tf`, `inventory.ini`, `baseline.yml`. That repo
-   now *is* your homelab.
+   `infra/main.tf`, `infra/variables.tf`, `ansible/inventory.ini`,
+   `ansible/baseline.yml`. That repo now *is* your homelab.
 
 If the second machine has arrived, this is also the moment to run the
 install lesson on it (`pve-worker`, `192.168.1.11`) — but that's a bonus,
@@ -1068,7 +1329,7 @@ give you everything this course needs with none of that ceremony.
 ## One repo, two hypervisors
 
 Terraform handles multiple endpoints with **provider aliases** — same
-provider plugin, second configuration. Add to `main.tf`:
+provider plugin, second configuration. Add to `infra/main.tf`:
 
 ```hcl
 provider "proxmox" {
@@ -1085,7 +1346,7 @@ provider "proxmox" {
 ```
 
 (and the matching `variable "proxmox_worker_api_token"` in
-`variables.tf`, with the value in your gitignored tfvars). Resources
+`infra/variables.tf`, with the value in your gitignored tfvars). Resources
 default to the unaliased provider; anything for machine 2 opts in with
 `provider = proxmox.worker`.
 
@@ -1147,7 +1408,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
 
 `terraform apply`, and machine 2 sprouts two identical workers. Then
 close the loop with the tools you already have: uncomment the workers in
-`inventory.ini`, add `k8s-w-2`, and run the baseline —
+`ansible/inventory.ini`, add `k8s-w-2`, and run the baseline —
 
 ```ini
 [k8s_workers]
@@ -1156,8 +1417,8 @@ k8s-w-2 ansible_host=192.168.1.62
 ```
 
 ```bash
-ansible -i inventory.ini k8s -m ping        # three pongs
-ansible-playbook -i inventory.ini baseline.yml
+ansible -i ansible/inventory.ini k8s -m ping        # three pongs
+ansible-playbook -i ansible/inventory.ini ansible/baseline.yml
 ```
 
 — and flip the workers' `agent { enabled = true }` and re-apply. Every
@@ -1204,7 +1465,7 @@ because the same playbook pattern joins the workers in the next lesson.
 ## The server playbook
 
 The official installer script inspects env vars to decide what to set up.
-Create `k3s-server.yml`:
+Create `ansible/k3s-server.yml`:
 
 ```yaml
 - name: Install k3s server (control plane)
@@ -1229,12 +1490,30 @@ Create `k3s-server.yml`:
         flat: true
 ```
 
-The `creates:` guard is what makes a raw shell command idempotent: if the
-service file already exists, Ansible skips the task instead of
-reinstalling. Run it:
+Three tasks, two new modules, and one important confession:
+
+- `get_url` downloads a file *on the managed host* to a path there —
+  and it's state-aware like `apt`: if the file already exists it
+  doesn't re-download.
+- `command` is the escape hatch. It runs whatever you give it, which
+  means Ansible has no idea what state it changes — a bare `command`
+  task would rerun the installer on every play, breaking the "rerun
+  freely" promise. The `creates:` guard patches that hole: you tell
+  Ansible what file the command leaves behind, and if
+  `/etc/systemd/system/k3s.service` already exists the task is skipped
+  (`ok`, not `changed`). Whenever you're forced to shell out, `creates:`
+  (or its sibling `removes:`) is how you keep the playbook idempotent.
+- `fetch` is copying in the *other direction*: it pulls a file off the
+  managed host back to your workstation. `dest:` is relative to where
+  you ran `ansible-playbook` (the repo root), and `flat: true` says
+  "just the file" — without it, fetch nests the copy under a
+  per-hostname directory tree, which matters when a play fetches from
+  many hosts but is noise for one.
+
+Run it:
 
 ```bash
-ansible-playbook -i inventory.ini k3s-server.yml
+ansible-playbook -i ansible/inventory.ini ansible/k3s-server.yml
 ```
 
 Sixty-odd seconds later there is a Kubernetes control plane running next
@@ -1316,7 +1595,7 @@ sticky note, and it goes stale if you ever rebuild the server. Instead,
 have Ansible read it off the control plane *during the play* and hand it
 to the workers. This is a two-play playbook, and it introduces
 `hostvars` — how one host's facts get used while configuring another.
-Create `k3s-agents.yml`:
+Create `ansible/k3s-agents.yml`:
 
 ```yaml
 - name: Read the join token off the control plane
@@ -1350,13 +1629,37 @@ Create `k3s-agents.yml`:
         creates: /etc/systemd/system/k3s-agent.service
 ```
 
-Same installer script; the presence of `K3S_URL` is what flips it to
-agent mode. `slurp` returns file contents base64-encoded (hence the
-`b64decode`), and `hostvars['k8s-cp-1']` reaches into facts registered by
-the first play. Run it, then watch from your workstation:
+This playbook earns its two plays: a play binds hosts to tasks, and the
+token lives on one set of hosts (`k8s_control`) but gets *used* on
+another (`k8s_workers`) — so reading and using can't be one play. The
+new machinery, piece by piece:
+
+- `register: node_token` — every module returns a JSON result (you've
+  been watching Ansible summarize them as `ok`/`changed` all along).
+  `register` saves that whole result as a variable named `node_token`
+  on the host that ran the task.
+- `slurp` reads a remote file and returns its contents in that result —
+  base64-encoded, so arbitrary bytes survive the JSON trip.
+- `{{ ... }}` is **Jinja2 templating**, evaluated on your workstation
+  before the value is used. Any value in a playbook can substitute
+  variables this way, and `|` pipes through filters: `b64decode` undoes
+  slurp's encoding, `trim` drops the trailing newline.
+- Variables are **per-host** — `node_token` exists on `k8s-cp-1`, and
+  the workers' play runs as other hosts. `hostvars` is the bridge: a
+  map of every host's variables, keyed by inventory name, so
+  `hostvars['k8s-cp-1'].node_token` reaches across from a worker's play
+  into what play one registered on the control plane.
+- `vars:` defines play-level variables — same `{{ }}` substitution,
+  just declared up front so the task list stays readable.
+- `environment:` sets environment variables for that one task's process.
+  That's the installer's actual interface: the same script inspects its
+  environment, and the presence of `K3S_URL` is what flips it from
+  server mode to agent mode.
+
+Run it, then watch from your workstation:
 
 ```bash
-ansible-playbook -i inventory.ini k3s-agents.yml
+ansible-playbook -i ansible/inventory.ini ansible/k3s-agents.yml
 kubectl get nodes --watch
 ```
 
@@ -1442,8 +1745,9 @@ svc -> p2
 ```
 
 Manifests are declarations, exactly like `.tf` files, so they live in the
-repo: create a `manifests/` directory. First `manifests/whoami.yaml`, all
-three rungs of the ladder in one file:
+repo — in the `manifests/` directory that's been waiting empty since the
+first lesson. Create `manifests/whoami.yaml`, all three rungs of the
+ladder in one file:
 
 ```yaml
 apiVersion: apps/v1
@@ -1575,7 +1879,7 @@ machine dying — and that you can regrow the lost limb from the repo.
 
 With `whoami` running and reachable:
 
-1. **Kill a worker for real.** `terraform destroy
+1. **Kill a worker for real.** From `infra/`: `terraform destroy
    -target='proxmox_virtual_environment_vm.worker["k8s-w-1"]'`. No
    drain, no warning — this is the power-supply-dies scenario.
 2. **Watch Kubernetes cope.** `kubectl get nodes --watch` shows the node
@@ -1583,9 +1887,10 @@ With `whoami` running and reachable:
    rescheduled onto the surviving worker (`kubectl get pods -o wide`).
    Keep curling `whoami.home.lan` throughout — brief blips are fair, but
    the app comes back without you touching anything.
-3. **Regrow the limb.** `terraform apply` rebuilds the VM;
-   `ansible-playbook -i inventory.ini baseline.yml` then
-   `-i inventory.ini k3s-agents.yml` re-baselines and rejoins it. The
+3. **Regrow the limb.** `terraform apply` (in `infra/`) rebuilds the VM;
+   `ansible-playbook -i ansible/inventory.ini ansible/baseline.yml` then
+   `-i ansible/inventory.ini ansible/k3s-agents.yml` re-baselines and
+   rejoins it. The
    rebuilt machine reuses the hostname `k8s-w-1`; if the old node object
    lingers as `NotReady`, clear it with `kubectl delete node k8s-w-1`
    *before* the rejoin and watch the fresh one register.
