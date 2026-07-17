@@ -715,8 +715,8 @@ resource "proxmox_virtual_environment_vm" "k8s_cp_1" {
   }
 
   agent {
-    enabled = false # see the gotcha below — Ansible flips this later
-  }
+    enabled = false # see the gotcha below — you flip this after Ansible
+  }                 # installs the agent next lesson
 
   initialization {
     ip_config {
@@ -805,20 +805,50 @@ def test_checkpoint_claimed():
 # Lesson: Ansible — Configuring the Machines Code Built {#ansible-baseline}
 
 Terraform answers "what machines exist?"; it's the wrong tool for "what's
-installed *on* them?". That's Ansible's job: it SSHes into hosts from an
-inventory and pushes them toward a described state — packages present,
-services running, files in place. Like Terraform it's **idempotent**: a
-task that's already true does nothing, so you rerun playbooks freely.
+installed *on* them?". That's Ansible's job: configuration management —
+pushing machines toward a described state: packages present, services
+running, files in place.
 
-Install it on your workstation (`pipx install ansible` or your package
-manager). No agent goes on the VMs — Ansible only needs the SSH access
-cloud-init already gave you.
+## How Ansible actually works
+
+There's no magic in Ansible, and knowing the machinery makes every error
+message legible. Ansible is a program that runs **entirely on your
+workstation** (the *control node* in its docs). It reads two files you
+write:
+
+- an **inventory** — the list of machines to manage and how to reach them
+- a **playbook** — the state you want those machines in
+
+Then, for every task in the playbook, against every host the task
+targets, it does the same dumb-simple thing:
+
+1. **SSH in** — the same `ssh ops@...` you'd type by hand. No agent, no
+   daemon, nothing listening on the VM beyond sshd.
+2. **Copy over a module** — a small Python program that implements the
+   task type (`apt`, `copy`, `command`, ...) — bundled with your
+   arguments.
+3. **Run it there.** The module checks current state *first*: the `apt`
+   module asks dpkg whether the package is already installed, and only
+   acts if reality differs from what you described.
+4. **Read back a JSON result** and print it as `ok` (already true),
+   `changed` (had to act), or `failed`.
+
+That's the whole trick. It's why the guests need Python but no Ansible
+anything; why everything rides over plain SSH; and where **idempotency**
+comes from — not magic, just modules that look before they touch. It's
+also the real difference between a playbook and a shell script: a script
+says "run `apt-get install`", a playbook says "this package is present",
+and the module decides whether that means doing anything at all. So you
+rerun playbooks freely, the way you rerun `terraform apply`.
+
+Install Ansible on your workstation (`pipx install ansible` or your
+package manager). The VMs need nothing new — cloud-init already gave you
+SSH, and Debian's cloud image ships Python.
 
 ## Inventory: the machines you manage
 
-Create `ansible/inventory.ini`. Groups (in brackets) let one playbook
-target many hosts; ours mirror the blueprint so the Kubernetes section can
-target `k8s_control` and `k8s_workers` separately later:
+Create `ansible/inventory.ini`. The format is INI: `[bracketed]` section
+headers with lines underneath them:
 
 ```ini
 [k8s_control]
@@ -835,6 +865,31 @@ k8s_workers
 ansible_user=ops
 ```
 
+Line by line:
+
+- `[k8s_control]` — a plain section header defines a **group**. Group
+  names are yours to invent, and playbooks target groups, so the
+  grouping *is* a design decision: ours mirror the blueprint, because
+  the Kubernetes lessons will need to treat the control plane and the
+  workers differently.
+- `k8s-cp-1 ansible_host=192.168.1.60` — one **host** per line. The
+  first word is the host's *inventory name*: the label Ansible prints in
+  output and the key you'll use to reference it later
+  (`hostvars['k8s-cp-1']` in the worker-join lesson). It doesn't need to
+  resolve in DNS, because everything after it is `key=value` **host
+  variables**, and `ansible_host=` supplies the actual address to SSH
+  to.
+- `[k8s:children]` — the `:children` suffix makes `k8s` a **group of
+  groups**: its members are other group names, not hosts. Now
+  `hosts: k8s` in a playbook means "every machine in the cluster", while
+  `k8s_control` and `k8s_workers` still exist for targeting a subset.
+- `[k8s:vars]` — the `:vars` suffix sets variables on **every host in
+  the group**. `ansible_user=ops` is a *connection variable*: which user
+  to SSH as, exactly like the `ops@` in `ssh ops@...`. Declared once
+  here instead of repeated on every host line; siblings like
+  `ansible_port` and `ansible_ssh_private_key_file` exist for hosts
+  that ever need them.
+
 Smoke-test connectivity (run ansible commands from the repo root — the
 paths point into `ansible/`):
 
@@ -842,9 +897,15 @@ paths point into `ansible/`):
 ansible -i ansible/inventory.ini k8s -m ping
 ```
 
-`ping` here isn't ICMP — it SSHes in and runs a module end-to-end.
-`"pong"` means inventory, DNS/IPs, SSH keys, and Python on the guest all
-work.
+Reading that command: `ansible` (as opposed to `ansible-playbook`) runs
+a single module ad hoc, no playbook file needed; `-i` says which
+inventory to use; `k8s` is the target group; `-m ping` picks the module.
+And `ping` isn't ICMP — it exercises the full machinery from the section
+above: SSH in as `ops`, copy the module over, run it under the guest's
+Python, marshal the JSON back. So `"pong"` proves the inventory address,
+the SSH key, the user, and Python on the guest, all in one shot — which
+makes it the first thing to reach for whenever a later playbook can't
+connect.
 
 ## The baseline playbook
 
@@ -865,29 +926,83 @@ debt by installing the QEMU guest agent:
           - vim
         update_cache: true
 
-    - name: Enable and start the guest agent
-      ansible.builtin.systemd_service:
-        name: qemu-guest-agent
-        state: started
-        enabled: true
-
     - name: Upgrade everything
       ansible.builtin.apt:
         upgrade: dist
 ```
 
-`become: true` means "use sudo" — which works passwordless because
-cloud-init set the `ops` user up that way. Run it, twice:
+This file is a **playbook**, and the unit of structure inside it is the
+**play**. Anatomy, top to bottom:
+
+- The leading `-` makes the file a YAML *list*: a playbook is a list of
+  plays, run in order. This one has a single play; the worker-join
+  playbook later in the course has two, and you'll see why.
+- A **play** binds a set of hosts to a list of tasks. `hosts: k8s` names
+  the inventory group from above — Ansible runs every task in this play
+  on every host in that group (several hosts in parallel, task by task).
+- `become: true` — run the tasks with privilege escalation, i.e. sudo.
+  We SSH in as `ops`, but installing packages needs root, so Ansible
+  "becomes" root for each task. No password prompt, because cloud-init
+  set `ops` up with passwordless sudo.
+- Each entry under `tasks:` is one **task**, and one task = one module
+  call. `name:` is a purely human label, echoed as the task runs — write
+  names as statements of state, not actions, and the run output reads
+  like a checklist being verified.
+- `ansible.builtin.apt` is the module, by fully qualified name
+  (`namespace.collection.module` — `builtin` ships with Ansible; the
+  `community.general` collection appears later this lesson). Everything
+  nested under the module name is its **arguments**: a description of
+  desired state — this list of packages present (present is `apt`'s
+  default state), refresh the package index first (`update_cache: true`,
+  the module's `apt update`) — not a command line. The module computes
+  the difference between that description and the machine and issues
+  only the apt operations that close it.
+
+Conspicuously absent: any task to start the `qemu-guest-agent` service —
+and adding one is a trap. The agent talks to the hypervisor over a
+virtio-serial device that Proxmox only attaches to the VM when the VM's
+agent option is on, and our Terraform still says
+`agent { enabled = false }`. Until that device exists,
+`systemctl start qemu-guest-agent` fails outright — the unit is bound to
+the missing device. You can't `enable` it either: Debian ships it as a
+*static* unit with no install config, started by a udev rule the moment
+the device appears. So the playbook installs the package and stops
+there; the service takes care of itself once the device arrives, next
+step. Run the playbook, twice:
 
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/baseline.yml
 ansible-playbook -i ansible/inventory.ini ansible/baseline.yml
 ```
 
-The first run reports `changed` tasks; the second should be all `ok` —
-idempotency you can see. With the agent now running, go flip
-`agent { enabled = true }` in `infra/main.tf` and `terraform apply`: from
-here on Proxmox can see guest IPs and shut VMs down cleanly.
+Reading the output: the first task Ansible runs is one you didn't write —
+`TASK [Gathering Facts]`. Before doing anything, it collects the host's
+OS, addresses, CPU count and so on into per-host variables called
+**facts**, so tasks and templates can branch on them ("is this Debian or
+RHEL?"). Then your tasks, each printing its `name:` and a per-host
+status; and finally `PLAY RECAP`, one line per host with `ok=`,
+`changed=` and `failed=` counts. On the first run both tasks report
+`changed` — the modules had to act. On the second, everything is `ok`:
+each module looked at the machine, found reality already matching the
+description, and touched nothing. That's idempotency you can watch
+happen.
+
+Now hand the agent its device. Flip `agent { enabled = true }` in
+`infra/main.tf` and `terraform apply` (from `infra/`). Attaching the
+agent device is a config change the VM only picks up across a power
+cycle, so the provider reboots the VM as part of the apply — its
+`reboot_after_update` setting defaults to `true`, and this is the case
+it exists for. When the VM comes back, udev sees the new device and
+starts the agent; no Ansible involved. Verify both ends of the
+conversation:
+
+```bash
+ssh ops@192.168.1.60 systemctl is-active qemu-guest-agent   # → active
+```
+
+and in the web UI the VM's **Summary** tab now shows its IP addresses —
+that's the agent reporting in. From here on Proxmox can see guest IPs
+and shut VMs down cleanly.
 
 Your rebuild story is now two commands: `terraform apply` creates the
 machine, `ansible-playbook` makes it yours.
@@ -1293,9 +1408,27 @@ Create `ansible/k3s-server.yml`:
         flat: true
 ```
 
-The `creates:` guard is what makes a raw shell command idempotent: if the
-service file already exists, Ansible skips the task instead of
-reinstalling. Run it:
+Three tasks, two new modules, and one important confession:
+
+- `get_url` downloads a file *on the managed host* to a path there —
+  and it's state-aware like `apt`: if the file already exists it
+  doesn't re-download.
+- `command` is the escape hatch. It runs whatever you give it, which
+  means Ansible has no idea what state it changes — a bare `command`
+  task would rerun the installer on every play, breaking the "rerun
+  freely" promise. The `creates:` guard patches that hole: you tell
+  Ansible what file the command leaves behind, and if
+  `/etc/systemd/system/k3s.service` already exists the task is skipped
+  (`ok`, not `changed`). Whenever you're forced to shell out, `creates:`
+  (or its sibling `removes:`) is how you keep the playbook idempotent.
+- `fetch` is copying in the *other direction*: it pulls a file off the
+  managed host back to your workstation. `dest:` is relative to where
+  you ran `ansible-playbook` (the repo root), and `flat: true` says
+  "just the file" — without it, fetch nests the copy under a
+  per-hostname directory tree, which matters when a play fetches from
+  many hosts but is noise for one.
+
+Run it:
 
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/k3s-server.yml
@@ -1414,10 +1547,34 @@ Create `ansible/k3s-agents.yml`:
         creates: /etc/systemd/system/k3s-agent.service
 ```
 
-Same installer script; the presence of `K3S_URL` is what flips it to
-agent mode. `slurp` returns file contents base64-encoded (hence the
-`b64decode`), and `hostvars['k8s-cp-1']` reaches into facts registered by
-the first play. Run it, then watch from your workstation:
+This playbook earns its two plays: a play binds hosts to tasks, and the
+token lives on one set of hosts (`k8s_control`) but gets *used* on
+another (`k8s_workers`) — so reading and using can't be one play. The
+new machinery, piece by piece:
+
+- `register: node_token` — every module returns a JSON result (you've
+  been watching Ansible summarize them as `ok`/`changed` all along).
+  `register` saves that whole result as a variable named `node_token`
+  on the host that ran the task.
+- `slurp` reads a remote file and returns its contents in that result —
+  base64-encoded, so arbitrary bytes survive the JSON trip.
+- `{{ ... }}` is **Jinja2 templating**, evaluated on your workstation
+  before the value is used. Any value in a playbook can substitute
+  variables this way, and `|` pipes through filters: `b64decode` undoes
+  slurp's encoding, `trim` drops the trailing newline.
+- Variables are **per-host** — `node_token` exists on `k8s-cp-1`, and
+  the workers' play runs as other hosts. `hostvars` is the bridge: a
+  map of every host's variables, keyed by inventory name, so
+  `hostvars['k8s-cp-1'].node_token` reaches across from a worker's play
+  into what play one registered on the control plane.
+- `vars:` defines play-level variables — same `{{ }}` substitution,
+  just declared up front so the task list stays readable.
+- `environment:` sets environment variables for that one task's process.
+  That's the installer's actual interface: the same script inspects its
+  environment, and the presence of `K3S_URL` is what flips it from
+  server mode to agent mode.
+
+Run it, then watch from your workstation:
 
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/k3s-agents.yml
