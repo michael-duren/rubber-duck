@@ -1,7 +1,10 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
+	"html"
+	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
@@ -73,19 +76,29 @@ templ SubmissionResult(sub domain.Submission) {
 	}
 }
 
-templ Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.UserToken, newToken string) {
+templ Profile(user *domain.User, scores []domain.CourseScore, stats domain.UserStats, tokens []domain.UserToken, newToken string) {
 	@Layout("Profile", user) {
-		<div class="flex items-center justify-between gap-3">
-			<h1 class="text-3xl font-bold">{ user.Username }</h1>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div class="flex min-w-0 items-center gap-3" x-data={ duckState() }>
+				<h1 class="text-3xl font-bold">{ user.Username }</h1>
+				@profileDuck()
+			</div>
 			<a href="/settings" class="text-sm text-slate-500 hover:underline dark:text-slate-400">Change password</a>
 		</div>
+		<div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+			@statTile(fmt.Sprint(totalEarned(scores)), "points earned")
+			@statTile(fmt.Sprint(stats.ChallengesSolved), "challenges solved")
+			@statTile(fmt.Sprint(stats.TotalSubmissions), "submissions")
+			@statTile(user.CreatedAt.Format("Jan 2006"), "quacking since")
+		</div>
 		if len(scores) == 0 {
-			<p class="mt-6 text-slate-500 dark:text-slate-400">
+			<p class="mt-8 text-slate-500 dark:text-slate-400">
 				No challenges attempted yet.
 				<a href="/courses" class="text-emerald-600 hover:underline dark:text-emerald-400">Pick a course</a> and earn your first points.
 			</p>
 		} else {
-			<div class="mt-8 flex flex-col gap-3">
+			<h2 class="mt-10 text-xl font-bold">Course progress</h2>
+			<div class="mt-4 flex flex-col gap-3">
 				for _, s := range scores {
 					<a href={ templ.SafeURL("/courses/" + s.CourseSlug + "/" + s.Language) } class="group border border-slate-200 bg-white p-5 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-600">
 						<div class="flex flex-wrap items-center justify-between gap-3">
@@ -106,15 +119,81 @@ templ Profile(user *domain.User, scores []domain.CourseScore, tokens []domain.Us
 	}
 }
 
+// profileDuck is the resident rubber duck: click it and it answers with a
+// random quip in a speech bubble. State (quip pool, current message, hide
+// timer) lives in the parent's x-data, seeded by duckState.
+templ profileDuck() {
+	<button
+		type="button"
+		@click="last = (last + 1 + Math.floor(Math.random() * (quips.length - 1))) % quips.length; msg = quips[last]; clearTimeout(timer); timer = setTimeout(() => msg = '', 6000)"
+		class="shrink-0 select-none text-3xl transition-transform hover:-translate-y-0.5 hover:scale-110 active:translate-y-0.5 active:scale-90"
+		title="quack?"
+		aria-label="Ask the duck"
+	>🦆</button>
+	<span
+		x-show="msg"
+		x-text="msg"
+		x-transition.opacity.duration.200ms
+		style="display: none"
+		aria-live="polite"
+		class="relative min-w-0 border border-slate-300 bg-white px-3 py-1.5 text-sm italic text-slate-600 before:absolute before:top-1/2 before:-left-1.5 before:h-2.5 before:w-2.5 before:-translate-y-1/2 before:rotate-45 before:border-b before:border-l before:border-slate-300 before:bg-white before:content-[''] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:before:border-slate-700 dark:before:bg-slate-900"
+	></span>
+}
+
+templ statTile(value, label string) {
+	<div class="border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+		<div class="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400">{ value }</div>
+		<div class="mt-1 text-xs tracking-wide text-slate-500 uppercase dark:text-slate-400">{ label }</div>
+	</div>
+}
+
+var duckQuips = []string{
+	"Quack.",
+	"Explain the bug to me. Out loud. That's the whole trick.",
+	"Every expert was once a duckling.",
+	"Calm above the water, paddling like mad below.",
+	"One more challenge won't hurt. Probably.",
+	"You talk, I listen, you fix it. Classic rubber ducking.",
+	"quack quack — that's duck for \"ship it\".",
+	"Reading the error message counts as debugging. Try it.",
+}
+
+// duckState seeds the duck's Alpine scope. last starts at -1 so the first
+// click can land on any quip; the click handler advances past the previous
+// index so the duck never says the same thing twice in a row.
+func duckState() string {
+	b, _ := json.Marshal(map[string]any{"quips": duckQuips, "msg": "", "timer": nil, "last": -1})
+	return string(b)
+}
+
+func totalEarned(scores []domain.CourseScore) int {
+	total := 0
+	for _, s := range scores {
+		total += s.Earned
+	}
+	return total
+}
+
 templ tokenSection(tokens []domain.UserToken, newToken string) {
 	<section class="mt-12">
 		<h2 class="text-xl font-bold">CLI tokens</h2>
-		<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Authenticate the <code>duck</code> CLI without a browser session.</p>
-		<pre class="mt-3 overflow-x-auto bg-slate-900 px-3 py-2 text-sm text-slate-100"><code>go install ./cmd/duck
-
-duck pull &lt;course&gt;/&lt;language&gt;   # scaffold challenges into a local dir
-duck test &lt;challenge-slug&gt;      # run tests locally, no submission
-duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (needs a token below)</code></pre>
+		<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+			Authenticate the <code>duck</code> CLI without a browser session.
+			<a href="/tokens" class="text-emerald-600 hover:underline dark:text-emerald-400">More about tokens →</a>
+		</p>
+		<pre class="mt-3 overflow-x-auto border border-slate-800 bg-slate-900 px-4 py-3 font-mono text-sm leading-relaxed text-slate-100"><code>@bashHTML(
+			"# install the duck CLI (from a repo checkout)",
+			"go install ./cmd/duck",
+			"",
+			"# scaffold a course's challenges into a local directory",
+			"duck pull <course>/<language>",
+			"",
+			"# run tests locally — nothing is submitted",
+			"duck test <challenge-slug>",
+			"",
+			"# run tests and submit; scored immediately (needs a token below)",
+			"duck submit <challenge-slug>",
+		)</code></pre>
 		<p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
 			Set <code>DUCK_TOKEN</code> or save the token to <code>~/.config/duck/token</code>.
 		</p>
@@ -124,25 +203,39 @@ duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (
 				<code class="mt-1 block break-all font-mono text-emerald-900 dark:text-emerald-200">{ newToken }</code>
 			</div>
 		}
-		if len(tokens) > 0 {
+		if active := activeTokens(tokens); len(active) > 0 {
 			<div class="mt-4 flex flex-col gap-2">
-				for _, t := range tokens {
-					<div class="flex items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
-						<span>
-							{ t.Name }
-							if t.RevokedAt != nil {
-								<span class="ml-2 text-slate-400 dark:text-slate-500">revoked</span>
-							}
+				for _, t := range active {
+					<div class="flex flex-wrap items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+						<span class="flex flex-wrap items-baseline gap-x-3">
+							<span class="font-medium">{ t.Name }</span>
+							<span class="font-mono text-xs text-slate-500 dark:text-slate-400">created { t.CreatedAt.Format(tokenDateFormat) }</span>
 						</span>
-						if t.RevokedAt == nil {
-							<form method="post" action={ templ.SafeURL(fmt.Sprintf("/profile/tokens/%d/revoke", t.ID)) }>
-								@csrfField()
-								<button type="submit" class="text-red-600 hover:underline dark:text-red-400">Revoke</button>
-							</form>
-						}
+						<form method="post" action={ templ.SafeURL(fmt.Sprintf("/profile/tokens/%d/revoke", t.ID)) }>
+							@csrfField()
+							<button type="submit" class="text-red-600 hover:underline dark:text-red-400">Revoke</button>
+						</form>
 					</div>
 				}
 			</div>
+		}
+		if revoked := revokedTokens(tokens); len(revoked) > 0 {
+			<details class="mt-3">
+				<summary class="cursor-pointer text-sm text-slate-500 select-none hover:text-slate-700 dark:hover:text-slate-300">Show revoked tokens ({ fmt.Sprint(len(revoked)) })</summary>
+				<div class="mt-2 flex flex-col gap-2">
+					for _, t := range revoked {
+						<div class="flex flex-wrap items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-sm opacity-60 dark:border-slate-800">
+							<span class="flex flex-wrap items-baseline gap-x-3">
+								<span class="font-medium">{ t.Name }</span>
+								<span class="font-mono text-xs text-slate-500 dark:text-slate-400">
+									created { t.CreatedAt.Format(tokenDateFormat) } · revoked { t.RevokedAt.Format(tokenDateFormat) }
+								</span>
+							</span>
+							<span class="text-xs tracking-wide text-slate-400 uppercase dark:text-slate-500">revoked</span>
+						</div>
+					}
+				</div>
+			</details>
 		}
 		<form method="post" action="/profile/tokens" class="mt-4 flex items-end gap-2">
 			@csrfField()
@@ -154,6 +247,47 @@ duck submit &lt;challenge-slug&gt;    # run tests + submit; score is immediate (
 			<button type="submit" class="bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Create CLI token</button>
 		</form>
 	</section>
+}
+
+const tokenDateFormat = "Jan 2, 2006"
+
+func activeTokens(tokens []domain.UserToken) []domain.UserToken {
+	var out []domain.UserToken
+	for _, t := range tokens {
+		if t.RevokedAt == nil {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func revokedTokens(tokens []domain.UserToken) []domain.UserToken {
+	var out []domain.UserToken
+	for _, t := range tokens {
+		if t.RevokedAt != nil {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// bashHTML renders shell lines for a <pre> block, dimming comment lines the
+// way a highlighter would. Lines are HTML-escaped here, then emitted as one
+// raw blob — templ's whitespace normalization can't be trusted inside <pre>.
+func bashHTML(lines ...string) templ.Component {
+	var b strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		esc := html.EscapeString(line)
+		if strings.HasPrefix(line, "#") {
+			b.WriteString(`<span class="text-slate-500">` + esc + `</span>`)
+		} else {
+			b.WriteString(esc)
+		}
+	}
+	return templ.Raw(b.String())
 }
 
 func percent(earned, possible int) int {

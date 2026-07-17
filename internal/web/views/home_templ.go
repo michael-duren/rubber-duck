@@ -20,8 +20,10 @@ import (
 // the output — and each section owns one color of the site's ANSI palette
 // (amber = points, violet = depth, cyan = languages, emerald = the prompt).
 // featured is a small slice of real catalog courses for the teaser strip;
-// empty is fine (the strip is skipped).
-func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
+// empty is fine (the strip is skipped). resume/progress personalize the
+// page for logged-in users: a "pick up where you left off" banner up top
+// and lesson-progress bars on any featured card they've started.
+func Home(user *domain.User, featured []domain.CourseSummary, resume *domain.VariantProgress, progress map[string]domain.VariantProgress) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -54,35 +56,53 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "   <script>document.documentElement.classList.add(\"js\")</script> <section class=\"hero-aura py-14 text-center sm:py-20\"><p class=\"reveal font-mono text-sm text-emerald-600 dark:text-emerald-400\">$ man duck <span class=\"tui-cursor\" aria-hidden=\"true\">▊</span></p><h1 class=\"reveal mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-6xl\" style=\"--reveal-delay:.08s\">Software isn't magic.<br><span class=\"text-emerald-600 dark:text-emerald-400\">Build it and see.</span></h1><p class=\"reveal mx-auto mt-6 max-w-2xl text-lg text-slate-600 dark:text-slate-400\" style=\"--reveal-delay:.16s\">Rubber Duck courses make you build the things you use every day — hash maps, databases, terminals, whole operating systems — in real code, graded by real test suites.</p><div class=\"reveal mt-8 flex flex-wrap items-center justify-center gap-3\" style=\"--reveal-delay:.24s\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "   <script>document.documentElement.classList.add(\"js\")</script> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if resume != nil {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"mt-6\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = resumeBanner(resume).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, " <section class=\"hero-aura py-14 text-center sm:py-20\"><p class=\"reveal font-mono text-sm text-emerald-600 dark:text-emerald-400\">$ man duck <span class=\"tui-cursor\" aria-hidden=\"true\">▊</span></p><h1 class=\"reveal mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-6xl\" style=\"--reveal-delay:.08s\">Software isn't magic.<br><span class=\"text-emerald-600 dark:text-emerald-400\">Build it and see.</span></h1><p class=\"reveal mx-auto mt-6 max-w-2xl text-lg text-slate-600 dark:text-slate-400\" style=\"--reveal-delay:.16s\">Rubber Duck courses make you build the things you use every day — hash maps, databases, terminals, whole operating systems — in real code, graded by real test suites.</p><div class=\"reveal mt-8 flex flex-wrap items-center justify-center gap-3\" style=\"--reveal-delay:.24s\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if user == nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<a href=\"/signup\" class=\"bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500\">Create free account</a> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<a href=\"/signup\" class=\"bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500\">Create free account</a> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<a href=\"/courses\" class=\"bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500\">Pick your next course</a> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<a href=\"/courses\" class=\"bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500\">Pick your next course</a> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<a href=\"/courses\" class=\"border border-slate-300 px-5 py-3 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400\">$ browse courses</a></div><p class=\"reveal mt-4 font-mono text-xs text-slate-500 dark:text-slate-500\" style=\"--reveal-delay:.3s\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<a href=\"/courses\" class=\"border border-slate-300 px-5 py-3 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400\">$ browse courses</a></div><p class=\"reveal mt-4 font-mono text-xs text-slate-500 dark:text-slate-500\" style=\"--reveal-delay:.3s\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs("// free · no email required · browser or terminal")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 42, Col: 161}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 49, Col: 161}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</p><div class=\"reveal tui-frame mt-12 border border-slate-300 dark:border-slate-800\" style=\"--reveal-delay:.38s\"><img src=\"/static/img/home/hero.svg\" alt=\"A terminal session: duck pull scaffolds a course, duck submit runs its tests and awards points, and an ASCII rubber duck asks you to explain it\" width=\"960\" height=\"320\" class=\"w-full\"></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p><div class=\"reveal tui-frame mt-12 border border-slate-300 dark:border-slate-800\" style=\"--reveal-delay:.38s\"><img src=\"/static/img/home/hero.svg\" alt=\"A terminal session: duck pull scaffolds a course, duck submit runs its tests and awards points, and an ASCII rubber duck asks you to explain it\" width=\"960\" height=\"320\" class=\"w-full\"></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -98,7 +118,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Every lesson ends in a challenge: a prompt, starter code, and a test suite with teeth. Your code compiles and runs in an isolated sandbox — no multiple choice, no fill-in-the-blank.</p><ul class=\"mt-5 space-y-2 font-mono text-sm text-slate-700 dark:text-slate-300\"><li><span class=\"text-amber-600 dark:text-amber-400\">[1]</span> pick a course, read the lesson</li><li><span class=\"text-amber-600 dark:text-amber-400\">[2]</span> make the tests pass</li><li><span class=\"text-amber-600 dark:text-amber-400\">[3]</span> collect the points — best submission counts</li></ul>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Every lesson ends in a challenge: a prompt, starter code, and a test suite with teeth. Your code compiles and runs in an isolated sandbox — no multiple choice, no fill-in-the-blank.</p><ul class=\"mt-5 space-y-2 font-mono text-sm text-slate-700 dark:text-slate-300\"><li><span class=\"text-amber-600 dark:text-amber-400\">[1]</span> pick a course, read the lesson</li><li><span class=\"text-amber-600 dark:text-amber-400\">[2]</span> make the tests pass</li><li><span class=\"text-amber-600 dark:text-amber-400\">[3]</span> collect the points — best submission counts</li></ul>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -114,7 +134,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -130,7 +150,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">The catalog is a ladder. Near the top: your first CLI, a chatbot, a hash map. Near the bottom: a database with its own B-tree, Raft consensus, an operating system that boots from power-on to a shell prompt you wrote.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Climb at your own pace — every level down, there's less magic left between you and the machine.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">The catalog is a ladder. Near the top: your first CLI, a chatbot, a hash map. Near the bottom: a database with its own B-tree, Raft consensus, an operating system that boots from power-on to a shell prompt you wrote.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Climb at your own pace — every level down, there's less magic left between you and the machine.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -146,7 +166,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -162,7 +182,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Many courses ship in several language variants. Learn the idea in Python or Go, then take the same course again in C and meet the pointers the runtime was hiding from you.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Same concepts, same challenges — a different altitude each time.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Many courses ship in several language variants. Learn the idea in Python or Go, then take the same course again in C and meet the pointers the runtime was hiding from you.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Same concepts, same challenges — a different altitude each time.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -178,7 +198,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -194,7 +214,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">The <span class=\"font-mono\">duck</span> CLI pulls a course's challenges to your machine and runs the real test suite with your own toolchain. Submit, and your points land instantly — the server re-runs your code in the background and stamps it verified.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Prefer the browser? Edit and submit right on the lesson page. Nothing to install.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">The <span class=\"font-mono\">duck</span> CLI pulls a course's challenges to your machine and runs the real test suite with your own toolchain. Submit, and your points land instantly — the server re-runs your code in the background and stamps it verified.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">Prefer the browser? Edit and submit right on the lesson page. Nothing to install.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -210,7 +230,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -226,7 +246,7 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Every course is a plain markdown document, authored and revised by AI agents, reviewed in pull requests, and published through an API. Find a mistake in a lesson? It gets fixed the way a bug gets fixed.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">That's also why the catalog keeps growing — publishing a great course costs a document, not a video studio.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<p class=\"mt-4 text-slate-600 dark:text-slate-400\">Every course is a plain markdown document, authored and revised by AI agents, reviewed in pull requests, and published through an API. Find a mistake in a lesson? It gets fixed the way a bug gets fixed.</p><p class=\"mt-4 text-slate-600 dark:text-slate-400\">That's also why the catalog keeps growing — publishing a great course costs a document, not a video studio.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -242,82 +262,82 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(featured) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<section class=\"border-t border-slate-200 py-16 dark:border-slate-800\"><p class=\"reveal font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<section class=\"border-t border-slate-200 py-16 dark:border-slate-800\"><p class=\"reveal font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs("// fresh from the catalog")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 136, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 143, Col: 114}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p><div class=\"mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</p><div class=\"mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for i, c := range featured {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var10 templ.SafeURL
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/courses/" + c.Slug))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 140, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 147, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" class=\"reveal tui-frame group flex flex-col border border-slate-300 bg-white transition hover:border-emerald-500 dark:border-slate-800 dark:bg-[#0e1410] dark:hover:border-emerald-500\" style=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" class=\"reveal tui-frame group flex flex-col border border-slate-300 bg-white transition hover:border-emerald-500 dark:border-slate-800 dark:bg-[#0e1410] dark:hover:border-emerald-500\" style=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("--reveal-delay:%.2fs", 0.08*float64(i)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 142, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 149, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\"><img src=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"><img src=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue("/courses/" + c.Slug + "/card.svg")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 144, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 151, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" alt=\"\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"block w-full border-b border-slate-300 dark:border-slate-800\"><div class=\"flex flex-1 flex-col p-5\"><h3 class=\"text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" alt=\"\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"block w-full border-b border-slate-300 dark:border-slate-800\"><div class=\"flex flex-1 flex-col p-5\"><h3 class=\"text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(c.Title)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 146, Col: 114}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 153, Col: 114}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</h3><div class=\"mt-auto flex items-center justify-between pt-4\"><span class=\"flex gap-1.5\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</h3><div class=\"mt-auto flex items-center justify-between pt-4\"><span class=\"flex gap-1.5\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -327,55 +347,65 @@ func Home(user *domain.User, featured []domain.CourseSummary) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if c.DurationHours > 0 {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"font-mono text-xs text-slate-500 dark:text-slate-400\">~")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"font-mono text-xs text-slate-500 dark:text-slate-400\">~")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var14 string
 						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%g", c.DurationHours))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 154, Col: 114}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 161, Col: 114}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "h</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "h</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div></div></a>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if p, ok := progress[c.Slug]; ok {
+						templ_7745c5c3_Err = lessonProgress(p).Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div></a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div><p class=\"reveal mt-6 text-center\"><a href=\"/courses\" class=\"font-mono text-sm text-emerald-600 hover:underline dark:text-emerald-400\">$ duck ls --all →</a></p></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><p class=\"reveal mt-6 text-center\"><a href=\"/courses\" class=\"font-mono text-sm text-emerald-600 hover:underline dark:text-emerald-400\">$ duck ls --all →</a></p></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " <section class=\"border-t border-slate-200 py-20 dark:border-slate-800\"><div class=\"reveal tui-frame mx-auto max-w-3xl border border-slate-300 bg-white p-8 text-center sm:p-12 dark:border-slate-800 dark:bg-[#0e1410]\"><p class=\"font-mono text-sm text-emerald-600 dark:text-emerald-400\">$ duck signup</p><h2 class=\"mt-4 text-3xl font-bold tracking-tight\">Username. Password. That's&nbsp;it.</h2><p class=\"mx-auto mt-4 max-w-md text-slate-600 dark:text-slate-400\">No email, no card, no trial clock. Your first passing test suite is about ten minutes away.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, " <section class=\"border-t border-slate-200 py-20 dark:border-slate-800\"><div class=\"reveal tui-frame mx-auto max-w-3xl border border-slate-300 bg-white p-8 text-center sm:p-12 dark:border-slate-800 dark:bg-[#0e1410]\"><p class=\"font-mono text-sm text-emerald-600 dark:text-emerald-400\">$ duck signup</p><h2 class=\"mt-4 text-3xl font-bold tracking-tight\">Username. Password. That's&nbsp;it.</h2><p class=\"mx-auto mt-4 max-w-md text-slate-600 dark:text-slate-400\">No email, no card, no trial clock. Your first passing test suite is about ten minutes away.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if user == nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<a href=\"/signup\" class=\"mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500\">Create free account</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<a href=\"/signup\" class=\"mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500\">Create free account</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<a href=\"/courses\" class=\"mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500\">Browse the catalog</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<a href=\"/courses\" class=\"mt-6 inline-block bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-500\">Browse the catalog</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div></section>   <script>\n\t\t\t(() => {\n\t\t\t\tconst els = document.querySelectorAll(\".reveal\");\n\t\t\t\tif (!(\"IntersectionObserver\" in window) || matchMedia(\"(prefers-reduced-motion: reduce)\").matches) {\n\t\t\t\t\tels.forEach((el) => el.classList.add(\"reveal-in\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst io = new IntersectionObserver((entries) => {\n\t\t\t\t\tfor (const entry of entries) {\n\t\t\t\t\t\tif (entry.isIntersecting) {\n\t\t\t\t\t\t\tentry.target.classList.add(\"reveal-in\");\n\t\t\t\t\t\t\tio.unobserve(entry.target);\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}, { threshold: 0.15, rootMargin: \"0px 0px -8% 0px\" });\n\t\t\t\tels.forEach((el) => io.observe(el));\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></section>   <script>\n\t\t\t(() => {\n\t\t\t\tconst els = document.querySelectorAll(\".reveal\");\n\t\t\t\tif (!(\"IntersectionObserver\" in window) || matchMedia(\"(prefers-reduced-motion: reduce)\").matches) {\n\t\t\t\t\tels.forEach((el) => el.classList.add(\"reveal-in\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst io = new IntersectionObserver((entries) => {\n\t\t\t\t\tfor (const entry of entries) {\n\t\t\t\t\t\tif (entry.isIntersecting) {\n\t\t\t\t\t\t\tentry.target.classList.add(\"reveal-in\");\n\t\t\t\t\t\t\tio.unobserve(entry.target);\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}, { threshold: 0.15, rootMargin: \"0px 0px -8% 0px\" });\n\t\t\t\tels.forEach((el) => io.observe(el));\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -413,7 +443,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<section class=\"grid items-center gap-8 border-t border-slate-200 py-16 sm:py-20 md:grid-cols-2 md:gap-14 dark:border-slate-800\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<section class=\"grid items-center gap-8 border-t border-slate-200 py-16 sm:py-20 md:grid-cols-2 md:gap-14 dark:border-slate-800\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -422,7 +452,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -435,7 +465,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -444,7 +474,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<p class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -457,33 +487,33 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(eyebrow)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 211, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 221, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</p><h2 class=\"mt-3 text-3xl font-bold tracking-tight\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</p><h2 class=\"mt-3 text-3xl font-bold tracking-tight\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(heading)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 212, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 222, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</h2>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -491,7 +521,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -500,7 +530,7 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<div class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -513,33 +543,33 @@ func homeFeature(eyebrow, eyebrowColor, heading, art, artAlt string, flip bool) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" style=\"--reveal-delay:.12s\"><img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" style=\"--reveal-delay:.12s\"><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(art)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 216, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 226, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" alt=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" alt=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(artAlt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 216, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/home.templ`, Line: 226, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"w-full\"></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" width=\"640\" height=\"256\" loading=\"lazy\" class=\"w-full\"></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

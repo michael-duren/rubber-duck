@@ -8,7 +8,7 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
-templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLangs []string, activeTags []string, activeLang, query string) {
+templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLangs []string, activeTags []string, activeLang, query string, resume *domain.VariantProgress, progress map[string]domain.VariantProgress) {
 	@Layout("Courses", user) {
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
@@ -19,6 +19,11 @@ templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLan
 				<a href="/courses/new" class="border border-slate-300 px-3 py-2 font-mono text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ New course</a>
 			}
 		</div>
+		if resume != nil {
+			<div class="mt-6">
+				@resumeBanner(resume)
+			</div>
+		}
 		// One GET form drives all filtering. htmx swaps only #catalog-results
 		// (the handler returns that fragment for HX-Request); Alpine holds the
 		// filter state so the flag dropdowns and reset button stay live after
@@ -80,12 +85,14 @@ templ Catalog(user *domain.User, courses []domain.CourseSummary, allTags, allLan
 				}
 			</noscript>
 		</form>
-		@CatalogResults(courses, query, activeTags, activeLang)
+		@CatalogResults(courses, query, activeTags, activeLang, progress)
 	}
 }
 
 // CatalogResults is the htmx swap target: result count plus the course grid.
-templ CatalogResults(courses []domain.CourseSummary, query string, activeTags []string, activeLang string) {
+// progress carries the logged-in user's per-course lesson completion (empty
+// for anonymous visitors) so started courses show a progress bar.
+templ CatalogResults(courses []domain.CourseSummary, query string, activeTags []string, activeLang string, progress map[string]domain.VariantProgress) {
 	<div id="catalog-results" class="mt-6">
 		// Styled like a code comment — it is one, syntactically.
 		<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ resultLine(len(courses), query, activeTags, activeLang) }</p>
@@ -120,6 +127,9 @@ templ CatalogResults(courses []domain.CourseSummary, query string, activeTags []
 									<span class="font-mono text-xs">~{ fmt.Sprintf("%g", c.DurationHours) }h</span>
 								}
 							</div>
+							if p, ok := progress[c.Slug]; ok {
+								@lessonProgress(p)
+							}
 						</div>
 					</a>
 				}
@@ -208,6 +218,40 @@ templ langOption(value, label string) {
 		@click={ fmt.Sprintf("lang = %q; menu = null; $nextTick(() => $root.requestSubmit())", value) }
 		class="block w-full px-3 py-1 text-left text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-300 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300"
 	>{ label }</button>
+}
+
+// resumeBanner offers a logged-in user their most recently worked course
+// variant, styled like the rest of the site's prompt lines. Shared by the
+// home page and the catalog.
+templ resumeBanner(p *domain.VariantProgress) {
+	<a
+		href={ templ.SafeURL("/courses/" + p.CourseSlug + "/" + p.Language) }
+		class="group flex flex-wrap items-center justify-between gap-3 border border-emerald-300 bg-emerald-50 px-4 py-3 transition hover:border-emerald-500 dark:border-emerald-800 dark:bg-emerald-950/40 dark:hover:border-emerald-600"
+	>
+		<span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<span class="font-mono text-sm text-emerald-700 dark:text-emerald-400">$ duck resume</span>
+			<span class="text-sm text-slate-700 dark:text-slate-300">
+				Pick up where you left off: <span class="font-semibold">{ p.CourseTitle }</span>
+			</span>
+			@langChip(p.Language)
+			<span class="font-mono text-xs text-slate-500 dark:text-slate-400">{ fmt.Sprintf("%d/%d lessons", p.LessonsDone, p.LessonsTotal) }</span>
+		</span>
+		<span class="font-mono text-sm font-medium text-emerald-700 group-hover:underline dark:text-emerald-400">resume →</span>
+	</a>
+}
+
+// lessonProgress is the completion readout on a course card: how many
+// lessons of the user's most recently worked variant are done, plus a bar.
+templ lessonProgress(p domain.VariantProgress) {
+	<div class="pt-3">
+		<div class="flex items-center justify-between font-mono text-xs text-slate-500 dark:text-slate-400">
+			<span>{ fmt.Sprintf("%d/%d lessons complete", p.LessonsDone, p.LessonsTotal) }</span>
+			<span class="text-emerald-600 dark:text-emerald-400">{ fmt.Sprintf("%d%%", percent(p.LessonsDone, p.LessonsTotal)) }</span>
+		</div>
+		<div class="mt-1.5 h-1.5 overflow-hidden bg-slate-200 dark:bg-slate-800">
+			<div class="h-full bg-emerald-500" style={ fmt.Sprintf("width: %d%%", percent(p.LessonsDone, p.LessonsTotal)) }></div>
+		</div>
+	</div>
 }
 
 // filterState seeds the form's Alpine scope from the request's filters.

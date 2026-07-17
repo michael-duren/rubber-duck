@@ -68,13 +68,49 @@ func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {
 	slices.Sort(allTags)
 	slices.Sort(allLangs)
 
+	progress, err := h.userProgress(r)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+
 	// htmx live-search swaps only the results fragment; a history restore
 	// (back button after htmx pruned its cache) still needs the full page.
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-History-Restore-Request") != "true" {
-		h.render(w, r, views.CatalogResults(filtered, query, tags, lang))
+		h.render(w, r, views.CatalogResults(filtered, query, tags, lang, progressBySlug(progress)))
 		return
 	}
-	h.render(w, r, views.Catalog(currentUser(r), filtered, allTags, allLangs, tags, lang, query))
+	h.render(w, r, views.Catalog(currentUser(r), filtered, allTags, allLangs, tags, lang, query, resumeTarget(progress), progressBySlug(progress)))
+}
+
+// userProgress is nil for anonymous visitors: no banner, no progress bars.
+func (h *handlers) userProgress(r *http.Request) ([]domain.VariantProgress, error) {
+	user := currentUser(r)
+	if user == nil {
+		return nil, nil
+	}
+	return h.submissions.UserVariantProgress(r.Context(), user.ID)
+}
+
+// resumeTarget picks the "pick up where you left off" variant: the most
+// recently worked one (progress is ordered newest-first).
+func resumeTarget(progress []domain.VariantProgress) *domain.VariantProgress {
+	if len(progress) == 0 {
+		return nil
+	}
+	return &progress[0]
+}
+
+// progressBySlug keeps each course's most recently active variant, keyed by
+// course slug for the catalog cards; newest-first input means first wins.
+func progressBySlug(progress []domain.VariantProgress) map[string]domain.VariantProgress {
+	m := make(map[string]domain.VariantProgress, len(progress))
+	for _, p := range progress {
+		if _, ok := m[p.CourseSlug]; !ok {
+			m[p.CourseSlug] = p
+		}
+	}
+	return m
 }
 
 // hasAllTags reports whether the course carries every selected tag; an empty

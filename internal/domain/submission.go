@@ -94,3 +94,23 @@ type CourseScore struct {
 	Earned      int
 	Possible    int
 }
+
+// UserStats aggregates a user's lifetime submission activity for the
+// profile page. Counts include archived challenges — history stays valid
+// across course updates, same as CourseScore.Earned.
+type UserStats struct {
+	ChallengesSolved int // distinct challenges with a passing submission
+	TotalSubmissions int
+}
+
+// VariantProgress is a user's lesson completion in one course variant they
+// have submitted to. It powers the catalog cards' progress bars and the
+// "pick up where you left off" banner (most recent activity first).
+type VariantProgress struct {
+	CourseSlug   string
+	CourseTitle  string
+	Language     string
+	LessonsDone  int // live lessons with every live challenge passed
+	LessonsTotal int // all live lessons in the variant
+	LastActivity time.Time
+}

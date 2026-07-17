@@ -89,7 +89,12 @@ func (h *handlers) homePage(w http.ResponseWriter, r *http.Request) {
 	if len(courses) > 3 {
 		courses = courses[:3]
 	}
-	h.render(w, r, views.Home(currentUser(r), courses))
+	progress, err := h.userProgress(r)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	h.render(w, r, views.Home(currentUser(r), courses, resumeTarget(progress), progressBySlug(progress)))
 }
 
 func (h *handlers) aboutPage(w http.ResponseWriter, r *http.Request) {

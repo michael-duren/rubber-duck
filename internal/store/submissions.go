@@ -223,6 +223,74 @@ func (s *Store) UserCourseScores(ctx context.Context, userID int64) ([]domain.Co
 	return out, rows.Err()
 }
 
+// UserStats counts a user's lifetime activity in one round trip: distinct
+// challenges with a passing submission, and submissions made overall.
+func (s *Store) UserStats(ctx context.Context, userID int64) (domain.UserStats, error) {
+	var st domain.UserStats
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(DISTINCT challenge_id) FILTER (WHERE status = 'passed'),
+		       count(*)
+		FROM submissions WHERE user_id = $1`,
+		userID,
+	).Scan(&st.ChallengesSolved, &st.TotalSubmissions)
+	return st, err
+}
+
+// UserVariantProgress reports lesson completion for every variant the user
+// has submitted to, most recent activity first. A lesson counts as done
+// when every live challenge in it has a passing submission — the same rule
+// the variant page uses to draw its ✓ marks — so a lesson with no
+// challenges is never done, while the total counts all live lessons.
+func (s *Store) UserVariantProgress(ctx context.Context, userID int64) ([]domain.VariantProgress, error) {
+	rows, err := s.pool.Query(ctx, `
+		WITH touched AS (
+			SELECT ch.variant_id, max(sub.created_at) AS last_at
+			FROM submissions sub
+			JOIN challenges ch ON ch.id = sub.challenge_id
+			WHERE sub.user_id = $1
+			GROUP BY ch.variant_id
+		),
+		lesson_state AS (
+			SELECT l.variant_id,
+			       count(ch.id) AS total,
+			       count(ch.id) FILTER (WHERE EXISTS (
+			           SELECT 1 FROM submissions s2
+			           WHERE s2.challenge_id = ch.id
+			             AND s2.user_id = $1 AND s2.status = 'passed')) AS passed
+			FROM lessons l
+			JOIN touched t ON t.variant_id = l.variant_id
+			LEFT JOIN challenges ch ON ch.lesson_id = l.id AND ch.archived_at IS NULL
+			WHERE l.archived_at IS NULL
+			GROUP BY l.variant_id, l.id
+		)
+		SELECT c.slug, c.title, v.language,
+		       count(*) FILTER (WHERE ls.total > 0 AND ls.passed = ls.total),
+		       count(*),
+		       t.last_at
+		FROM lesson_state ls
+		JOIN course_variants v ON v.id = ls.variant_id
+		JOIN courses c ON c.id = v.course_id
+		JOIN touched t ON t.variant_id = ls.variant_id
+		GROUP BY c.slug, c.title, v.language, t.last_at
+		ORDER BY t.last_at DESC`,
+		userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.VariantProgress
+	for rows.Next() {
+		var p domain.VariantProgress
+		if err := rows.Scan(&p.CourseSlug, &p.CourseTitle, &p.Language,
+			&p.LessonsDone, &p.LessonsTotal, &p.LastActivity); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // LatestSubmissionCodesByVariant returns the most recent submission code for
 // each challenge in the variant that the user has attempted.
 func (s *Store) LatestSubmissionCodesByVariant(ctx context.Context, userID, variantID int64) (map[int64]string, error) {

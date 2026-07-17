@@ -122,7 +122,12 @@ func (f *fakeStore) ListUserTokens(_ context.Context, userID int64) ([]domain.Us
 	var out []domain.UserToken
 	for id, t := range f.tokens {
 		if t.userID == userID {
-			out = append(out, domain.UserToken{ID: id, Name: t.name})
+			tok := domain.UserToken{ID: id, Name: t.name}
+			if t.revoked {
+				now := time.Now()
+				tok.RevokedAt = &now
+			}
+			out = append(out, tok)
 		}
 	}
 	return out, nil
@@ -241,6 +246,26 @@ func (f *fakeStore) SubmissionForUser(_ context.Context, id, userID int64) (doma
 
 func (f *fakeStore) UserCourseScores(context.Context, int64) ([]domain.CourseScore, error) {
 	return nil, nil
+}
+
+func (f *fakeStore) UserVariantProgress(context.Context, int64) ([]domain.VariantProgress, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) UserStats(_ context.Context, userID int64) (domain.UserStats, error) {
+	var st domain.UserStats
+	solved := map[int64]bool{}
+	for _, sub := range f.submissions {
+		if sub.UserID != userID {
+			continue
+		}
+		st.TotalSubmissions++
+		if sub.Status == "passed" {
+			solved[sub.ChallengeID] = true
+		}
+	}
+	st.ChallengesSolved = len(solved)
+	return st, nil
 }
 
 func (f *fakeStore) SubmissionRateLimited(_ context.Context, userID, challengeID int64) (bool, error) {
