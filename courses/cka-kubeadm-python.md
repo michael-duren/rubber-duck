@@ -274,6 +274,25 @@ kubectl get nodes    # one node... NotReady. Correct! See below.
 
 ## The tour — learn this layout cold
 
+The kubelet (amber border) is the bootstrap: it watches
+`/etc/kubernetes/manifests/` and runs the four control-plane components as
+**static pods** — which is why editing (or breaking) a file there makes
+that component restart (or vanish).
+
+```d2
+kubelet: "kubelet\n(watches manifests/)" {style.stroke: "#fbbf24"; style.stroke-width: 2}
+pods: "static pods · kube-system" {
+  api: "kube-apiserver"
+  etcd: "etcd\n(all cluster state)"
+  sched: "scheduler"
+  ctrl: "controller-manager"
+}
+kubelet -> pods.api: runs
+kubelet -> pods.etcd: runs
+kubelet -> pods.sched: runs
+kubelet -> pods.ctrl: runs
+```
+
 The exam's troubleshooting tasks are largely "something in this layout is
 wrong, find it." Spend real time here:
 
@@ -342,6 +361,19 @@ Interface) and implements none of it. We install **Calico**: it's
 widely deployed, and — decisive for the exam — it *enforces
 NetworkPolicy*, which the simplest plugins silently don't.
 
+The dashed arrows are the one-time `kubeadm join` handshake that
+registers each worker with the control plane (violet border); the pod
+network itself is Calico's job, below.
+
+```d2
+direction: right
+cp: "cp-1\ncontrol plane" {style.stroke: "#a78bfa"; style.stroke-width: 2}
+w1: "w-1\nkubelet + pods"
+w2: "w-2\nkubelet + pods"
+w1 -> cp: "kubeadm join" {style.stroke-dash: 4}
+w2 -> cp: "kubeadm join" {style.stroke-dash: 4}
+```
+
 ## Install Calico
 
 Calico installs as an operator plus a config object. Check the [Calico
@@ -349,8 +381,8 @@ docs](https://docs.tigera.io/calico/latest/getting-started/kubernetes/)
 for the current version and substitute it below:
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/tigera-operator.yaml
-curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/custom-resources.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/tigera-operator.yaml
+curl -LO https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/custom-resources.yaml
 ```
 
 **Edit `custom-resources.yaml` before applying**: its default pod CIDR is
@@ -439,6 +471,23 @@ biggest non-troubleshooting domain. The architecture we're building is
 alongside the other components, the three etcd members form a quorum
 (majority rules — three members tolerate one failure), and a TCP load
 balancer in front makes the API reachable when any one node is down.
+
+The amber hexagon is the TCP load balancer: each `:6443` edge is a plain
+TCP forward to a healthy **apiserver**, and the etcd members stacked
+alongside them form the 2-of-3 quorum.
+
+```d2
+direction: right
+lb: "haproxy\nk8s-api:6443\n(TCP LB)" {shape: hexagon; style.stroke: "#fbbf24"; style.stroke-width: 2}
+quorum: "quorum 2/3" {
+  cp1: "cp-1\napiserver + etcd"
+  cp2: "cp-2\napiserver + etcd"
+  cp3: "cp-3\napiserver + etcd"
+}
+lb -> quorum.cp1: ":6443"
+lb -> quorum.cp2: ":6443"
+lb -> quorum.cp3: ":6443"
+```
 
 ## The load balancer
 
@@ -837,6 +886,13 @@ kubectl create role pod-reader --verb=get,list,watch --resource=pods -n dev
 kubectl create rolebinding alice-reads-pods --role=pod-reader --user=alice -n dev
 ```
 
+The cluster-wide half of the grid is the same grammar with the namespace
+dropped: `kubectl create clusterrole pod-reader --verb=get,list
+--resource=pods` and `kubectl create clusterrolebinding ... --clusterrole
+pod-reader --serviceaccount=<ns>:<sa>` (or `--user`). Reach for these when
+a task says "cluster-wide" or spans namespaces — the mock exam's
+`get`/`list` pods-everywhere ServiceAccount is exactly this shape.
+
 Your verification tool — learn it before creating anything, because it's
 also how you *check your own work* on the exam:
 
@@ -913,6 +969,22 @@ and procedures reward practice.
 
 ## etcd backup and restore — the marquee exam task
 
+`snapshot save` freezes the live cluster state (emerald cylinder) into a
+`.db` file (amber page); `snapshot restore` only unpacks that file into a
+fresh data-dir — etcd actually runs on it only after the third step,
+repointing `etcd.yaml`'s hostPath so the kubelet restarts etcd.
+
+```d2
+direction: right
+live: "live etcd" {shape: cylinder; style.stroke: "#34d399"; style.stroke-width: 2}
+snap: "snapshot.db" {shape: page; style.stroke: "#d97706"; style.stroke-width: 2}
+restored: "restored etcd\n(new data-dir)" {shape: cylinder}
+manifest: "etcd.yaml" {shape: page}
+live -> snap: "snapshot save"
+snap -> restored: "snapshot restore"
+manifest -> restored: "hostPath repoint;\nkubelet restarts"
+```
+
 All cluster state lives in etcd, so a cluster backup *is* an etcd
 snapshot. On `cp-1` (etcd speaks TLS with certs from the pki directory —
 all three flags required, a fact the exam checks by omission):
@@ -930,11 +1002,18 @@ Restore inverts it: unpack the snapshot to a *new* data directory, then
 point etcd's static pod at it:
 
 ```bash
-sudo etcdutl snapshot restore /var/backups/etcd-snap.db \
+sudo etcdctl snapshot restore /var/backups/etcd-snap.db \
   --data-dir /var/lib/etcd-restore
 ```
 
-then edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
+Restore is a local operation on the snapshot file, so — unlike the
+snapshot *save* — it needs no endpoint or cert flags. One version note:
+Ubuntu's `etcd-client` package is etcd 3.4, where `etcdctl snapshot
+restore` is the command. etcd 3.5+ moved restore into a separate
+`etcdutl` binary (`etcdutl snapshot restore`, same flags) and 3.6 dropped
+it from `etcdctl` entirely — so on a newer etcd, or the official release
+tarball that bundles both, run `etcdutl snapshot restore` instead. Then
+edit `/etc/kubernetes/manifests/etcd.yaml`'s hostPath volume from
 `/var/lib/etcd` to `/var/lib/etcd-restore` and let the kubelet restart
 it. Drill the full loop: create a marker deployment, snapshot, delete
 the deployment, restore, watch the deployment *come back*. (On your HA
@@ -1029,17 +1108,22 @@ extends itself.
 
 **Helm** — templated charts with versioned releases. Install it
 (one-line script in the Helm docs), then run one full lifecycle against
-your cluster:
+your cluster. We use **podinfo**, a tiny self-contained demo chart. A
+word on chart choice: countless tutorials reach for Bitnami charts, but
+Bitnami retired its free public image catalog in 2025, so those charts
+now deploy and then wedge on `ImagePullBackOff`. The habit that saves
+you — on the exam and in the wild — is confirming a chart's images are
+still pullable before you build on it.
 
 ```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add podinfo https://stefanprodan.github.io/podinfo
 helm repo update
-helm install mydb bitnami/postgresql --set auth.postgresPassword=drill
+helm install mydemo podinfo/podinfo --set replicaCount=2
 helm list
-helm get values mydb
-helm upgrade mydb bitnami/postgresql --set primary.persistence.size=2Gi
-helm rollback mydb 1
-helm uninstall mydb
+helm get values mydemo            # just the values you overrode
+helm upgrade mydemo podinfo/podinfo --set replicaCount=3
+helm rollback mydemo 1            # back to the 2-replica revision
+helm uninstall mydemo
 ```
 
 The exam shapes: install a given chart with specific values overridden
@@ -1192,8 +1276,9 @@ def test_checkpoint_claimed():
 # Final Challenge: The Mock Exam {#mock-exam points=50}
 
 Simulate the real thing. **Two hours on a timer**, docs allowed (only
-kubernetes.io/docs, kubernetes.io/blog, and helm.sh — the real
-allowlist), no lesson text, no old shell history. Do the tasks in any
+kubernetes.io/docs, kubernetes.io/blog, helm.sh, and
+gateway-api.sigs.k8s.io — the real CKA allowlist), no lesson text, no old
+shell history. Do the tasks in any
 order; skip and return rather than sinking time — that discipline is
 half of passing. Score a task only if it fully works.
 

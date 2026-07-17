@@ -64,6 +64,42 @@ in `runtime/proc.go`:
   An M must hold a P to run Go code; an M without a P is parked or sitting
   in a syscall.
 
+The amber ovals are Ms (OS threads); each violet box is a P holding its
+local run queue of runnable Gs.
+
+```d2
+direction: right
+
+m1: "M — OS thread" {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+m2: "M — OS thread" {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+p1: "P — local run queue" {
+  grid-rows: 1
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  g1: "G"
+  g2: "G"
+}
+p2: "P — local run queue" {
+  grid-rows: 1
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  g3: "G"
+  g4: "G"
+}
+
+m1 -- p1: "runs"
+m2 -- p2: "runs"
+```
+
 `go f()` compiles to a call to `runtime.newproc`, which allocates (or
 recycles) a `g`, seeds its `gobuf` so it will "return into" `f`, marks it
 `_Grunnable`, and drops it on the current P's run queue. That's all — the
@@ -99,8 +135,12 @@ of a WaitGroup. (The grader can't truly detect it; this is between you and
 the duck.) The intended shape is an atomic counter plus a channel used as a
 one-shot park/unpark signal: `Spawn` increments before starting the
 goroutine, a deferred decrement detects the drop to zero and wakes waiters.
-A `sync.Mutex` guarding the counter alongside a "currently idle" channel is
-also a fine design. Think hard about the classic bug: incrementing *inside*
+Reuse is the wrinkle the tests lean on: if you wake waiters by *closing* the
+channel, that channel is spent — a closed channel can't park the next round's
+waiters — so whichever `Spawn` next lifts the count off zero must install a
+fresh one. That coupling of "bump the count" and "swap the signal" is exactly
+why the other natural design is a `sync.Mutex` guarding the counter alongside
+a "currently idle" channel, updated together. Think hard about the classic bug: incrementing *inside*
 the new goroutine instead of before it starts — a `WaitAll` racing that
 increment sees zero and returns early.
 
@@ -236,6 +276,31 @@ The runtime's answer is a pair of functions you'll see all over `proc.go`:
 - **`goready`** — called by whoever unblocks it (the sender, the unlocker).
   It flips the G back to `_Grunnable` and pushes it onto a run queue. The M
   never stopped: after `gopark` it immediately picked up another runnable G.
+
+Each edge names what drives the transition — `gopark` and `goready` are the
+pair this lesson covers; a G in `_Gwaiting` sits on no run queue at all.
+
+```d2
+direction: right
+
+runnable: "_Grunnable\n(on a run queue)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+running: "_Grunning\n(owns an M)" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+waiting: "_Gwaiting\n(on no queue)" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+runnable -> running: "execute"
+running -> waiting: "gopark"
+waiting -> runnable: "goready"
+running -> runnable: "Gosched / preempt"
+```
 
 `sync.Mutex` is a consumer of this machinery: its fast path is a single
 atomic CAS (compare-and-swap: "if the value is still what I last saw, swap

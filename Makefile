@@ -3,7 +3,7 @@ TAILWIND := bin/tailwindcss
 SQL_PROXY_VERSION := v2.15.2
 SQL_PROXY := bin/cloud-sql-proxy
 
-.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish sync-courses apikey apikey-prod check clean
+.PHONY: tools generate css build duck install uninstall serve db dev runner-images test test-integration seed publish sync-courses apikey apikey-prod check clean editor-bundle
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@latest
@@ -23,6 +23,14 @@ generate:
 
 css: $(TAILWIND)
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --minify
+
+# Rebuild the vendored CodeMirror editor bundle. Unlike app.css (built in CI
+# by the tailwind standalone binary), internal/web/static/cm6.js is a
+# COMMITTED artifact — the web app has no JS bundler and CI has no Node. Run
+# this only when changing editor/src or bumping CodeMirror, then commit the
+# regenerated cm6.js. Needs Node >= 18. See editor/README.md.
+editor-bundle:
+	cd editor && npm ci && npm run build
 
 build: generate css
 	go build -o duckserver ./cmd/duckserver
