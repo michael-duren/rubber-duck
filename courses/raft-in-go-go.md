@@ -73,6 +73,32 @@ a legitimate leader (same or higher term) steps back down to follower. And
 *anyone* who sees a higher term — leader included — immediately becomes a
 follower of that term.
 
+Each state below carries a colored border — follower emerald, candidate amber,
+leader violet — and every edge is labeled with the event that triggers it.
+
+```d2
+direction: right
+
+follower: Follower {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+candidate: Candidate {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+leader: Leader {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+follower -> candidate: "election timeout"
+candidate -> candidate: "timeout: split vote"
+candidate -> leader: "wins majority"
+candidate -> follower: "current leader / new term"
+leader -> follower: "discovers higher term"
+```
+
 Majorities are why Raft works: any two majorities of the same cluster overlap
 in at least one server, so at most one candidate can win a term, and any
 elected leader has talked to at least one server that saw previous decisions.
@@ -543,6 +569,48 @@ Once elected, a leader services client requests: it appends each command to its
 own log, then replicates the entry to the followers with **AppendEntries
 RPCs** — the same RPC that, sent with no entries, doubles as the heartbeat.
 
+Below, the violet border marks the leader and the dashed edge is an
+AppendEntries still in flight; the emerald box is the commit that follows once
+a majority of the cluster stores the entry — the leader itself counts toward
+that majority.
+
+```d2
+direction: right
+
+leader: "Leader — term 3" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+  log: Log {
+    shape: sql_table
+    "1": "term 1"
+    "2": "term 3"
+    "3": "term 3 (new)"
+  }
+}
+
+fa: "Follower A" {
+  shape: sql_table
+  "1": "term 1"
+  "2": "term 3"
+  "3": "term 3"
+}
+
+fb: "Follower B" {
+  shape: sql_table
+  "1": "term 1"
+  "2": "term 3"
+}
+
+leader.log -> fa: "AppendEntries: stored"
+leader.log -> fb: "in flight" {style.stroke-dash: 4}
+
+commit: "leader + A = majority\n-> commitIndex = 3" {
+  style.stroke: "#34d399"
+  style.stroke-width: 2
+}
+leader.log -> commit: "quorum"
+```
+
 The key invariant is the **Log Matching Property** (§5.3):
 
 > If two logs contain an entry with the same index and term, then the logs are
@@ -813,7 +881,10 @@ In (b), S5 wins the next election (term 3, with votes from S3, S4, and
 itself) and writes a *different* entry at index 2. S5 crashes too; in (c),
 S1 restarts and wins election again, this time as leader of term 4 — but it
 has not accepted any new client command yet, so its log still ends at
-index 2 with the same old term-2 entry. Coming to power, S1 just resumes
+index 2 with the same old term-2 entry. (The paper's Figure 8(c) also shows
+S1 carrying an uncommitted term-4 entry at index 3; we leave that out so the
+hazard stands on its own — the danger here is entirely about the *old*
+index-2 entry, not any new one.) Coming to power, S1 just resumes
 normal replication (§5.3): retrying AppendEntries against S3 until the
 consistency check passes backfills that same old, already-existing entry
 onto S3 too. Nobody asked for that specifically; it falls out of the
@@ -984,8 +1055,8 @@ together, all become candidates together, split the vote, and repeat forever.
 Raft's fix is charmingly low-tech: **randomized election timeouts** (e.g.
 150–300 ms). Whoever draws the shortest timeout usually wins the election
 before anyone else even wakes up. The paper's own experiments (§9.3,
-"Performance") back this recommendation: shrinking the timeout range brings
-faster failover, but push it too low (well under the broadcast time) and
+"Performance") back this recommendation: lowering the election timeout speeds
+up failover, but push it too low (well under the broadcast time) and
 leaders start missing their own heartbeat deadline before followers'
 timeouts fire, causing unnecessary elections and *lower* availability — which
 is exactly the `broadcastTime << electionTimeout` half of the inequality

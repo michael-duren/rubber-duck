@@ -25,7 +25,7 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 					@lessonSidebar(course, v, l, lessonNum, completed)
 				</div>
 			</aside>
-			<div class="mx-auto min-w-0 max-w-3xl lg:mx-0 lg:flex-1">
+			<div class="mx-auto min-w-0 max-w-3xl lg:mx-0 lg:max-w-none lg:flex-1">
 				// On small screens the sidebar folds into this dropdown.
 				<details class="border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/60 lg:hidden">
 					<summary class="cursor-pointer px-4 py-3 font-mono text-sm text-slate-700 dark:text-slate-300">
@@ -42,7 +42,12 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 						@templ.Raw(l.ContentHTML)
 					</div>
 					for _, c := range l.Challenges {
-						@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID], v.Version)
+						@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID], v.Version, v.Language)
+					}
+					// Only load the editor bundle when there's a textarea for it to
+					// enhance: ChallengeCard renders the form only for signed-in users.
+					if user != nil && len(l.Challenges) > 0 {
+						@editorScript()
 					}
 					<div class="mt-10 flex justify-between border-t border-slate-200 pt-6 dark:border-slate-800">
 						<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="font-mono text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
@@ -132,9 +137,12 @@ templ Final(user *domain.User, course domain.Course, v domain.Variant, latestCod
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / final
 		</nav>
-		<article class="mx-auto mt-6 max-w-3xl">
+		<article class="mx-auto mt-6 max-w-5xl">
 			<p class="font-mono text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">★ Final Challenge</p>
-			@ChallengeCard(user, v.Final, latestCode, submissions, v.Version)
+			@ChallengeCard(user, v.Final, latestCode, submissions, v.Version, v.Language)
+			if user != nil {
+				@editorScript()
+			}
 		</article>
 	}
 }
@@ -175,10 +183,29 @@ func completedBeforeUpdate(submissions []domain.Submission, currentVersion int) 
 	return passedOlder
 }
 
+// editorCode picks the code to prefill the editor with: the user's latest
+// submission if they have one, otherwise the challenge's starter code.
+func editorCode(latestCode, starterCode string) string {
+	if latestCode != "" {
+		return latestCode
+	}
+	return starterCode
+}
+
+// editorScript loads the vendored CodeMirror bundle that enhances every
+// challenge textarea on the page. Included once per lesson/final page (like
+// poll.js on submission pages) so non-editor pages stay lightweight.
+templ editorScript() {
+	<script src="/static/cm6.js"></script>
+}
+
 // ChallengeCard shows a challenge prompt with the code submission form.
 // variantVersion is the variant's current content version, compared against
 // each submission's stamped version for the completed-before-update notice.
-templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, submissions []domain.Submission, variantVersion int) {
+// lang is the variant's language, forwarded to the editor for syntax
+// highlighting (data-language); the CodeMirror enhancement is loaded once per
+// page by editorScript.
+templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, submissions []domain.Submission, variantVersion int, lang string) {
 	<section class="tui-frame mt-8 border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-[#0e1410]">
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-xl font-semibold">
@@ -198,24 +225,21 @@ templ ChallengeCard(user *domain.User, c domain.Challenge, latestCode string, su
 			<form method="post" action={ templ.SafeURL(fmt.Sprintf("/challenges/%d/submissions", c.ID)) } class="mt-4">
 				@csrfField()
 				<label class="text-sm font-medium" for={ fmt.Sprintf("code-%d", c.ID) }>Your solution</label>
-				// The editor is a terminal: dark phosphor in both themes.
-				if latestCode != "" {
-					<textarea
-						id={ fmt.Sprintf("code-%d", c.ID) }
-						name="code"
-						rows="14"
-						spellcheck="false"
-						class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
-					>{ latestCode }</textarea>
-				} else {
-					<textarea
-						id={ fmt.Sprintf("code-%d", c.ID) }
-						name="code"
-						rows="14"
-						spellcheck="false"
-						class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
-					>{ c.StarterCode }</textarea>
-				}
+				// The editor is a terminal: dark phosphor in both themes. When
+				// cm6.js loads it enhances this textarea into CodeMirror (see
+				// data-editor / data-language); without JS the textarea still
+				// submits. data-mobile-notice: on phone widths, swap the form
+				// for a "use a bigger screen" note instead of mounting.
+				<textarea
+					id={ fmt.Sprintf("code-%d", c.ID) }
+					name="code"
+					rows="14"
+					spellcheck="false"
+					data-editor
+					data-mobile-notice
+					data-language={ lang }
+					class="mt-2 w-full border border-slate-400 bg-[#0b0f0d] p-3 font-mono text-sm text-slate-100 caret-emerald-400 outline-none focus:border-emerald-500 dark:border-slate-700"
+				>{ editorCode(latestCode, c.StarterCode) }</textarea>
 				<button type="submit" class="mt-3 bg-emerald-600 px-4 py-2 font-mono font-medium text-white hover:bg-emerald-500">▶ Run tests</button>
 			</form>
 			if len(submissions) > 0 {

@@ -74,6 +74,32 @@ the state, no screen required. Every graded challenge in this course works
 that way, and the final challenge drives a whole editor core with synthetic
 keystrokes and mouse clicks.
 
+The solid arrows run once per event — the loop blocks in the violet oval
+until something happens; the dashed arrow to the red oval is the one event
+that breaks out of it (`running = false`).
+
+```d2
+direction: right
+
+wait: "wait_for_next_event()" {
+  shape: oval
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+dispatch: "handle(ev)\ndispatch by type"
+update: "update state,\nrepaint if needed"
+quit: "running = false" {
+  shape: oval
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+
+wait -> dispatch: "event"
+dispatch -> update
+update -> wait: "loop"
+dispatch -> quit: "Quit" {style.stroke-dash: 4}
+```
+
 ### The event queue is a real queue
 
 Events arrive faster than you handle them — the X server doesn't wait for
@@ -2685,6 +2711,34 @@ byte of text. The costs follow: insertion copies `s.size()` bytes into
 the add buffer plus O(pieces) list work — never O(document). A 500 MB
 file with one typo fixed is two buffers and three pieces.
 
+Each piece is an arrow into a span of one immutable buffer; the emerald
+arrow is the only piece that reads from the add buffer.
+
+```d2
+direction: right
+
+pieces: "piece list (the document)" {
+  shape: sql_table
+  p0: "original · start 0 · len 10 · \"the quick \""
+  p1: "add · start 0 · len 6 · \"brown \""
+  p2: "original · start 10 · len 3 · \"fox\""
+}
+
+orig: "original buffer (read-only)" {
+  shape: sql_table
+  t: "\"the quick fox\""
+}
+
+add: "add buffer (append-only)" {
+  shape: sql_table
+  t: "\"brown \""
+}
+
+pieces.p0 -> orig.t
+pieces.p1 -> add.t {style.stroke: "#34d399"; style.stroke-width: 2}
+pieces.p2 -> orig.t
+```
+
 The design rewards you three more times downstream:
 
 - **Undo is nearly free.** Since buffers never change, any prior document
@@ -3630,10 +3684,10 @@ Implement `wrap_line` per the algorithm above.
 - Break opportunities are *after each space* (`' '` only — no tabs here).
 - On overflow (running width + next char's width **>** `max_width`, and
   the row is non-empty): break at the last opportunity after the row
-  start if there is one, else before the current character. The space
-  ending an upper row may overhang `max_width`... no — the space was
-  *counted* when scanned; it can trigger overflow itself and wrap like
-  any character.
+  start if there is one, else before the current character. A space is
+  not free: it is measured like any other character when scanned, so
+  there is no "hanging space" exemption from the width budget — a run of
+  spaces can itself overflow and wrap (see `test_spaces_wrap_too`).
 - An empty line yields exactly one row, `{0, 0}`. All rows are
   contiguous: each begins where the previous ended, the first at 0, the
   last ending at `line.size()`.
@@ -5318,11 +5372,12 @@ challenge, pure logic, no server needed.
 Independent of transport, the three commands are selection-and-text
 algebra with firm conventions users rely on:
 
-- **Copy** with a non-empty selection stores its text; the selection
-  stays (you can copy, then keep typing to replace — er, no: copy does
-  *not* collapse the selection; watch any editor). Copy with an *empty*
-  selection is a no-op that must **not** clear the clipboard — nothing
-  is more rage-inducing than losing a clipboard to a stray Ctrl+C.
+- **Copy** with a non-empty selection stores its text and leaves the
+  document untouched — copy never collapses the selection, so the
+  highlight stays put and you can keep working with it (watch any
+  editor). Copy with an *empty* selection is a no-op that must **not**
+  clear the clipboard — nothing is more rage-inducing than losing a
+  clipboard to a stray Ctrl+C.
 - **Cut** = copy + delete selection + caret collapses where the text
   was.
 - **Paste** replaces the selection (if any) with the clipboard, caret

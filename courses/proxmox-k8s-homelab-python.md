@@ -58,6 +58,33 @@ over your home network. Kubernetes doesn't care that its nodes live on two
 different hypervisors — to it they're just machines that can reach each
 other.
 
+The violet box is the cluster's brain; the grey box is the services on
+`pve-main` that stay untouched. The dashed arrows are the control plane
+managing workers *across* the two hypervisors, over your LAN.
+
+```d2
+direction: right
+
+main: "pve-main\nhypervisor" {
+  jelly: "Jellyfin\n+ services" {
+    style.stroke: "#9ca3af"
+    style.font-color: "#9ca3af"
+  }
+  cp: "k8s-cp-1\ncontrol plane\napi · scheduler · etcd" {
+    style.stroke: "#a78bfa"
+    style.stroke-width: 2
+  }
+}
+
+worker: "pve-worker\nhypervisor" {
+  w1: "k8s-w-1\nworker"
+  w2: "k8s-w-2\nworker"
+}
+
+main.cp -> worker.w1: manages {style.stroke-dash: 4}
+main.cp -> worker.w2: manages {style.stroke-dash: 4}
+```
+
 ## Why VMs on Proxmox instead of Kubernetes on bare metal?
 
 You could install Kubernetes directly on both machines. Don't — at least
@@ -288,6 +315,24 @@ Note the node's own IP lives on the *bridge*, not the NIC — the NIC is
 installer got it right — but when a VM config says `bridge=vmbr0`, this
 is the switch it's plugging into.
 
+`vmbr0` is a virtual switch (cyan border): the node's own IP lives on the
+bridge, each VM's virtual NIC (the ovals) is a port on it, and the
+physical NIC is the port actually cabled to your LAN — the
+`bridge-ports enp3s0` line above. No NAT anywhere.
+
+```d2
+direction: right
+cp: "cp-1 vnic" {shape: oval}
+jf: "Jellyfin VM\nvnic" {shape: oval}
+br: "vmbr0\nLinux bridge\n.10" {style.stroke: "#22d3ee"; style.stroke-width: 2}
+nic: "enp3s0\nphysical NIC"
+lan: "home LAN\n192.168.1.0/24" {shape: cloud}
+cp -> br
+jf -> br
+br -> nic: "bridge-ports"
+nic -> lan
+```
+
 If you have the second machine already, repeat this lesson on it now
 (`pve-worker`, `192.168.1.11`). If not, carry on — everything until the
 Kubernetes section works with one node.
@@ -466,7 +511,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.70"
+      version = "~> 0.111.0"
     }
   }
 }
@@ -482,6 +527,23 @@ provider "proxmox" {
   }
 }
 ```
+
+That `version` line earns a closer look, because `bpg/proxmox` is still a
+`0.x` provider. Semver's promise — "no breaking changes without a major
+version bump" — only switches on at `1.0`; below that, `0.112` is allowed
+to rename or remove an attribute that `0.111` accepted, and this provider
+does move fast. So the pin matters. Terraform's `~>` (the *pessimistic*
+operator) treats the **last** number you write as the only one it may
+increment: `~> 0.111.0` means ">= 0.111.0, < 0.112.0" — you pick up bugfix
+patches on `terraform init` but never a surprise minor. Drop a digit to
+`~> 0.111` and that last number becomes the minor, so `init` would happily
+jump you to `0.150` and possibly break your config out from under you.
+That's exactly the trap a naive `~> 0.70` falls into: it resolves to
+"< 1.0", so a fresh `init` pulls whatever `0.x` is newest today, not a
+`0.70`. Pin the minor here, and let the `.terraform.lock.hcl` file that
+`init` generates (commit it — it's not under the `.terraform/` dir you
+gitignore below) freeze the exact build your teammates and future self
+resolve to.
 
 The `ssh` block is a quirk of this provider worth knowing: a few
 operations (uploading cloud-init snippet files, some disk imports) aren't
@@ -1072,6 +1134,26 @@ to end: **your infrastructure is a git repo, and reality is disposable.**
 Everything from here on builds on that being actually true, not
 aspirationally true.
 
+Here's the chain you've built — every solid arrow is a command, and none
+of it required touching a machine by hand. The ovals are the chain's two
+ends: the frozen template it starts from, and (greyed, dashed) where it's
+headed — the k3s cluster the Kubernetes section installs next. Terraform's
+clone step is amber:
+
+```d2
+direction: right
+tpl: "cloud-init\ntemplate\n(frozen)" {shape: oval}
+tf: "terraform\nclone N VMs" {style.stroke: "#d97706"; style.stroke-width: 2}
+ans: "ansible\nbaseline"
+k3s: "k3s cluster\n(next section)" {
+  shape: oval
+  style.stroke-dash: 4
+  style.font-color: "#9ca3af"
+}
+tpl -> tf -> ans
+ans -> k3s: {style.stroke-dash: 4}
+```
+
 ## Challenge: Rebuild From Nothing {#foundation-rebuild points=25}
 
 Do a full cold rebuild of the control-plane VM, from nothing to
@@ -1643,6 +1725,24 @@ The cluster exists; make it earn its electricity. We'll deploy `whoami` —
 a tiny web server that echoes back which pod served you, which makes
 replicas and self-healing *visible* — and route real HTTP to it from your
 LAN through the bundled Traefik ingress.
+
+The three rungs of the ladder you're about to write are one request path:
+your browser hits the Ingress by name (`whoami.home.lan`, the amber
+Traefik box), which forwards to a Service, which load-balances across the
+Deployment's pods wherever they landed.
+
+```d2
+direction: right
+client: "your laptop\nbrowser" {shape: oval}
+ing: "Ingress\nTraefik" {style.stroke: "#d97706"; style.stroke-width: 2}
+svc: "Service\nClusterIP"
+p1: "pod · w-1"
+p2: "pod · w-2"
+client -> ing: "whoami.home.lan"
+ing -> svc
+svc -> p1
+svc -> p2
+```
 
 Manifests are declarations, exactly like `.tf` files, so they live in the
 repo — in the `manifests/` directory that's been waiting empty since the

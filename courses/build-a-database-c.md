@@ -728,9 +728,12 @@ no power loss — the process being killed (OOM killer, Ctrl-C, a bug) is enough
 It gets subtler: the kernel and the drive may write your data back in **any
 order**. Writing bytes 0–4095 then 4096–8191 does not mean they reach the
 platter in that order. A crash can leave the *second* page written and the
-first one old — a file that's interleaved old/new garbage. This is called a
-**torn write**, and it's why "I'll just be careful about write order" doesn't
-work without explicit barriers (fsync is also an ordering barrier).
+first one old — a file that's interleaved old/new garbage. This is why "I'll just be careful about write
+order" doesn't work without explicit barriers (fsync is also an ordering
+barrier). (The single-page version of this hazard is the classic **torn
+write**, or **torn page**: one page write fractured into part-old, part-new
+because the drive's atomic unit is only a sector — the reason Postgres logs
+whole page images after each checkpoint.)
 
 ## The Fix: Write-New-Then-Rename
 
@@ -1650,6 +1653,35 @@ of thirty — and the top levels are hot enough to always be in cache, so
 usually one or two. The B-Tree is what "cache-line-friendly array" (lesson 1)
 looks like when generalized into a tree: pack as much decision-making as
 possible into each unit of I/O.
+
+The boxed table is one node — a single 4 KB page whose keys and child
+pointers interleave; each `page` shape below is the subtree a pointer leads
+to. Three keys fan out to four children, and real nodes hold hundreds:
+
+```d2
+direction: down
+
+node: "B-Tree node" {
+  shape: sql_table
+  c0: "child ptr"
+  k1: "key 25"
+  c1: "child ptr"
+  k2: "key 50"
+  c2: "child ptr"
+  k3: "key 75"
+  c3: "child ptr"
+}
+
+l0: "keys < 25" { shape: page }
+l1: "25 < keys < 50" { shape: page }
+l2: "50 < keys < 75" { shape: page }
+l3: "keys > 75" { shape: page }
+
+node.c0 -> l0
+node.c1 -> l1
+node.c2 -> l2
+node.c3 -> l3
+```
 
 We'll build the honest starter version: an index over the unique ID column,
 stored as a growing array of `{id, row_index}` pairs. Its lookup is still
@@ -2607,6 +2639,23 @@ real database's execution pipeline: **parse** the text, **validate** it,
 **plan** (here: pick the operation), **execute**, and expose results. It's a
 miniature of what happens to every SQL statement — SQLite compiles SQL to
 bytecode for a virtual machine; our "bytecode" is just a dispatch on the verb.
+
+The pipeline reads left to right; the cyan-bordered stage is the plan
+step — our whole "bytecode" is just a `switch` on the verb:
+
+```d2
+direction: right
+
+cmd: "\"INSERT\nAlice 30\"" { shape: oval }
+parse: "parse +\nvalidate"
+dispatch: "plan: pick op\n(switch on verb)" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+exec: "run table op\n-> 0 / -1" { shape: oval }
+
+cmd -> parse -> dispatch -> exec
+```
 
 All the building blocks from previous lessons are provided complete. Your work
 is the glue — and the glue is where consistency lives: LOAD must rebuild the
