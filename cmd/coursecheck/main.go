@@ -1,16 +1,19 @@
 // coursecheck validates a course markdown document offline: it runs the
-// same ingest parser the API uses, then compile-checks every challenge.
+// same ingest parser the API uses, then compile-checks every challenge
+// (languages "cpp" and "c"; others parse-check only).
 //
 // For language "cpp" the convention is: the test file does
 // `#include "solution.cpp"` and defines main(), so only the test file is
-// compiled. The starter must therefore define the full interface (with
+// compiled. For "c", solution.c and test_solution.c are separate
+// translation units compiled together, exactly like the grader runner and
+// `duck test`. Either way the starter must define the full interface (with
 // stub bodies) so the tests compile before the learner writes anything.
 //
 // Usage:
 //
 //	go run ./cmd/coursecheck [-solutions dir] courses/foo-cpp.md
 //
-// With -solutions, any <challenge-slug>.cpp found in dir replaces the
+// With -solutions, any <challenge-slug>.<ext> found in dir replaces the
 // starter and the tests must then pass (exit 0, no FAIL lines).
 package main
 
@@ -66,14 +69,15 @@ func main() {
 	fmt.Printf("INGEST OK: %d lessons, %d challenges, %d points\n",
 		len(res.Lessons), len(challenges), total)
 
-	if res.Course.Language != "cpp" {
-		fmt.Println("language is not cpp; skipping compile checks")
+	lang := res.Course.Language
+	if lang != "cpp" && lang != "c" {
+		fmt.Printf("language %q has no compile checks; done\n", lang)
 		return
 	}
 
 	failed := 0
 	for _, c := range challenges {
-		if err := checkChallenge(c, *solDir); err != nil {
+		if err := checkChallenge(lang, c, *solDir); err != nil {
 			failed++
 			fmt.Printf("FAIL %-40s %v\n", c.Slug, err)
 		} else {
@@ -87,10 +91,10 @@ func main() {
 	fmt.Println("all challenges passed")
 }
 
-func checkChallenge(c ingest.ParsedChallenge, solDir string) error {
+func checkChallenge(lang string, c ingest.ParsedChallenge, solDir string) error {
 	// Starter must compile against the tests and run to completion
 	// (failing tests are expected; crashing is not).
-	out, runErr, err := build(c.StarterCode, c.TestCode)
+	out, runErr, err := build(lang, c.StarterCode, c.TestCode)
 	if err != nil {
 		return fmt.Errorf("starter does not compile:\n%s", indent(out))
 	}
@@ -104,11 +108,11 @@ func checkChallenge(c ingest.ParsedChallenge, solDir string) error {
 	if solDir == "" {
 		return nil
 	}
-	sol, err := os.ReadFile(filepath.Join(solDir, c.Slug+".cpp"))
+	sol, err := os.ReadFile(filepath.Join(solDir, c.Slug+"."+lang))
 	if err != nil {
 		return fmt.Errorf("no reference solution: %v", err)
 	}
-	out, runErr, err = build(string(sol), c.TestCode)
+	out, runErr, err = build(lang, string(sol), c.TestCode)
 	if err != nil {
 		return fmt.Errorf("solution does not compile:\n%s", indent(out))
 	}
@@ -118,31 +122,48 @@ func checkChallenge(c ingest.ParsedChallenge, solDir string) error {
 	return nil
 }
 
-// build writes solution.cpp + test_solution.cpp, compiles the test file
-// (which #includes the solution), and runs it. Returns combined
-// compiler-or-program output, the run error, and a compile error.
-func build(solution, tests string) (string, error, error) {
+// build writes solution + tests under the language's grader file names,
+// compiles them the way that language's runner does (plus sanitizers,
+// which the runner lacks — coursecheck is the author's gate, so stricter
+// is better), and runs the binary. Returns combined compiler-or-program
+// output, the run error, and a compile error.
+func build(lang, solution, tests string) (string, error, error) {
 	dir, err := os.MkdirTemp("", "coursecheck")
 	if err != nil {
 		return "", nil, err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	if err := os.WriteFile(filepath.Join(dir, "solution.cpp"), []byte(solution), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "solution."+lang), []byte(solution), 0o644); err != nil {
 		return "", nil, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "test_solution.cpp"), []byte(tests), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "test_solution."+lang), []byte(tests), 0o644); err != nil {
 		return "", nil, err
 	}
 	bin := filepath.Join(dir, "test_bin")
-	cc := exec.Command("g++", "-std=c++20", "-Wall", "-Wextra", "-O1", "-fsanitize=address,undefined",
-		"-o", bin, "test_solution.cpp", "-pthread")
+	var cc *exec.Cmd
+	switch lang {
+	case "cpp":
+		// The test file #includes solution.cpp, so only it is compiled.
+		cc = exec.Command("g++", "-std=c++20", "-Wall", "-Wextra", "-O1", "-fsanitize=address,undefined",
+			"-o", bin, "test_solution.cpp", "-pthread")
+	case "c":
+		// Two translation units, mirroring gc-runner-c and `duck test`.
+		cc = exec.Command("cc", "-std=c17", "-Wall", "-Wextra", "-O1", "-fsanitize=address,undefined",
+			"-o", bin, "solution.c", "test_solution.c")
+	default:
+		return "", nil, fmt.Errorf("no build rule for language %q", lang)
+	}
 	cc.Dir = dir
 	if out, err := cc.CombinedOutput(); err != nil {
-		return string(out), nil, fmt.Errorf("g++: %w", err)
+		return string(out), nil, fmt.Errorf("%s: %w", cc.Path, err)
 	}
 
 	run := exec.Command(bin)
 	run.Dir = dir
+	// The graders build without ASan, where an impossibly large malloc
+	// just returns NULL; ASan's default is to abort instead. Courses test
+	// allocation-failure paths that way, so keep NULL-return semantics.
+	run.Env = append(os.Environ(), "ASAN_OPTIONS=allocator_may_return_null=1")
 	run.WaitDelay = time.Second
 	done := make(chan struct{})
 	var out []byte
