@@ -192,7 +192,7 @@ func educatorPullCmd(args []string) error {
 		return usageHelp("educator", "pull")
 	}
 
-	token, err := loadToken()
+	token, tokenSource, err := loadToken()
 	if err != nil {
 		return err
 	}
@@ -214,7 +214,7 @@ func educatorPullCmd(args []string) error {
 		return fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized: token missing or revoked")
+		return unauthorizedErr(tokenSource, baseURL)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("fetch variant: server said %s: %s", resp.Status, body)
@@ -289,7 +289,7 @@ func educatorPushCmd(args []string) error {
 		return fmt.Errorf("%d problem(s) found — fix before pushing", len(probs))
 	}
 
-	token, err := loadToken()
+	token, tokenSource, err := loadToken()
 	if err != nil {
 		return err
 	}
@@ -322,7 +322,7 @@ func educatorPushCmd(args []string) error {
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized: token missing or revoked")
+		return unauthorizedErr(tokenSource, baseURL)
 	}
 
 	var errResp struct {

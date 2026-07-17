@@ -30,16 +30,19 @@ var (
 	loginReadPassword           = func() ([]byte, error) { return term.ReadPassword(int(os.Stdin.Fd())) }
 )
 
-func loginCmd(args []string) error {
-	fs := flag.NewFlagSet("login", flag.ContinueOnError)
+func authLoginCmd(args []string) error {
+	fs := flag.NewFlagSet("auth login", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default help output
-	baseURL := fs.String("base", "https://duckgc.com", "server base URL")
+	// envOr keeps login consistent with pull/educator: before this, a
+	// DUCK_BASE_URL pointing pull at one server while login minted tokens on
+	// another was an easy way to earn a baffling 401 from `duck submit`.
+	baseURL := fs.String("base", envOr("DUCK_BASE_URL", "https://duckgc.com"), "server base URL")
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(rest) != 0 {
-		return fmt.Errorf("usage: duck login [--base URL]")
+		return fmt.Errorf("usage: duck auth login [--base URL]")
 	}
 
 	fmt.Print("username: ")
@@ -80,6 +83,13 @@ func loginCmd(args []string) error {
 	}
 
 	fmt.Printf("token saved to %s\n", tokenPath)
+	// The freshly saved token is useless while a different DUCK_TOKEN is
+	// exported: loadToken prefers the env var, so every command would keep
+	// sending the old (likely revoked) token. Say so now, at the moment the
+	// user believes they just fixed their credentials.
+	if env := os.Getenv("DUCK_TOKEN"); env != "" && env != token {
+		fmt.Println("warning: DUCK_TOKEN is set in your environment and differs from the token just saved — duck will keep using DUCK_TOKEN; unset it (or update it) to use the new token")
+	}
 	return nil
 }
 
@@ -151,7 +161,7 @@ func fetchCLIToken(client *http.Client, base, username, password string) (string
 	}
 
 	tokenReq, err := http.NewRequest("POST", base+"/profile/tokens", strings.NewReader(
-		url.Values{"name": {"duck login"}, "csrf_token": {csrfToken}}.Encode(),
+		url.Values{"name": {"duck auth login"}, "csrf_token": {csrfToken}}.Encode(),
 	))
 	if err != nil {
 		return "", err

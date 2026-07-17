@@ -17,7 +17,7 @@ func TestDocPages(t *testing.T) {
 		{"/about", []string{"About Rubber Duck", "/cli"}},
 		// The CLI page hard-codes the canonical deployment (duckgc.com),
 		// which is also the CLI's default target, so no --base is shown.
-		{"/cli", []string{"duck login", "duck pull intro-to-concurrency/go", "https://duckgc.com", "releases/latest"}},
+		{"/cli", []string{"duck auth login", "duck pull intro-to-concurrency/go", "https://duckgc.com", "releases/latest"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {

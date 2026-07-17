@@ -51,7 +51,7 @@ async function getJSON(url: string, token?: string): Promise<any> {
   }
   const resp = await fetch(url, { headers });
   if (resp.status === 401) {
-    throw new AuthError("unauthorized: token missing or revoked — run duck login");
+    throw new AuthError("unauthorized: token missing or revoked — run duck auth login");
   }
   if (!resp.ok) {
     const body = (await resp.text()).slice(0, 200);
@@ -61,7 +61,7 @@ async function getJSON(url: string, token?: string): Promise<any> {
 }
 
 // listCourses hits the authenticated catalog endpoint; a user token minted
-// by `duck login` is accepted alongside agent keys.
+// by `duck auth login` is accepted alongside agent keys.
 export async function listCourses(baseUrl: string, token: string): Promise<CourseSummary[]> {
   const data = await getJSON(`${baseUrl.replace(/\/+$/, "")}/api/v1/courses`, token);
   return data.courses ?? [];

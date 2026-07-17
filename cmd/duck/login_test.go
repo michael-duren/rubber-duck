@@ -451,7 +451,7 @@ func TestLoginCmd_EndToEnd(t *testing.T) {
 	loginStdin = bytes.NewBufferString("duckwalker\n")
 	loginReadPassword = func() ([]byte, error) { return []byte("hunter2pass"), nil }
 
-	if err := loginCmd([]string{"--base", srv.URL}); err != nil {
+	if err := authLoginCmd([]string{"--base", srv.URL}); err != nil {
 		t.Fatalf("loginCmd: %v", err)
 	}
 
@@ -483,7 +483,7 @@ func TestLoginCmd_WrongPassword_NoTokenFileWritten(t *testing.T) {
 	loginStdin = bytes.NewBufferString("duckwalker\n")
 	loginReadPassword = func() ([]byte, error) { return []byte("wrongpass"), nil }
 
-	err := loginCmd([]string{"--base", srv.URL})
+	err := authLoginCmd([]string{"--base", srv.URL})
 	if err == nil {
 		t.Fatal("loginCmd: want error for wrong password, got nil")
 	}
@@ -494,7 +494,7 @@ func TestLoginCmd_WrongPassword_NoTokenFileWritten(t *testing.T) {
 }
 
 func TestLoginCmd_UsageErrorOnExtraArgs(t *testing.T) {
-	if err := loginCmd([]string{"unexpected-positional-arg"}); err == nil {
+	if err := authLoginCmd([]string{"unexpected-positional-arg"}); err == nil {
 		t.Fatal("loginCmd: want usage error for an unexpected positional arg, got nil")
 	}
 }
@@ -504,7 +504,7 @@ func TestLoginCmd_ReadUsernameError(t *testing.T) {
 	t.Cleanup(func() { loginStdin = origStdin })
 	loginStdin = bytes.NewBufferString("") // EOF immediately
 
-	if err := loginCmd(nil); err == nil || !strings.Contains(err.Error(), "read username") {
+	if err := authLoginCmd(nil); err == nil || !strings.Contains(err.Error(), "read username") {
 		t.Fatalf("loginCmd with empty stdin: err = %v, want a \"read username\" error", err)
 	}
 }
@@ -515,13 +515,13 @@ func TestLoginCmd_ReadPasswordError(t *testing.T) {
 	loginStdin = bytes.NewBufferString("duckwalker\n")
 	loginReadPassword = func() ([]byte, error) { return nil, fmt.Errorf("inappropriate ioctl for device") }
 
-	if err := loginCmd(nil); err == nil || !strings.Contains(err.Error(), "read password") {
+	if err := authLoginCmd(nil); err == nil || !strings.Contains(err.Error(), "read password") {
 		t.Fatalf("loginCmd with failing password read: err = %v, want a \"read password\" error", err)
 	}
 }
 
 func TestLoginCmd_UnknownFlagErrorIsSurfaced(t *testing.T) {
-	err := loginCmd([]string{"--bse", "http://localhost:1"})
+	err := authLoginCmd([]string{"--bse", "http://localhost:1"})
 	if err == nil || !strings.Contains(err.Error(), "-bse") {
 		t.Fatalf("err = %v, want the flag error to name the unknown flag -bse", err)
 	}

@@ -94,7 +94,7 @@ seed:
 	done
 
 # Mint an agent API key (the gc_ kind that authenticates /api/v1 course
-# publishing — NOT the gc_u_ user tokens `duck login` mints). The raw key
+# publishing — NOT the gc_u_ user tokens `duck auth login` mints). The raw key
 # prints once; store it (e.g. as the GC_API_KEY repo secret for CD).
 KEY_NAME ?= writer-1
 
@@ -125,7 +125,7 @@ publish:
 # Diff courses/*.md against a running server and push only the variants that
 # actually differ — unlike `publish`, which re-seeds every course
 # unconditionally (and so cascade-deletes lessons/challenges/submissions even
-# for courses that never changed). Auth is the `duck login` user token, not
+# for courses that never changed). Auth is the `duck auth login` user token, not
 # GC_API_KEY: only a user-attributed caller gets the optimistic-concurrency
 # check that keeps a concurrent editor from being clobbered.
 #

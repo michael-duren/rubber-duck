@@ -55,19 +55,45 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// loadToken resolves the user's CLI token: DUCK_TOKEN env var first, then
-// ~/.config/duck/token.
-func loadToken() (string, error) {
-	if t := os.Getenv("DUCK_TOKEN"); t != "" {
-		return t, nil
-	}
+// tokenSourceEnv/tokenSourceFile name where loadToken found the token, for
+// error messages and `duck auth status` — "your token was rejected" is only
+// actionable if the user knows WHICH token was sent (a stale DUCK_TOKEN
+// silently shadows the file a fresh `duck auth login` just wrote).
+const (
+	tokenSourceEnv  = "the DUCK_TOKEN environment variable"
+	tokenSourceFile = "~/.config/duck/token"
+)
+
+// tokenFilePath returns the CLI token file path (~/.config/duck/token).
+func tokenFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("no DUCK_TOKEN set and can't find home dir: %w", err)
+		return "", err
 	}
-	b, err := os.ReadFile(filepath.Join(home, ".config", "duck", "token"))
+	return filepath.Join(home, ".config", "duck", "token"), nil
+}
+
+// loadToken resolves the user's CLI token: DUCK_TOKEN env var first, then
+// ~/.config/duck/token. source is one of the tokenSource* constants.
+func loadToken() (token, source string, err error) {
+	if t := os.Getenv("DUCK_TOKEN"); t != "" {
+		return t, tokenSourceEnv, nil
+	}
+	path, err := tokenFilePath()
 	if err != nil {
-		return "", fmt.Errorf("no DUCK_TOKEN set and no token file (%s): mint one on the profile page and set DUCK_TOKEN, or save it to ~/.config/duck/token", filepath.Join(home, ".config", "duck", "token"))
+		return "", "", fmt.Errorf("no DUCK_TOKEN set and can't find home dir: %w", err)
 	}
-	return strings.TrimSpace(string(b)), nil
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", fmt.Errorf("no DUCK_TOKEN set and no token file (%s): run `duck auth login`, or mint a token on the profile page and set DUCK_TOKEN or save it to ~/.config/duck/token", path)
+	}
+	return strings.TrimSpace(string(b)), tokenSourceFile, nil
+}
+
+// unauthorizedErr renders a 401 from the server actionably: it names the
+// token's origin and where it was sent, because "token missing or revoked"
+// alone sends people in circles when a stale DUCK_TOKEN is shadowing a
+// freshly saved token file.
+func unauthorizedErr(source, base string) error {
+	return fmt.Errorf("unauthorized: the token from %s was rejected by %s — run `duck auth status` to diagnose, `duck auth login` to fix", source, base)
 }

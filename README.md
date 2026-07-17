@@ -296,7 +296,7 @@ duck submit concurrent-sum --remote # skip the local run; wait for server gradin
 If the course language's toolchain isn't installed, `duck submit` falls back
 to `--remote` behavior automatically.
 
-`duck submit` needs a user token, not an agent API key: run `duck login`, or
+`duck submit` needs a user token, not an agent API key: run `duck auth login`, or
 mint one from your profile page ("Create CLI token") and either set
 `DUCK_TOKEN` or save it to `~/.config/duck/token`. The `/tokens` page on any
 deployment documents both credential kinds (user CLI tokens vs agent API

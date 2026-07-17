@@ -7,7 +7,7 @@
 # script diffs first and pushes only what actually changed, so an unchanged
 # course is never rewritten.
 #
-# Auth is `duck login` (the same bearer token `duck educator push` uses) —
+# Auth is `duck auth login` (the same bearer token `duck educator push` uses) —
 # it must be a user token, since only a user-attributed caller gets the
 # optimistic-concurrency check that makes this safe against concurrent edits.
 #

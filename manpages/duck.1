@@ -1,6 +1,6 @@
 .\" Manpage for duck, the Rubber Duck companion CLI.
 .\" Regenerate/review alongside cmd/duck; install with `make install`.
-.TH DUCK 1 "2026-07-08" "duck" "Rubber Duck Manual"
+.TH DUCK 1 "2026-07-17" "duck" "Rubber Duck Manual"
 .SH NAME
 duck \- local companion CLI for Rubber Duck courses
 .SH SYNOPSIS
@@ -54,10 +54,12 @@ A single graded exercise within a course, addressed by its slug (e.g.
 .TP
 .B Token
 Your API credential.
-.B duck login
+.B duck auth login
 mints and saves one; commands that write to the server
 .RB ( submit ", all of " educator )
 require it.
+.B duck auth status
+shows which token would be sent and whether the server accepts it.
 .TP
 .B Local\-first grading
 .B duck submit
@@ -96,7 +98,7 @@ code together with the claimed verdict, and prints the result immediately; the
 server audits in the background. Requires a token. If the language's toolchain
 is not installed, submit falls back to synchronous server grading.
 .TP
-.B "duck login"
+.B "duck auth login"
 Prompt for credentials, mint an API token, and save it to
 .I ~/.config/duck/token
 (mode 0600). Used by
@@ -104,7 +106,22 @@ Prompt for credentials, mint an API token, and save it to
 and the
 .B educator
 commands. Alternatively set
-.BR DUCK_TOKEN .
+.BR DUCK_TOKEN ,
+which takes precedence over the saved file whenever it is set.
+.RB ( "duck login"
+is a deprecated alias.)
+.TP
+.B "duck auth status"
+Report which token duck would send \(en
+.B DUCK_TOKEN
+wins over
+.I ~/.config/duck/token
+when both are set \(en and whether the server accepts it. Exits non\-zero if
+not. Run this first when a command answers \(lqunauthorized\(rq right after a
+login: the usual causes (a stale
+.B DUCK_TOKEN
+shadowing a freshly saved token file, or a token minted on a different
+server) are all visible here.
 .TP
 .B "duck version"
 Print the CLI version.
@@ -154,7 +171,8 @@ else
 .BR https://duckgc.com .
 Accepted by
 .BR pull ,
-.BR login ,
+.BR "auth login" ,
+.BR "auth status" ,
 and
 .BR "educator pull" .
 .TP
@@ -241,7 +259,8 @@ $ duck educator pull intro-to-go/go --force
 .TP
 .B DUCK_BASE_URL
 Default server base URL for
-.B pull
+.BR pull ,
+.BR auth ,
 and
 .B educator
 commands. A
@@ -256,7 +275,10 @@ Ideal for CI.
 .TP
 .I ~/.config/duck/token
 Saved API token (mode 0600), written by
-.BR "duck login" .
+.BR "duck auth login" .
+Ignored whenever
+.B DUCK_TOKEN
+is set.
 .TP
 .I <course>-<language>/.duck-course.json
 Written by

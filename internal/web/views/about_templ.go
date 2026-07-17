@@ -345,7 +345,7 @@ func CLI(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = shell("duck login").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = shell("duck auth login").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -371,7 +371,7 @@ func CLI(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">profile page</a> (\"Create CLI token\") and either export it as <span class=\"font-mono\">DUCK_TOKEN</span> or save it to <span class=\"font-mono\">~/.config/duck/token</span>. ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">profile page</a> (\"Create CLI token\") and either export it as <span class=\"font-mono\">DUCK_TOKEN</span> or save it to <span class=\"font-mono\">~/.config/duck/token</span>. If a submit ever answers \"unauthorized\", <span class=\"font-mono\">duck auth status</span> shows which token duck is sending and whether the server accepts it. ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -437,7 +437,11 @@ func CLI(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = cmdRow("duck login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = cmdRow("duck auth login", "Prompt for credentials, mint a CLI token, save it to ~/.config/duck/token.").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = cmdRow("duck auth status", "Show which token duck would send and whether the server accepts it.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -489,7 +493,7 @@ func docHeading(title string) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 170, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 173, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -532,7 +536,7 @@ func shell(lines ...string) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(lines, "\n"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 175, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 178, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -574,7 +578,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(cmd)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 180, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 183, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -587,7 +591,7 @@ func cmdRow(cmd, desc string) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 181, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/about.templ`, Line: 184, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
