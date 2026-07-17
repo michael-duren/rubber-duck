@@ -15,12 +15,13 @@ import (
 )
 
 type challengeJSON struct {
-	LessonSlug  string `json:"lesson_slug"`
-	Slug        string `json:"slug"`
-	Title       string `json:"title"`
-	Points      int    `json:"points"`
-	StarterCode string `json:"starter_code"`
-	TestCode    string `json:"test_code"`
+	LessonSlug   string `json:"lesson_slug"`
+	LessonNumber int    `json:"lesson_number"` // 1-based lesson position; 0 for the final
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	Points       int    `json:"points"`
+	StarterCode  string `json:"starter_code"`
+	TestCode     string `json:"test_code"`
 }
 
 func pullCmd(args []string) error {
@@ -70,16 +71,24 @@ func pullCmd(args []string) error {
 		return fmt.Errorf("write %s: %w", courseMetaFile, err)
 	}
 
-	for _, c := range listing.Challenges {
+	dirNames := challengeDirNames(listing.Challenges)
+	for i, c := range listing.Challenges {
 		// The slug names a local directory, and it came off the network:
 		// never let a malicious or broken server walk it out of root
 		// (e.g. a slug of "../../.bashrc").
 		if c.Slug == "" || c.Slug == "." || c.Slug == ".." || c.Slug != filepath.Base(c.Slug) {
 			return fmt.Errorf("server returned unsafe challenge slug %q", c.Slug)
 		}
-		dir := filepath.Join(root, c.Slug)
+		dir := filepath.Join(root, dirNames[i])
 		if _, err := os.Stat(dir); err == nil {
 			fmt.Printf("skip %s (already exists)\n", dir)
+			continue
+		}
+		// A pre-ordering pull scaffolded this challenge under the bare
+		// slug; leave that work in progress alone rather than pulling a
+		// duplicate copy under the new name.
+		if _, err := os.Stat(filepath.Join(root, c.Slug)); err == nil {
+			fmt.Printf("skip %s (already exists as %s)\n", dir, filepath.Join(root, c.Slug))
 			continue
 		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {

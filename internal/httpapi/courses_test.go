@@ -339,12 +339,13 @@ func TestListChallengesPublic(t *testing.T) {
 
 	var resp struct {
 		Challenges []struct {
-			LessonSlug  string `json:"lesson_slug"`
-			Slug        string `json:"slug"`
-			Title       string `json:"title"`
-			Points      int    `json:"points"`
-			StarterCode string `json:"starter_code"`
-			TestCode    string `json:"test_code"`
+			LessonSlug   string `json:"lesson_slug"`
+			LessonNumber int    `json:"lesson_number"`
+			Slug         string `json:"slug"`
+			Title        string `json:"title"`
+			Points       int    `json:"points"`
+			StarterCode  string `json:"starter_code"`
+			TestCode     string `json:"test_code"`
 		} `json:"challenges"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
@@ -358,9 +359,12 @@ func TestListChallengesPublic(t *testing.T) {
 			t.Errorf("challenge missing fields: %+v", c)
 		}
 	}
+	if n1, n2 := resp.Challenges[0].LessonNumber, resp.Challenges[1].LessonNumber; n1 != 1 || n2 != 2 {
+		t.Errorf("lesson numbers = %d, %d, want 1, 2", n1, n2)
+	}
 	last := resp.Challenges[len(resp.Challenges)-1]
-	if last.LessonSlug != "" || last.Slug != "final" {
-		t.Errorf("final challenge = %+v, want lesson_slug empty and slug final", last)
+	if last.LessonSlug != "" || last.LessonNumber != 0 || last.Slug != "final" {
+		t.Errorf("final challenge = %+v, want lesson_slug empty, lesson_number 0, slug final", last)
 	}
 
 	rec2 := doJSON(mux, "GET", "/api/v1/courses/nope/variants/go/challenges", nil)

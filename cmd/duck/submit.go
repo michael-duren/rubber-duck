@@ -31,7 +31,6 @@ func submitCmd(args []string) error {
 	if len(rest) != 1 {
 		return usageHelp("submit")
 	}
-	slug := rest[0]
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -45,10 +44,14 @@ func submitCmd(args []string) error {
 	if !ok {
 		return fmt.Errorf("unsupported language %q", meta.Language)
 	}
-	codePath := filepath.Join(root, slug, files.Code)
+	dir, slug, err := resolveChallenge(root, rest[0])
+	if err != nil {
+		return err
+	}
+	codePath := filepath.Join(root, dir, files.Code)
 	code, err := os.ReadFile(codePath)
 	if err != nil {
-		return fmt.Errorf("read solution (did you `duck pull` and pick a real slug?): %w", err)
+		return fmt.Errorf("read solution: %w", err)
 	}
 
 	claim := !*remote
@@ -66,7 +69,7 @@ func submitCmd(args []string) error {
 	form := url.Values{"code": {string(code)}}
 	var local runResult
 	if claim {
-		local, err = runChallenge(filepath.Join(root, slug), meta.Language)
+		local, err = runChallenge(filepath.Join(root, dir), meta.Language)
 		if err != nil {
 			return err
 		}
