@@ -19,6 +19,9 @@ func TestBackLink(t *testing.T) {
 		{"other host", "http://evil.example.net/courses", ""},
 		{"javascript scheme", "javascript:alert(1)", ""},
 		{"schemeless other host", "//evil.example.net/x", ""},
+		// A same-host referer whose *path* starts with "//" must not survive:
+		// href="//evil.com/x" is protocol-relative, i.e. off-site.
+		{"same host double-slash path", "http://example.com//evil.example.net/x", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

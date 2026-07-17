@@ -93,10 +93,12 @@ func (h *handlers) submissionFragment(w http.ResponseWriter, r *http.Request) {
 
 // backLink derives the submission page's "back to the challenge" href from
 // the Referer, reduced to a same-host path — an off-site or otherwise odd
-// Referer yields "" (no link) rather than a link off the site.
+// Referer yields "" (no link) rather than a link off the site. A path
+// starting "//" is rejected too: emitted as an href it would be
+// protocol-relative (a link to another host), not a path.
 func backLink(r *http.Request) string {
 	ref, err := url.Parse(r.Referer())
-	if err != nil || !strings.HasPrefix(ref.Path, "/") || (ref.Host != "" && ref.Host != r.Host) {
+	if err != nil || !strings.HasPrefix(ref.Path, "/") || strings.HasPrefix(ref.Path, "//") || (ref.Host != "" && ref.Host != r.Host) {
 		return ""
 	}
 	return ref.RequestURI()
