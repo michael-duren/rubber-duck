@@ -142,6 +142,16 @@ func TestParseErrors(t *testing.T) {
 			`missing required field "description"`,
 		},
 		{
+			"course slug with path separators",
+			"---\ncourse: ../evil\ntitle: T\nlanguage: go\ndescription: D\n---\n" + validLessonAndFinal,
+			`field "course" must be lowercase letters, numbers, and hyphens`,
+		},
+		{
+			"language not kebab-case",
+			"---\ncourse: c\ntitle: T\nlanguage: C++\ndescription: D\n---\n" + validLessonAndFinal,
+			`field "language" must be lowercase letters, numbers, and hyphens`,
+		},
+		{
 			"no lessons",
 			validHeader + "# Final Challenge: F {#fin points=9}\n\n### Starter\n\n```go\ns\n```\n\n### Tests\n\n```go\nt\n```\n",
 			"no lessons",

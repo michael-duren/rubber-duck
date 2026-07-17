@@ -141,11 +141,34 @@ func (h *handlers) updateProposal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such proposal", nil)
 		return
 	}
-	_, _, title, summary, markdown, ok := h.decodeProposalBody(w, r)
+	course, language, title, summary, markdown, ok := h.decodeProposalBody(w, r)
 	if !ok {
 		return
 	}
 	user := currentUser(r)
+
+	// A proposal can't change which course variant it targets (the web
+	// editor enforces the same rule): its diff, reviews, and re-captured
+	// base_version are all anchored to the variant it was opened for, so a
+	// retargeted document would publish somewhere the reviewers never
+	// looked. Proposal metadata is readable by any authenticated user (see
+	// getProposal), so checking before the proposer-scoped update leaks
+	// nothing.
+	existing, err := h.proposals.ProposalByID(r.Context(), id)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "no such proposal", nil)
+		return
+	}
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	if existing.CourseSlug != course || existing.Language != language {
+		writeError(w, http.StatusConflict, "variant_mismatch",
+			fmt.Sprintf("this proposal is for %s/%s but the document's frontmatter says %s/%s — a proposal can't change which course variant it targets; propose the new document separately",
+				existing.CourseSlug, existing.Language, course, language), nil)
+		return
+	}
 
 	p, err := h.proposals.UpdateProposalMarkdown(r.Context(), id, user.ID, title, summary, markdown)
 	switch {

@@ -227,6 +227,9 @@ func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) openProposalFor(r *http.Request, userID int64, slug, lang string) (domain.Proposal, bool) {
 	mine, err := h.proposals.ListProposalsByUser(r.Context(), userID)
 	if err != nil {
+		// Degrades to the generic duplicate-proposal message rather than a
+		// redirect into the editor; log so the failure isn't invisible.
+		h.logger.Error("listing user proposals for duplicate redirect", "err", err)
 		return domain.Proposal{}, false
 	}
 	for _, p := range mine {

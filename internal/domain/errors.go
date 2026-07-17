@@ -26,4 +26,11 @@ var (
 	// ErrDuplicateProposal: a user already has an open proposal for this
 	// course variant; the fix is updating that one, not opening another.
 	ErrDuplicateProposal = errors.New("you already have an open proposal for this course variant")
+
+	// ErrStaleRevision is returned by store.AddReview when the verdict was
+	// formed against a revision of the proposal that is no longer current —
+	// the proposer updated the content between the reviewer loading the
+	// page and submitting. Nothing is recorded; the reviewer re-reads the
+	// current revision and reviews again.
+	ErrStaleRevision = errors.New("the proposal was updated while you were reviewing")
 )

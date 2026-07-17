@@ -80,11 +80,11 @@ func TestProposalReviewsAndThresholdCounting(t *testing.T) {
 	}
 
 	// Proposer may not review their own proposal (they're not an admin).
-	if _, err := s.AddReview(ctx, p.ID, proposer.ID, domain.VerdictApprove, ""); !errors.Is(err, domain.ErrSelfReview) {
+	if _, err := s.AddReview(ctx, p.ID, proposer.ID, domain.VerdictApprove, "", 1); !errors.Is(err, domain.ErrSelfReview) {
 		t.Errorf("self review err = %v, want ErrSelfReview", err)
 	}
 
-	out, err := s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "lgtm")
+	out, err := s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "lgtm", 1)
 	if err != nil {
 		t.Fatalf("review 1: %v", err)
 	}
@@ -93,10 +93,10 @@ func TestProposalReviewsAndThresholdCounting(t *testing.T) {
 	}
 
 	// A reject verdict doesn't count as an approval; re-reviewing upserts.
-	if _, err := s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictReject, "needs work"); err != nil {
+	if _, err := s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictReject, "needs work", 1); err != nil {
 		t.Fatal(err)
 	}
-	out, err = s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictApprove, "better now")
+	out, err = s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictApprove, "better now", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,21 +124,27 @@ func TestProposalReviewsAndThresholdCounting(t *testing.T) {
 		}
 	}
 
+	// A verdict formed against the pre-update revision is refused, not
+	// silently counted toward content the reviewer never read.
+	if _, err := s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "old lgtm", 1); !errors.Is(err, domain.ErrStaleRevision) {
+		t.Errorf("stale-revision review err = %v, want ErrStaleRevision", err)
+	}
+
 	// Re-approving after the update counts again.
-	out, err = s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "still lgtm")
+	out, err = s.AddReview(ctx, p.ID, rev1.ID, domain.VerdictApprove, "still lgtm", 2)
 	if err != nil || out.Proposal.Approvals != 1 {
 		t.Errorf("re-approve outcome = %+v, %v; want 1 approval", out, err)
 	}
 
 	// Admin rejection closes the proposal; further reviews bounce.
-	out, err = s.AddReview(ctx, p.ID, admin.ID, domain.VerdictReject, "off-topic")
+	out, err = s.AddReview(ctx, p.ID, admin.ID, domain.VerdictReject, "off-topic", 2)
 	if err != nil {
 		t.Fatalf("admin reject: %v", err)
 	}
 	if !out.Closed || !out.ReviewerIsAdmin || out.Proposal.Status != domain.ProposalRejected {
 		t.Errorf("admin reject outcome = %+v, want closed/rejected", out)
 	}
-	if _, err := s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictApprove, ""); !errors.Is(err, domain.ErrProposalClosed) {
+	if _, err := s.AddReview(ctx, p.ID, rev2.ID, domain.VerdictApprove, "", 2); !errors.Is(err, domain.ErrProposalClosed) {
 		t.Errorf("review after close err = %v, want ErrProposalClosed", err)
 	}
 }
@@ -155,7 +161,7 @@ func TestAdminSelfApprove(t *testing.T) {
 	}
 
 	// The bootstrap carve-out: an admin may approve their own proposal…
-	out, err := s.AddReview(ctx, p.ID, admin.ID, domain.VerdictApprove, "")
+	out, err := s.AddReview(ctx, p.ID, admin.ID, domain.VerdictApprove, "", 1)
 	if err != nil {
 		t.Fatalf("admin self-approve: %v", err)
 	}
@@ -169,7 +175,7 @@ func TestAdminSelfApprove(t *testing.T) {
 	}
 
 	// An admin rejecting their own proposal is still self-review.
-	if _, err := s.AddReview(ctx, p.ID, admin.ID, domain.VerdictReject, ""); !errors.Is(err, domain.ErrSelfReview) {
+	if _, err := s.AddReview(ctx, p.ID, admin.ID, domain.VerdictReject, "", 1); !errors.Is(err, domain.ErrSelfReview) {
 		t.Errorf("admin self-reject err = %v, want ErrSelfReview", err)
 	}
 }

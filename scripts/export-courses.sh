@@ -39,6 +39,14 @@ trap 'rm -f "$expected"' EXIT
 for i in $(seq 0 $((count - 1))); do
     course="$(jq -r ".variants[$i].course" <<<"$export_json")"
     language="$(jq -r ".variants[$i].language" <<<"$export_json")"
+    # Defense in depth: ingest already rejects non-kebab-case course/language
+    # frontmatter, but these strings become filenames in a job with push
+    # rights, so a name that could escape courses/ means the server-side
+    # invariant broke — stop rather than write anywhere.
+    if ! [[ "$course" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && "$language" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+        echo "export-courses: refusing unsafe variant name '$course/$language' from $base" >&2
+        exit 1
+    fi
     file="$course-$language.md"
     # -j (not -r): raw output with no added trailing newline, so the file is
     # byte-identical to the stored source_md and re-imports diff as unchanged.

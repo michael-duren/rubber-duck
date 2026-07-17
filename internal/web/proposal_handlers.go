@@ -24,8 +24,10 @@ type ProposalStore interface {
 	ListProposalReviews(ctx context.Context, proposalID int64) ([]domain.ProposalReview, error)
 	// AddReview records a verdict and reports back what the caller needs to
 	// decide about publishing — the approval threshold is web config, so
-	// the store deliberately doesn't publish on its own.
-	AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string) (domain.ReviewOutcome, error)
+	// the store deliberately doesn't publish on its own. seenRevision is
+	// the proposal revision the verdict was formed against; a mismatch with
+	// the current revision is ErrStaleRevision.
+	AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string, seenRevision int) (domain.ReviewOutcome, error)
 	PublishProposal(ctx context.Context, proposalID int64, course domain.Course, variant domain.Variant) (int, error)
 	WithdrawProposal(ctx context.Context, proposalID, proposerID int64) error
 }
@@ -134,12 +136,25 @@ func (h *handlers) createReview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "verdict must be approve or reject", http.StatusBadRequest)
 		return
 	}
+	// The revision the reviewer's page showed. AddReview refuses the
+	// verdict if the proposer has revised since, so an approval can never
+	// count toward (or worse, instantly publish) content the reviewer
+	// never saw.
+	seenRevision, err := strconv.Atoi(r.FormValue("revision"))
+	if err != nil {
+		http.Error(w, "missing or invalid revision", http.StatusBadRequest)
+		return
+	}
 	user := currentUser(r) // non-nil: route is behind requireUser
 
-	out, err := h.proposals.AddReview(r.Context(), p.ID, user.ID, verdict, r.FormValue("comment"))
+	out, err := h.proposals.AddReview(r.Context(), p.ID, user.ID, verdict, r.FormValue("comment"), seenRevision)
 	switch {
 	case errors.Is(err, domain.ErrSelfReview):
 		h.renderProposal(w, r, p, "You can't review your own proposal.")
+		return
+	case errors.Is(err, domain.ErrStaleRevision):
+		h.renderProposal(w, r, p,
+			"This proposal was updated while you were reviewing — your verdict wasn't recorded. Re-read the current version below and review again.")
 		return
 	case errors.Is(err, domain.ErrProposalClosed):
 		// Someone else's review closed it between page load and submit;

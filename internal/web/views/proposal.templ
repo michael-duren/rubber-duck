@@ -157,6 +157,10 @@ templ ProposalDetail(user *domain.User, p domain.Proposal, reviews []domain.Prop
 			} else if user.ID != p.ProposerID || user.IsAdmin() {
 				<form method="post" action={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10) + "/reviews") } class="mt-6 flex max-w-2xl flex-col gap-3">
 					@csrfField()
+					<!-- The revision this page rendered: a verdict is refused if the
+					     proposer revises before it lands, so approvals can't attach to
+					     content the reviewer never saw. -->
+					<input type="hidden" name="revision" value={ strconv.Itoa(p.Revision) }/>
 					<label class="flex flex-col gap-1 text-sm">
 						<span class="font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Comment (optional)</span>
 						<textarea name="comment" rows="3" class="border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900"></textarea>

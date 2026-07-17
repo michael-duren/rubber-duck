@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -53,6 +54,45 @@ func checkRoundTrip(t *testing.T, oldSrc, newSrc string) []Line {
 		}
 	}
 	return lines
+}
+
+// TestLinesRandomized hammers the round-trip invariant with seeded random
+// documents. The tiny vocabulary makes duplicate lines the norm, so this
+// exercises the paths the golden tests can't systematically reach: the
+// no-anchor replace fallback, lines that become unique only inside a
+// recursed sub-segment, and empty/identical/one-sided inputs.
+func TestLinesRandomized(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	vocab := []string{"a", "b", "c", "d", "", "}", "\tx := 1"}
+	randomDoc := func() []string {
+		doc := make([]string, rng.Intn(60))
+		for i := range doc {
+			doc[i] = vocab[rng.Intn(len(vocab))]
+		}
+		return doc
+	}
+	for i := range 1000 {
+		oldDoc := randomDoc()
+		var newDoc []string
+		if rng.Intn(10) == 0 {
+			newDoc = randomDoc() // occasionally unrelated documents
+		} else {
+			// Usually a mutation of oldDoc: keep, drop, or insert-before.
+			for _, l := range oldDoc {
+				switch rng.Intn(5) {
+				case 0: // drop
+				case 1:
+					newDoc = append(newDoc, vocab[rng.Intn(len(vocab))], l)
+				default:
+					newDoc = append(newDoc, l)
+				}
+			}
+		}
+		checkRoundTrip(t, strings.Join(oldDoc, "\n"), strings.Join(newDoc, "\n"))
+		if t.Failed() {
+			t.Fatalf("failed on case %d: old=%q new=%q", i, oldDoc, newDoc)
+		}
+	}
 }
 
 func countOps(lines []Line) (eq, del, ins int) {

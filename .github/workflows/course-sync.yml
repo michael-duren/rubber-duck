@@ -23,14 +23,24 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # COURSE_SYNC_TOKEN is a fine-grained PAT (contents + pull-requests:
+      # write, this repo only). It exists because events created with the
+      # default GITHUB_TOKEN deliberately don't trigger other workflows: a
+      # sync PR pushed with github.token would never get a CI run, so
+      # auto-merge would either wait forever (required checks) or be
+      # rejected outright (no checks to wait on). The github.token fallback
+      # keeps the job producing a PR (manually mergeable) if the secret is
+      # ever missing.
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
 
       - name: Export courses from production
         run: DUCK_BASE_URL=https://duckgc.com ./scripts/export-courses.sh
 
       - name: Open (or update) the sync PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
         run: |
           if git diff --quiet -- courses; then
             echo "mirror is up to date"

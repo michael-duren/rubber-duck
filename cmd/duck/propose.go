@@ -96,9 +96,12 @@ func proposeCmd(args []string) error {
 	var p proposalResponse
 	if haveMeta && meta.ProposalID != 0 {
 		p, err = sendProposal(http.MethodPut, fmt.Sprintf("%s/api/v1/proposals/%d", baseURL, meta.ProposalID), token, tokenSource, baseURL, mdPath, reqBody)
-		// A 404/409 here means that remembered proposal is gone or closed —
-		// fall through to creating a fresh one rather than dead-ending.
-		if err != nil {
+		// Fall through to creating a fresh proposal only when the remembered
+		// one is genuinely unusable — gone, closed, or now targeting a
+		// different variant because this file's frontmatter changed. A
+		// transient failure (network, 5xx, auth) surfaces as-is; retrying it
+		// as a POST would just stack a second confusing error on top.
+		if proposalGone(err) {
 			p, err = sendProposal(http.MethodPost, baseURL+"/api/v1/proposals", token, tokenSource, baseURL, mdPath, reqBody)
 		}
 	} else {
@@ -139,6 +142,34 @@ func proposeCmd(args []string) error {
 type duplicateProposalError struct{ msg string }
 
 func (e *duplicateProposalError) Error() string { return e.msg }
+
+// apiStatusError preserves the HTTP status and API error code of a failed
+// proposal request so callers can branch on what actually went wrong (see
+// proposalGone) instead of pattern-matching message text.
+type apiStatusError struct {
+	status int
+	code   string
+	msg    string
+}
+
+func (e *apiStatusError) Error() string { return e.msg }
+
+// proposalGone reports whether an update failed because the remembered
+// proposal can no longer accept this document — it doesn't exist (404), is
+// closed, or targets a different course variant than the file's frontmatter
+// now names. Those are the only cases where creating a fresh proposal is
+// the right recovery.
+func proposalGone(err error) bool {
+	var apiErr *apiStatusError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	if apiErr.status == http.StatusNotFound {
+		return true
+	}
+	return apiErr.status == http.StatusConflict &&
+		(apiErr.code == "proposal_closed" || apiErr.code == "variant_mismatch")
+}
 
 // sendProposal POSTs/PUTs a proposal body and decodes the response,
 // translating the API's error shapes into the CLI's messages.
@@ -182,9 +213,11 @@ func sendProposal(method, url, token, tokenSource, baseURL, mdPath string, body 
 			return proposalResponse{}, &duplicateProposalError{msg: "you already have an open proposal for this course variant"}
 		}
 		if errResp.Error.Message != "" {
-			return proposalResponse{}, fmt.Errorf("propose: %s: %s", resp.Status, errResp.Error.Message)
+			return proposalResponse{}, &apiStatusError{status: resp.StatusCode, code: errResp.Error.Code,
+				msg: fmt.Sprintf("propose: %s: %s", resp.Status, errResp.Error.Message)}
 		}
-		return proposalResponse{}, fmt.Errorf("propose: server said %s: %s", resp.Status, respBody)
+		return proposalResponse{}, &apiStatusError{status: resp.StatusCode,
+			msg: fmt.Sprintf("propose: server said %s: %s", resp.Status, respBody)}
 	case http.StatusUnprocessableEntity:
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Code == "invalid_course_markdown" {
 			printProblems(mdPath, errResp.Error.Details)
@@ -192,7 +225,9 @@ func sendProposal(method, url, token, tokenSource, baseURL, mdPath string, body 
 		}
 		return proposalResponse{}, fmt.Errorf("propose: server said %s: %s", resp.Status, respBody)
 	default:
-		return proposalResponse{}, fmt.Errorf("propose: server said %s: %s", resp.Status, respBody)
+		_ = json.Unmarshal(respBody, &errResp)
+		return proposalResponse{}, &apiStatusError{status: resp.StatusCode, code: errResp.Error.Code,
+			msg: fmt.Sprintf("propose: server said %s: %s", resp.Status, respBody)}
 	}
 
 	var p proposalResponse

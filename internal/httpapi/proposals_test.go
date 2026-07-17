@@ -201,6 +201,28 @@ func TestProposalUpdateGetWithdraw(t *testing.T) {
 		}
 	})
 
+	t.Run("update that retargets another variant is 409", func(t *testing.T) {
+		mux, _ := setup(t)
+		moved := strings.Replace(doc, "course: intro-to-concurrency", "course: some-other-course", 1)
+		if moved == doc {
+			t.Fatal("fixture frontmatter changed; update this test's replacement")
+		}
+		rec := doJSONAs(mux, "PUT", "/api/v1/proposals/1", "gc_u_alice",
+			map[string]string{"markdown": moved})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status = %d body %s, want 409", rec.Code, rec.Body)
+		}
+		var got struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &got)
+		if got.Error.Code != "variant_mismatch" {
+			t.Errorf("error code = %q, want variant_mismatch", got.Error.Code)
+		}
+	})
+
 	t.Run("any authenticated user can read a proposal with its document", func(t *testing.T) {
 		mux, _ := setup(t)
 		rec := doJSONAs(mux, "GET", "/api/v1/proposals/1", "gc_u_bob", nil)

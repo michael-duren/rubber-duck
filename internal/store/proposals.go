@@ -177,13 +177,22 @@ func (s *Store) ListProposalReviews(ctx context.Context, proposalID int64) ([]do
 
 // AddReview records (or replaces) one reviewer's verdict on an open
 // proposal. The reviewer's role is read inside the transaction rather than
-// trusted from the caller. Self-review returns ErrSelfReview with one
-// carve-out: an admin approving their own proposal (the bootstrap case for
-// a site with one admin and no quorum). An admin rejection closes the
+// trusted from the caller. seenRevision is the proposal revision the
+// reviewer's verdict was formed against (the detail page embeds it in the
+// form); if the proposer updated the proposal in the meantime the verdict
+// is refused with ErrStaleRevision rather than silently counted toward
+// content the reviewer never read. Self-review returns ErrSelfReview with
+// one carve-out: an admin approving their own proposal (the bootstrap case
+// for a site with one admin and no quorum). An admin rejection closes the
 // proposal here; publishing on approval is deliberately NOT done here —
 // the approval threshold is the web layer's config, so the caller compares
 // the returned outcome against it and calls PublishProposal.
-func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string) (domain.ReviewOutcome, error) {
+func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string, seenRevision int) (domain.ReviewOutcome, error) {
+	if verdict != domain.VerdictApprove && verdict != domain.VerdictReject {
+		// The web handler validates too; this guard keeps a future caller's
+		// bad verdict from surfacing as a CHECK-constraint 500.
+		return domain.ReviewOutcome{}, fmt.Errorf("invalid verdict %q", verdict)
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return domain.ReviewOutcome{}, err
@@ -204,6 +213,9 @@ func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, ver
 	}
 	if status != domain.ProposalOpen {
 		return domain.ReviewOutcome{}, domain.ErrProposalClosed
+	}
+	if seenRevision != revision {
+		return domain.ReviewOutcome{}, domain.ErrStaleRevision
 	}
 
 	var role string

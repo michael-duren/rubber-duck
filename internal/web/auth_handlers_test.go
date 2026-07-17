@@ -312,13 +312,16 @@ func (f *fakeStore) ListProposalReviews(_ context.Context, proposalID int64) ([]
 	return out, nil
 }
 
-func (f *fakeStore) AddReview(_ context.Context, proposalID, reviewerID int64, verdict, comment string) (domain.ReviewOutcome, error) {
+func (f *fakeStore) AddReview(_ context.Context, proposalID, reviewerID int64, verdict, comment string, seenRevision int) (domain.ReviewOutcome, error) {
 	p, ok := f.proposals[proposalID]
 	if !ok {
 		return domain.ReviewOutcome{}, domain.ErrNotFound
 	}
 	if p.Status != domain.ProposalOpen {
 		return domain.ReviewOutcome{}, domain.ErrProposalClosed
+	}
+	if seenRevision != p.Revision {
+		return domain.ReviewOutcome{}, domain.ErrStaleRevision
 	}
 	reviewer, _ := f.userByID(reviewerID)
 	isAdmin := reviewer.IsAdmin()

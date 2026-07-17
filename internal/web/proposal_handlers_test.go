@@ -86,7 +86,7 @@ func TestReviewRequiresLogin(t *testing.T) {
 	mux, fs := testMux(t)
 	seedProposal(t, mux, fs)
 
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, nil)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, nil)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
 		t.Errorf("anonymous review = %d -> %q, want 303 /login", rec.Code, rec.Header().Get("Location"))
 	}
@@ -99,7 +99,7 @@ func TestSelfReviewBlocked(t *testing.T) {
 	mux, fs := testMux(t)
 	alice := seedProposal(t, mux, fs)
 
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, alice)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, alice)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("self review = %d, want 200 (re-render with error)", rec.Code)
 	}
@@ -119,7 +119,7 @@ func TestThresholdPublishes(t *testing.T) {
 	bob := loginAs(t, mux, "bob")
 	carol := loginAs(t, mux, "carol")
 
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "comment": {"lgtm"}}, bob)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "comment": {"lgtm"}, "revision": {"1"}}, bob)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("bob approve = %d: %s", rec.Code, rec.Body)
 	}
@@ -130,7 +130,7 @@ func TestThresholdPublishes(t *testing.T) {
 		t.Fatal("must not publish below the threshold")
 	}
 
-	rec = postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, carol)
+	rec = postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, carol)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("carol approve = %d: %s", rec.Code, rec.Body)
 	}
@@ -149,7 +149,7 @@ func TestAdminApprovePublishesInstantly(t *testing.T) {
 	admin := loginAs(t, mux, "root")
 	fs.promote("root", domain.RoleAdmin)
 
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, admin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("admin approve = %d: %s", rec.Code, rec.Body)
 	}
@@ -164,7 +164,7 @@ func TestAdminRejectCloses(t *testing.T) {
 	admin := loginAs(t, mux, "root")
 	fs.promote("root", domain.RoleAdmin)
 
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"reject"}, "comment": {"nope"}}, admin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"reject"}, "comment": {"nope"}, "revision": {"1"}}, admin)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("admin reject = %d: %s", rec.Code, rec.Body)
 	}
@@ -187,7 +187,7 @@ func TestAdminSelfApprovePublishes(t *testing.T) {
 		url.Values{"markdown": {seedMarkdown(t)}}, admin); rec.Code != http.StatusSeeOther {
 		t.Fatalf("admin propose = %d", rec.Code)
 	}
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, admin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("admin self-approve = %d: %s", rec.Code, rec.Body)
 	}
@@ -212,7 +212,7 @@ func TestStalePublishDeferred(t *testing.T) {
 
 	admin := loginAs(t, mux, "root")
 	fs.promote("root", domain.RoleAdmin)
-	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, admin)
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("approve on stale = %d: %s", rec.Code, rec.Body)
 	}
@@ -240,7 +240,7 @@ func TestProposalEditResetsApprovals(t *testing.T) {
 	alice := seedProposal(t, mux, fs)
 	bob := loginAs(t, mux, "bob")
 
-	if rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, bob); rec.Code != http.StatusSeeOther {
+	if rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, bob); rec.Code != http.StatusSeeOther {
 		t.Fatalf("bob approve = %d", rec.Code)
 	}
 	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency v2", 1)
@@ -258,6 +258,41 @@ func TestProposalEditResetsApprovals(t *testing.T) {
 	body := get(mux, "/proposals/1", nil).Body.String()
 	if !strings.Contains(body, "outdated") {
 		t.Error("prior review should display as outdated")
+	}
+}
+
+// TestStaleRevisionReviewRefused: a verdict submitted against a revision
+// the proposer has since replaced is refused (nothing recorded), so an
+// approval can never count toward — or instantly publish — content the
+// reviewer never saw. Re-reviewing the current revision works.
+func TestStaleRevisionReviewRefused(t *testing.T) {
+	mux, fs := testMux(t)
+	alice := seedProposal(t, mux, fs)
+	bob := loginAs(t, mux, "bob")
+
+	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency v2", 1)
+	if rec := postForm(mux, "/proposals/1/edit", url.Values{"markdown": {edited}}, alice); rec.Code != http.StatusSeeOther {
+		t.Fatalf("proposer edit = %d", rec.Code)
+	}
+
+	// Bob's page showed revision 1; the proposal is now revision 2.
+	rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, bob)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stale review = %d, want 200 (re-render with error)", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "updated while you were reviewing") {
+		t.Errorf("expected stale-revision message, got: %s", rec.Body.String())
+	}
+	if len(fs.reviews[1]) != 0 {
+		t.Error("stale review must not be recorded")
+	}
+
+	rec = postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"2"}}, bob)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("current-revision review = %d: %s", rec.Code, rec.Body)
+	}
+	if len(fs.reviews[1]) != 1 {
+		t.Error("current-revision review should be recorded")
 	}
 }
 
@@ -319,7 +354,7 @@ func TestWithdrawProposal(t *testing.T) {
 	}
 
 	// Reviews on a closed proposal bounce back to the detail page.
-	if rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}}, bob); rec.Code != http.StatusSeeOther {
+	if rec := postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, bob); rec.Code != http.StatusSeeOther {
 		t.Errorf("review after close = %d, want 303 redirect", rec.Code)
 	}
 }
