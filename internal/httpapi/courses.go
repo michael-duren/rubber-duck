@@ -1,14 +1,12 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
-	"github.com/michael-duren/rubber-duck/internal/markdown"
 )
 
 const maxDocumentBytes = 2 << 20 // 2 MiB per course document
@@ -22,37 +20,11 @@ type variantSummaryJSON struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
-// putVariant is the core agent endpoint: idempotent upsert of one
-// course-language variant from a markdown document.
-func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
-	slug, language := r.PathValue("slug"), r.PathValue("language")
-
-	var body struct {
-		Markdown string `json:"markdown"`
-		// ExpectedVersion enables optimistic concurrency for human
-		// (gc_u_ user-token) callers only — see currentUser handling
-		// below. An agent-key caller may send it too; it's simply
-		// ignored, matching that path's existing unversioned behavior.
-		ExpectedVersion *int `json:"expected_version,omitempty"`
-	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDocumentBytes))
-	if err := dec.Decode(&body); err != nil {
-		// A valid-but-huge body hits MaxBytesReader's limit and would
-		// otherwise surface as a baffling "must be JSON" 400.
-		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-			writeError(w, http.StatusRequestEntityTooLarge, "document_too_large",
-				fmt.Sprintf("document exceeds the %d-byte limit", maxDocumentBytes), nil)
-			return
-		}
-		writeError(w, http.StatusBadRequest, "bad_request", `body must be JSON: {"markdown": "..."}`, nil)
-		return
-	}
-	if body.Markdown == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", `missing or empty "markdown" field`, nil)
-		return
-	}
-
-	src := []byte(body.Markdown)
+// parseCourseDoc runs a submitted markdown document through ingest.Parse,
+// writing the API's standard error responses (422 with line-numbered
+// details for validation problems, 500 otherwise) itself. Callers get
+// (nil, false) when a response has already been written.
+func (h *handlers) parseCourseDoc(w http.ResponseWriter, r *http.Request, src []byte) (*ingest.Result, bool) {
 	res, err := ingest.Parse(src)
 	if verr, ok := errors.AsType[*ingest.ValidationError](err); ok {
 		details := make([]Detail, len(verr.Problems))
@@ -61,67 +33,13 @@ func (h *handlers) putVariant(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusUnprocessableEntity, "invalid_course_markdown",
 			fmt.Sprintf("%d problems found", len(details)), details)
-		return
+		return nil, false
 	}
 	if err != nil {
 		h.serverError(w, r, err)
-		return
+		return nil, false
 	}
-
-	if res.Course.Course != slug || res.Course.Language != language {
-		writeError(w, http.StatusConflict, "slug_mismatch",
-			fmt.Sprintf("URL names %s/%s but frontmatter says %s/%s",
-				slug, language, res.Course.Course, res.Course.Language), nil)
-		return
-	}
-
-	course, variant, err := ingest.ToDomain(res, src)
-	if _, ok := errors.AsType[*markdown.DiagramError](err); ok {
-		// A ```d2 fence that doesn't compile is the document's problem,
-		// not the server's: report it like any other validation failure
-		// (the wrapped error names the lesson/challenge and d2's line:col).
-		writeError(w, http.StatusUnprocessableEntity, "invalid_course_markdown", err.Error(), nil)
-		return
-	}
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-	// A human editor (authenticated via a gc_u_ user token, see
-	// requireKey) is attributed and may opt into the same optimistic
-	// concurrency check the web editor uses. An agent-key caller has no
-	// currentUser and stays unattributed and unversioned (see issue #36's
-	// scope) — any expected_version it sent is ignored, not validated.
-	var editedBy *int64
-	var expectedVersion *int
-	if user := currentUser(r); user != nil {
-		editedBy = &user.ID
-		expectedVersion = body.ExpectedVersion
-	}
-
-	version, err := h.store.UpsertVariant(r.Context(), course, variant, editedBy, expectedVersion)
-	if errors.Is(err, domain.ErrVersionConflict) {
-		writeError(w, http.StatusConflict, "version_conflict",
-			"the variant has changed since your expected_version — re-fetch it and reapply your changes before pushing", nil)
-		return
-	}
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-
-	status := http.StatusOK
-	if version == 1 {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, map[string]any{
-		"course":       course.Slug,
-		"language":     variant.Language,
-		"version":      version,
-		"lessons":      len(variant.Lessons),
-		"challenges":   variant.ChallengeCount(),
-		"total_points": variant.TotalPoints(),
-	})
+	return res, true
 }
 
 func (h *handlers) listCourses(w http.ResponseWriter, r *http.Request) {
@@ -171,9 +89,9 @@ func (h *handlers) getCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
-	// version lets a human caller round-trip it back as expected_version
-	// on a subsequent PUT (see putVariant), the same optimistic-concurrency
-	// pattern the web editor's hidden form field already uses.
+	// version is the live variant version a caller authoring a proposal
+	// records as its base — the optimistic-concurrency check publishing
+	// runs (see store.PublishProposal).
 	src, version, err := h.store.VariantSource(r.Context(), r.PathValue("slug"), r.PathValue("language"))
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "no such course variant", nil)
@@ -221,26 +139,6 @@ func (h *handlers) listChallenges(w http.ResponseWriter, r *http.Request) {
 	}
 	items = append(items, challengeJSON{"", 0, variant.Final.Slug, variant.Final.Title, variant.Final.Points, variant.Final.StarterCode, variant.Final.TestCode})
 	writeJSON(w, http.StatusOK, map[string]any{"challenges": items})
-}
-
-func (h *handlers) deleteCourse(w http.ResponseWriter, r *http.Request) {
-	h.deleted(w, r, h.store.DeleteCourse(r.Context(), r.PathValue("slug")))
-}
-
-func (h *handlers) deleteVariant(w http.ResponseWriter, r *http.Request) {
-	h.deleted(w, r, h.store.DeleteVariant(r.Context(), r.PathValue("slug"), r.PathValue("language")))
-}
-
-func (h *handlers) deleted(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "nothing to delete", nil)
-		return
-	}
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handlers) listTags(w http.ResponseWriter, r *http.Request) {

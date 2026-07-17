@@ -46,23 +46,23 @@ func TestEditVariantPageRequiresAuth(t *testing.T) {
 	}
 }
 
-// TestSaveVariantRequiresAuth covers the POST side of auth-gating that
+// TestProposeVariantRequiresAuth covers the POST side of auth-gating that
 // TestEditVariantPageRequiresAuth leaves untested: the GET page redirects an
-// anonymous visitor, but the actual write path (saveVariant) needs its own
-// check, since it's the handler that would persist an anonymous edit if the
-// route ever lost its h.requireUser wrapping.
-func TestSaveVariantRequiresAuth(t *testing.T) {
+// anonymous visitor, but the actual write path (proposeVariant) needs its
+// own check, since it's the handler that would open an anonymous proposal
+// if the route ever lost its h.requireUser wrapping.
+func TestProposeVariantRequiresAuth(t *testing.T) {
 	mux, fs := testMux(t)
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {"whatever"}, "version": {"0"}}, nil)
+		url.Values{"markdown": {"whatever"}}, nil)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("anonymous POST /edit = %d, want 303 redirect to /login", rec.Code)
 	}
 	if loc := rec.Header().Get("Location"); loc != "/login" {
 		t.Errorf("Location = %q, want /login", loc)
 	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("anonymous POST must not save, got %d upserts", len(fs.upserts))
+	if len(fs.proposals) != 0 {
+		t.Errorf("anonymous POST must not open a proposal, got %d", len(fs.proposals))
 	}
 }
 
@@ -100,7 +100,7 @@ func TestEditVariantPagePrefillsMarkdown(t *testing.T) {
 	}
 }
 
-func TestSaveVariantValidationErrorPreservesInput(t *testing.T) {
+func TestProposeVariantValidationErrorPreservesInput(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
@@ -110,7 +110,7 @@ func TestSaveVariantValidationErrorPreservesInput(t *testing.T) {
 
 	badMarkdown := "this is not a valid course document at all"
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {badMarkdown}, "version": {"0"}}, session)
+		url.Values{"markdown": {badMarkdown}}, session)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST invalid markdown = %d, want 200 (re-render)", rec.Code)
 	}
@@ -121,12 +121,12 @@ func TestSaveVariantValidationErrorPreservesInput(t *testing.T) {
 	if !strings.Contains(body, badMarkdown) {
 		t.Error("edit page should preserve exactly what the user submitted, not the old stored markdown")
 	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("invalid markdown must not be saved, got %d upserts", len(fs.upserts))
+	if len(fs.proposals) != 0 {
+		t.Errorf("invalid markdown must not open a proposal, got %d", len(fs.proposals))
 	}
 }
 
-func TestSaveVariantSlugMismatchPreservesInput(t *testing.T) {
+func TestProposeVariantSlugMismatchPreservesInput(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
@@ -136,7 +136,7 @@ func TestSaveVariantSlugMismatchPreservesInput(t *testing.T) {
 
 	// Valid document, but posted to a URL naming a different course slug.
 	rec := postForm(mux, "/courses/some-other-course/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
+		url.Values{"markdown": {seedMarkdown(t)}}, session)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST slug-mismatched markdown = %d, want 200 (re-render)", rec.Code)
 	}
@@ -147,52 +147,78 @@ func TestSaveVariantSlugMismatchPreservesInput(t *testing.T) {
 	if !strings.Contains(body, "Introduction to Concurrency") {
 		t.Error("edit page should preserve the submitted markdown on mismatch")
 	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("mismatched markdown must not be saved, got %d upserts", len(fs.upserts))
+	if len(fs.proposals) != 0 {
+		t.Errorf("mismatched markdown must not open a proposal, got %d", len(fs.proposals))
 	}
 }
 
-func TestSaveVariantSuccessRedirectsAndAttributesEditor(t *testing.T) {
+// TestProposeVariantOpensProposal is the core behavior change from the
+// direct-edit era: submitting the editor never writes the variant — it
+// opens a proposal for review and redirects to it, leaving the live
+// content untouched until approvals publish it.
+func TestProposeVariantOpensProposal(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
 	fs.variantSlug = "intro-to-concurrency"
 	fs.variant = &fakeVariantGo
-	fs.variantSource = "stale"
+	fs.variantSource = "live content"
+	fs.variantVersion = 4
 
 	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
+		url.Values{"markdown": {seedMarkdown(t)}, "title": {"Fix typos"}, "summary": {"spelling"}}, session)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST valid markdown = %d, want 303: %s", rec.Code, rec.Body)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/courses/intro-to-concurrency/go" {
-		t.Errorf("Location = %q, want /courses/intro-to-concurrency/go", loc)
+	if loc := rec.Header().Get("Location"); loc != "/proposals/1" {
+		t.Errorf("Location = %q, want /proposals/1", loc)
 	}
 
-	if len(fs.upserts) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	if len(fs.proposals) != 1 {
+		t.Fatalf("proposals = %d, want 1", len(fs.proposals))
 	}
-	call := fs.upserts[0]
-	if call.Course.Slug != "intro-to-concurrency" || call.Variant.Language != "go" {
-		t.Errorf("upserted course/variant = %+v / %+v", call.Course, call.Variant)
-	}
-	if call.EditedBy == nil {
-		t.Fatal("EditedBy must be set for a web-form save")
-	}
+	p := fs.proposals[1]
 	aliceID := fs.users["alice"].id
-	if *call.EditedBy != aliceID {
-		t.Errorf("EditedBy = %d, want %d (alice)", *call.EditedBy, aliceID)
+	if p.ProposerID != aliceID || p.CourseSlug != "intro-to-concurrency" || p.Language != "go" {
+		t.Errorf("proposal = %+v", p)
 	}
-	// The redirect and attribution checks above don't confirm the actual
-	// document content was persisted — assert that separately: the fake
-	// store's variantSource is only updated by UpsertVariant on success
-	// (see fakeStore.UpsertVariant), so this is a genuine "stale" ->
-	// "newly-submitted markdown" read-after-write check, not a tautology.
-	if fs.variantSource != seedMarkdown(t) {
-		t.Error("stored markdown should be updated to exactly what was submitted")
+	if p.Title != "Fix typos" || p.SummaryMD != "spelling" || p.ProposedMD != seedMarkdown(t) {
+		t.Errorf("proposal content = %q / %q", p.Title, p.SummaryMD)
 	}
-	if call.Variant.SourceMD != seedMarkdown(t) {
-		t.Error("UpsertVariant should be called with the submitted markdown, not the stale stored one")
+	if p.BaseVersion != 4 {
+		t.Errorf("BaseVersion = %d, want the live version 4", p.BaseVersion)
+	}
+	// The live variant must be untouched: proposing is not publishing.
+	if fs.variantSource != "live content" || fs.variantVersion != 4 {
+		t.Error("proposing must not modify the live variant")
+	}
+}
+
+// TestProposeVariantDuplicateRedirectsToExisting: a second propose for the
+// same variant funnels into editing the existing open proposal rather than
+// erroring or forking.
+func TestProposeVariantDuplicateRedirectsToExisting(t *testing.T) {
+	mux, fs := testMux(t)
+	session := loginAlice(t, mux)
+
+	fs.variantSlug = "intro-to-concurrency"
+	fs.variant = &fakeVariantGo
+	fs.variantSource = seedMarkdown(t)
+
+	if rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}}, session); rec.Code != http.StatusSeeOther {
+		t.Fatalf("first propose = %d, want 303", rec.Code)
+	}
+	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
+		url.Values{"markdown": {seedMarkdown(t)}}, session)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("second propose = %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/proposals/1/edit?dup=1" {
+		t.Errorf("Location = %q, want /proposals/1/edit?dup=1", loc)
+	}
+	if len(fs.proposals) != 1 {
+		t.Errorf("proposals = %d, want 1 (no fork)", len(fs.proposals))
 	}
 }
 
@@ -364,49 +390,32 @@ func TestEditVariantPageWithoutNewStill404s(t *testing.T) {
 	}
 }
 
-// TestSaveVariantCreatesNewCourseNoFriction is the end-to-end check of
-// issue #38's core claim: saving the seeded template as-is creates the
-// course + variant via the ordinary saveVariant path, with no version
-// conflict and no destructive-republish confirmation (there's nothing to
-// conflict with or overwrite yet).
-func TestSaveVariantCreatesNewCourseNoFriction(t *testing.T) {
+// TestProposeVariantNewCourse is the end-to-end check of the new-course
+// flow: submitting the seeded template opens a proposal with base version 0
+// (the variant doesn't exist), via the ordinary proposeVariant path.
+func TestProposeVariantNewCourse(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
 	tmpl := newVariantTemplate("brand-new-course", "go", "Brand New Course", "A pitch.")
 	rec := postForm(mux, "/courses/brand-new-course/go/edit",
-		url.Values{"markdown": {tmpl}, "version": {"0"}}, session)
+		url.Values{"markdown": {tmpl}}, session)
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST seeded template = %d, want 303 (saved): %s", rec.Code, rec.Body)
+		t.Fatalf("POST seeded template = %d, want 303 (proposed): %s", rec.Code, rec.Body)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/courses/brand-new-course/go" {
-		t.Errorf("Location = %q, want /courses/brand-new-course/go", loc)
+	if loc := rec.Header().Get("Location"); loc != "/proposals/1" {
+		t.Errorf("Location = %q, want /proposals/1", loc)
 	}
-	if len(fs.upserts) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	if len(fs.proposals) != 1 {
+		t.Fatalf("proposals = %d, want 1", len(fs.proposals))
 	}
-	call := fs.upserts[0]
-	if call.Course.Slug != "brand-new-course" || call.Variant.Language != "go" {
-		t.Errorf("upserted course/variant = %+v / %+v", call.Course, call.Variant)
+	p := fs.proposals[1]
+	if p.CourseSlug != "brand-new-course" || p.Language != "go" || p.BaseVersion != 0 {
+		t.Errorf("proposal = %+v, want brand-new-course/go at base 0", p)
 	}
-}
-
-// TestSaveVariantCreatesNewCourseWithMinimalEdits is the same flow, but with
-// the TODO placeholders filled in first — the point of the seeded template
-// is that it's a starting point, not necessarily the final document.
-func TestSaveVariantCreatesNewCourseWithMinimalEdits(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	tmpl := newVariantTemplate("brand-new-course", "python", "Brand New Course", "A pitch.")
-	edited := strings.Replace(tmpl, "TODO: write this lesson's content.", "Here's the real lesson content.", 1)
-	rec := postForm(mux, "/courses/brand-new-course/python/edit",
-		url.Values{"markdown": {edited}, "version": {"0"}}, session)
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST edited seeded template = %d, want 303 (saved): %s", rec.Code, rec.Body)
-	}
-	if len(fs.upserts) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
+	// An empty title falls back to the generated default.
+	if !strings.Contains(p.Title, "brand-new-course/go") {
+		t.Errorf("default title = %q", p.Title)
 	}
 }
 
@@ -414,89 +423,6 @@ func TestSaveVariantCreatesNewCourseWithMinimalEdits(t *testing.T) {
 // VariantDetail/VariantSource slug+language matching for the "go" variant of
 // intro-to-concurrency; only Language is consulted by the fake.
 var fakeVariantGo = domain.Variant{Language: "go"}
-
-// TestSaveVariantVersionConflictPreservesInput covers issue #36: someone
-// else's save landed between this page being loaded (at version 1) and this
-// submit, so the fake store's current version has already moved to 2. The
-// stale submit must be rejected with a clear message, must not silently
-// refetch/merge, and — like every other rejected save — must preserve
-// exactly what the user typed rather than reverting to stored content.
-func TestSaveVariantVersionConflictPreservesInput(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-	fs.variantVersion = 2 // someone else already saved after this page was loaded at version 1
-
-	edited := strings.Replace(seedMarkdown(t), "Introduction to Concurrency", "Introduction to Concurrency (edited)", 1)
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {edited}, "version": {"1"}}, session)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST stale version = %d, want 200 (re-render): %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "Someone else changed this since you opened it") {
-		t.Errorf("expected version-conflict message, got: %s", body)
-	}
-	if !strings.Contains(body, "(edited)") {
-		t.Error("edit page should preserve exactly what the user submitted on a version conflict")
-	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("stale write must not be applied, got %d upserts", len(fs.upserts))
-	}
-	if fs.variantSource != seedMarkdown(t) {
-		t.Error("stored variant must be untouched by the rejected stale write")
-	}
-}
-
-// TestSaveVariantMissingVersionPreservesInput covers a malformed/tampered
-// submit missing the hidden version field: it must be rejected (there's no
-// version to safely check against) rather than treated as an unconditional
-// overwrite, while still preserving the user's submitted text.
-func TestSaveVariantMissingVersionPreservesInput(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = seedMarkdown(t)
-
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}}, session) // no "version" field
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST missing version = %d, want 200 (re-render): %s", rec.Code, rec.Body)
-	}
-	if !strings.Contains(rec.Body.String(), "Missing or invalid version") {
-		t.Errorf("expected missing-version message, got: %s", rec.Body.String())
-	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("write without a version must not be applied, got %d upserts", len(fs.upserts))
-	}
-}
-
-// TestSaveVariantSavesImmediately: a valid save applies on the first plain
-// Save with no confirmation step. (Saving used to require confirming when
-// submissions existed — issue #37 — but re-publishing no longer deletes
-// them, so the confirm flow is gone.)
-func TestSaveVariantSavesImmediately(t *testing.T) {
-	mux, fs := testMux(t)
-	session := loginAlice(t, mux)
-
-	fs.variantSlug = "intro-to-concurrency"
-	fs.variant = &fakeVariantGo
-	fs.variantSource = "stale"
-
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit",
-		url.Values{"markdown": {seedMarkdown(t)}, "version": {"0"}}, session)
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST = %d, want 303 (saved immediately): %s", rec.Code, rec.Body)
-	}
-	if len(fs.upserts) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(fs.upserts))
-	}
-}
 
 // TestCreateCourseExistingSlugShowsStoredContent guards against a future
 // regression in the new=1 flow: createCourse blindly redirects into the
@@ -541,33 +467,33 @@ func TestCreateCourseExistingSlugShowsStoredContent(t *testing.T) {
 	if strings.Contains(body, "TODO: write this lesson's content.") {
 		t.Error("an existing variant's content must not be replaced by the blank new-course template")
 	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("this flow must not save anything, got %d upserts", len(fs.upserts))
+	if len(fs.proposals) != 0 {
+		t.Errorf("this flow must not open a proposal, got %d", len(fs.proposals))
 	}
 }
 
 // --- issue #39: live preview ---
 
-// TestPreviewVariantRequiresAuth mirrors TestEditVariantPageRequiresAuth:
-// the preview endpoint is gated exactly like the editor page it serves, so
-// an anonymous caller never gets a rendering oracle.
-func TestPreviewVariantRequiresAuth(t *testing.T) {
+// TestPreviewMarkdownRequiresAuth mirrors TestEditVariantPageRequiresAuth:
+// the preview endpoint is gated exactly like the editors it serves, so an
+// anonymous caller never gets a rendering oracle.
+func TestPreviewMarkdownRequiresAuth(t *testing.T) {
 	mux, _ := testMux(t)
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit/preview", url.Values{"markdown": {"# Hi"}}, nil)
+	rec := postForm(mux, "/preview/markdown", url.Values{"markdown": {"# Hi"}}, nil)
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("anonymous POST /edit/preview = %d, want 303 redirect to /login", rec.Code)
+		t.Fatalf("anonymous POST /preview/markdown = %d, want 303 redirect to /login", rec.Code)
 	}
 	if loc := rec.Header().Get("Location"); loc != "/login" {
 		t.Errorf("Location = %q, want /login", loc)
 	}
 }
 
-// TestPreviewVariantStripsFrontmatterAndRendersMarkdown covers the core
+// TestPreviewMarkdownStripsFrontmatterAndRendersMarkdown covers the core
 // behavior: a full course document (frontmatter + a fenced code block) POSTed
 // to the preview endpoint comes back as HTML with the frontmatter gone and
 // the markdown structure (heading, code block) actually rendered — not the
-// raw frontmatter keys, and not a real save (no store upsert).
-func TestPreviewVariantStripsFrontmatterAndRendersMarkdown(t *testing.T) {
+// raw frontmatter keys, and no side effects (no proposal opened).
+func TestPreviewMarkdownStripsFrontmatterAndRendersMarkdown(t *testing.T) {
 	mux, fs := testMux(t)
 	session := loginAlice(t, mux)
 
@@ -583,9 +509,9 @@ func TestPreviewVariantStripsFrontmatterAndRendersMarkdown(t *testing.T) {
 		"func main() {}\n" +
 		"```\n"
 
-	rec := postForm(mux, "/courses/intro-to-concurrency/go/edit/preview", url.Values{"markdown": {doc}}, session)
+	rec := postForm(mux, "/preview/markdown", url.Values{"markdown": {doc}}, session)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /edit/preview = %d, want 200: %s", rec.Code, rec.Body)
+		t.Fatalf("POST /preview/markdown = %d, want 200: %s", rec.Code, rec.Body)
 	}
 	body := rec.Body.String()
 	if strings.Contains(body, "course:") || strings.Contains(body, "language:") {
@@ -597,7 +523,7 @@ func TestPreviewVariantStripsFrontmatterAndRendersMarkdown(t *testing.T) {
 	if !strings.Contains(body, "<pre") && !strings.Contains(body, "<code") {
 		t.Errorf("expected a rendered code block, got: %s", body)
 	}
-	if len(fs.upserts) != 0 {
-		t.Errorf("preview must be side-effect-free, got %d upserts", len(fs.upserts))
+	if len(fs.proposals) != 0 {
+		t.Errorf("preview must be side-effect-free, got %d proposals", len(fs.proposals))
 	}
 }

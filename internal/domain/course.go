@@ -64,6 +64,16 @@ type Challenge struct {
 	Points      int
 }
 
+// VariantExport is one live variant's source document with just enough
+// identity to write it to a file — the shape of the public /api/v1/export
+// endpoint that keeps the repo's courses/ mirror in sync.
+type VariantExport struct {
+	CourseSlug string
+	Language   string
+	Version    int
+	SourceMD   string
+}
+
 // TotalPoints is the maximum score achievable in the variant.
 func (v Variant) TotalPoints() int {
 	total := v.Final.Points
