@@ -54,8 +54,11 @@ var commands = []cmdHelp{
 		usage:   "duck pull <course>/<language> [--base URL]",
 		long: "Scaffolds a course variant into ./<course>-<language>/, one\n" +
 			"subdirectory per challenge holding the starter code and its test\n" +
-			"file (plus a go.mod for Go). A .duck-course.json is written at the\n" +
-			"root so `duck test` and `duck submit` work from anywhere in the\n" +
+			"file (plus a go.mod for Go). Directories are prefixed with their\n" +
+			"lesson number (\"03-merge\"; \"05a-min-heap\"/\"05b-heapsort\" when a\n" +
+			"lesson has several; \"final-…\" for the final challenge) so a\n" +
+			"listing sorts in course order. A .duck-course.json is written at\n" +
+			"the root so `duck test` and `duck submit` work from anywhere in the\n" +
 			"tree. Challenges that already exist locally are skipped, so pulling\n" +
 			"again never clobbers work in progress.",
 		flags: []flagHelp{baseFlag},
@@ -73,7 +76,8 @@ var commands = []cmdHelp{
 		long: "Runs a challenge's tests on your machine using the native\n" +
 			"toolchain (go, python3, or cc) — no Docker, no network. Run it from\n" +
 			"anywhere inside a pulled course tree. With no slug it runs every\n" +
-			"challenge; with a slug it runs just that one. Each run is bounded by\n" +
+			"challenge; with a slug (or its directory name — \"merge\" and\n" +
+			"\"03-merge\" both work) it runs just that one. Each run is bounded by\n" +
 			"a 30s timeout and reports PASS, FAIL, or TIMEOUT with the test\n" +
 			"output.",
 		examples: []example{
@@ -88,10 +92,12 @@ var commands = []cmdHelp{
 		usage:   "duck submit <challenge-slug> [--remote]",
 		long: "Local-first grading: runs the challenge's tests on your machine,\n" +
 			"submits the code together with the claimed pass/fail verdict, and\n" +
-			"prints the result immediately. The server re-grades in the\n" +
-			"background as an audit nobody waits on. Requires a saved token (see\n" +
-			"`duck auth login`). If the language's toolchain isn't installed, submit\n" +
-			"automatically falls back to synchronous server grading.",
+			"prints the result immediately. The challenge can be named by slug\n" +
+			"or by its pulled directory (\"merge\" and \"03-merge\" both work). The\n" +
+			"server re-grades in the background as an audit nobody waits on.\n" +
+			"Requires a saved token (see `duck auth login`). If the language's\n" +
+			"toolchain isn't installed, submit automatically falls back to\n" +
+			"synchronous server grading.",
 		flags: []flagHelp{
 			{"--remote", "skip the local run; grade on the server and wait for the result"},
 		},
