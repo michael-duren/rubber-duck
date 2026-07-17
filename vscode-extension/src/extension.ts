@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { listCourses, loadToken } from "./api";
-import { baseArgs, baseUrl, disposeTerminal, duckPath, execDuck, runInTerminal } from "./cli";
+import { baseArgs, baseUrl, disposeTerminal, duckPath, execDuck, runInTerminal, shellQuote } from "./cli";
 import { DuckCodeLensProvider } from "./codelens";
 import { ChallengeItem, CourseItem, CoursesProvider, VariantItem } from "./courses";
 import { challengeSlugFor, findCourseRootFor } from "./local";
@@ -34,7 +34,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("duck.login", () => {
       const term = vscode.window.createTerminal("duck auth login");
       term.show();
-      term.sendText([duckPath(), "auth", "login", ...baseArgs()].join(" "));
+      term.sendText(shellQuote([duckPath(), "auth", "login", ...baseArgs()]));
       vscode.window
         .showInformationMessage(
           "Complete the login in the terminal, then refresh the course list.",
@@ -130,7 +130,13 @@ async function pullCourse(provider: CoursesProvider, item?: VariantItem): Promis
       vscode.window.showErrorMessage("Sign in first: run Duck: Login.");
       return;
     }
-    const courses = await listCourses(baseUrl(), token);
+    let courses;
+    try {
+      courses = await listCourses(baseUrl(), token);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Couldn't load courses: ${(err as Error).message}`);
+      return;
+    }
     const coursePick = await vscode.window.showQuickPick(
       courses.map((c) => ({ label: c.title, description: c.slug, course: c })),
       { placeHolder: "Course to pull" },

@@ -23,7 +23,9 @@ templ SubmissionPage(user *domain.User, sub domain.Submission, back string) {
 				@SubmissionResult(sub)
 			</div>
 			if back != "" {
-				<a href={ templ.SafeURL(back) } class="mt-6 inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-400">← Back to the challenge</a>
+				// back is a same-host path (see backLink); the plain-string href
+				// keeps templ's URL sanitizer in play as a second layer.
+				<a href={ back } class="mt-6 inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-400">← Back to the challenge</a>
 			}
 		</article>
 		<script src="/static/poll.js"></script>

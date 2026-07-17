@@ -58,10 +58,11 @@
     },
     {
       "customType": "regex",
-      "description": "templ binary pinned in the Dockerfile go install",
-      "managerFilePatterns": ["/^Dockerfile$/"],
+      "description": "templ binary pinned in the Dockerfile go install and Makefile var",
+      "managerFilePatterns": ["/^Dockerfile$/", "/^Makefile$/"],
       "matchStrings": [
-        "github\\.com/a-h/templ/cmd/templ@(?<currentValue>v[\\d.]+)"
+        "github\\.com/a-h/templ/cmd/templ@(?<currentValue>v[\\d.]+)",
+        "TEMPL_VERSION\\s*:?=\\s*(?<currentValue>v[\\d.]+)"
       ],
       "depNameTemplate": "github.com/a-h/templ",
       "datasourceTemplate": "go"

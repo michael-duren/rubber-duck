@@ -85,11 +85,15 @@ func (p *docWalker) walk(doc ast.Node) {
 func (p *docWalker) heading(h *ast.Heading) bool {
 	title := nodeText(h, p.src)
 	line := lineOf(p.src, headingOffset(h))
+	// The pending section ends where this heading's *line* starts, not at
+	// the heading text: headingOffset points past the "# " marker, and
+	// flushing to it would leak stray marker characters into the section.
+	start := lineStart(p.src, headingOffset(h))
 
 	switch {
 	case h.Level == 1 && strings.HasPrefix(title, "Lesson:"):
 		p.closeChallenge()
-		p.flushSection(headingOffset(h))
+		p.flushSection(start)
 		p.res.Lessons = append(p.res.Lessons, ParsedLesson{
 			Slug:  attrString(h, "id"),
 			Title: strings.TrimSpace(strings.TrimPrefix(title, "Lesson:")),
@@ -103,7 +107,7 @@ func (p *docWalker) heading(h *ast.Heading) bool {
 
 	case h.Level == 1 && strings.HasPrefix(title, "Final Challenge:"):
 		p.closeChallenge()
-		p.flushSection(headingOffset(h))
+		p.flushSection(start)
 		p.lesson = nil
 		if p.res.Final.Slug != "" || p.isFinal {
 			p.probs = append(p.probs, Problem{line, "more than one final challenge"})
@@ -115,7 +119,7 @@ func (p *docWalker) heading(h *ast.Heading) bool {
 
 	case h.Level == 2 && strings.HasPrefix(title, "Challenge:"):
 		p.closeChallenge()
-		p.flushSection(headingOffset(h))
+		p.flushSection(start)
 		if p.lesson == nil {
 			p.probs = append(p.probs, Problem{line, "challenge outside a lesson"})
 			p.challenge = &ParsedChallenge{} // parse it, then discard
@@ -127,7 +131,7 @@ func (p *docWalker) heading(h *ast.Heading) bool {
 		return true
 
 	case h.Level == 3 && p.challenge != nil && (title == "Starter" || title == "Tests"):
-		p.flushSection(headingOffset(h))
+		p.flushSection(start)
 		p.contentDst = nil
 		if title == "Starter" {
 			p.fenceDst = &p.challenge.StarterCode
@@ -273,6 +277,14 @@ func lineOf(src []byte, off int) int {
 		off = len(src)
 	}
 	return bytes.Count(src[:off], []byte("\n")) + 1
+}
+
+// lineStart returns the offset of the start of the line containing off.
+func lineStart(src []byte, off int) int {
+	if off > len(src) {
+		off = len(src)
+	}
+	return bytes.LastIndexByte(src[:off], '\n') + 1
 }
 
 // lineEnd returns the offset just past the end of the line containing off.
