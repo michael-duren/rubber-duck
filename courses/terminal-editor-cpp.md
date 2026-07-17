@@ -573,15 +573,17 @@ ESC [ 4 ~  or  ESC [ 8 ~ End
 ESC [ 3 ~                Delete
 ESC [ 5 ~ / ESC [ 6 ~    PageUp / PageDown
 ESC O A ... ESC O F      arrows/Home/End again — SS3 form, sent by
-                         terminals in "application keypad" mode
+                         terminals in "application cursor keys" mode
 ```
 
 Yes: three different encodings for Home, from different terminal
 lineages, all still in the wild. A robust decoder accepts all of them.
 (The `~`-form numbers come from the VT220's function-key scheme; the
-`ESC O` prefix is SS3, "single shift 3", from the VT100's application
-keypad.) The `ctlseqs` document in the extended reading is the closest
-thing to a complete map.
+`ESC O` prefix is SS3, "single shift 3", the VT100 control that
+introduces its application-mode keypad and cursor-key codes — arrows
+switch to the SS3 form when the terminal enters application cursor-keys
+mode, `ESC [ ? 1 h`, DECCKM.) The `ctlseqs` document in the extended
+reading is the closest thing to a complete map.
 
 There's one genuinely nasty ambiguity: the user pressing the **Esc key**
 sends a lone 0x1B — the same byte that *starts* every sequence. The only
@@ -633,9 +635,9 @@ Implement `decode_byte`, mapping a single input byte to a `Key`:
   Ctrl-H from tradition).
 - Remaining bytes `0x01..0x1A` → `CtrlKey` with the lowercase letter:
   `0x01` → `{'a'}`, `0x1A` → `{'z'}`.
-- Everything else — printable ASCII, and bytes ≥ 0x80 (UTF-8
-  continuation bytes pass through untouched; the buffer stores raw
-  bytes) — → `char` (cast the byte).
+- Everything else — printable ASCII, and bytes ≥ 0x80 (the non-ASCII
+  bytes of a UTF-8 sequence, lead and continuation alike, pass through
+  untouched; the buffer stores raw bytes) — → `char` (cast the byte).
 
 Note the parameter is `std::uint8_t`, not `char`: whether `char` is
 signed is platform-dependent, and a signed 0xE9 is −23 — the same bug the
@@ -1361,6 +1363,32 @@ you make cheap*, and an editor's hot operations are: insert/delete a
 char near the cursor, split/join a line, and read a screenful of
 consecutive lines.
 
+The cursor (amber oval, a `Pos{row, col}`) reaches a character in two
+steps — the solid `row` edge picks the line, then the dashed `col` edge
+indexes into that line's own string (here landing on the `'r'`):
+
+```d2
+direction: right
+
+cur: "cursor  Pos{row, col}" {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+buf: "TextBuffer.lines_" {
+  shape: sql_table
+  "row 0": "int main() {"
+  "row 1": "  return 0;"
+  "row 2": "}"
+}
+
+ch: "'r'" {shape: text}
+
+cur -> buf."row 1": "row"
+buf."row 1" -> ch: "col" {style.stroke-dash: 4}
+```
+
 ### Positions, and the operations that edit
 
 A position in the buffer is a row/column pair — a tiny value type,
@@ -1890,8 +1918,9 @@ axis:
 
 The horizontal axis is identical with `col_off`/`cur_rx`/`screen_cols` —
 and note it's **rx**, not cx, that the horizontal comparison uses: the
-viewport is a window over *screen columns*, and `cx_to_rx` is what turns the cursor's buffer position into the
-coordinate this policy clamps. Wire them in the wrong order (clamp on
+viewport is a window over *screen columns*, and `cx_to_rx` is what turns
+the cursor's buffer position into the coordinate this policy clamps. Wire
+them in the wrong order (clamp on
 cx, render with rx) and files with tabs scroll horizontally at the
 wrong moment — by an amount that depends on how many tabs are left of
 the cursor, a lovely class of bug to debug at 40 columns.
@@ -2519,6 +2548,27 @@ current mode. The transitions:
   executes it; **Esc** abandons it; **Backspace** erases — and
   backspacing past the start *cancels back to normal mode*, a small
   authentic vi behavior the tests check.
+
+Normal is the hub (violet border); each edge is labeled with the key
+that triggers it, and the dashed edge marks the two ways command mode
+bails back to normal without submitting:
+
+```d2
+direction: right
+
+normal: "Normal\n(command console)" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+insert: "Insert\n(typewriter)"
+command: "Command\n(:ex line)"
+
+normal -> insert: "i I a A o O"
+insert -> normal: "Esc"
+normal -> command: ":"
+command -> normal: "Enter: submit"
+command -> normal: "Esc / Backspace past start" {style.stroke-dash: 4}
+```
 
 `std::visit` earns its keep here: dispatching a `Key` variant means
 handling each alternative, and the **overloaded-lambdas idiom** is the
@@ -3979,20 +4029,17 @@ int main() {
         check(doc == "", "test_undo_peels_first_session");
     }
     {
-        // Non-contiguous inserts don't coalesce.
+        // Non-contiguous inserts don't coalesce: the second insert lands
+        // BEFORE the first, so the end-of-run position doesn't line up.
         UndoHistory h;
-        std::string doc = "xy";
-        h.record_insert(0, "x");  // pretend history for "x" at 0...
-        // (fresh history; drive it for real:)
-        UndoHistory h2;
-        std::string d2;
-        ins(h2, d2, 0, "a");
-        ins(h2, d2, 0, "b");     // inserted BEFORE previous text
-        check(d2 == "ba", "test_doc_noncontiguous");
-        h2.undo(d2);
-        check(d2 == "a", "test_noncontiguous_separate_units");
-        h2.undo(d2);
-        check(d2 == "", "test_noncontiguous_second_undo");
+        std::string doc;
+        ins(h, doc, 0, "a");
+        ins(h, doc, 0, "b");     // inserted BEFORE previous text
+        check(doc == "ba", "test_doc_noncontiguous");
+        h.undo(doc);
+        check(doc == "a", "test_noncontiguous_separate_units");
+        h.undo(doc);
+        check(doc == "", "test_noncontiguous_second_undo");
     }
     {
         // Newline starts a new unit: undo is line-grained.

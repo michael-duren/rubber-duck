@@ -148,7 +148,9 @@ templ Home(user *domain.User, featured []domain.CourseSummary, resume *domain.Va
 							class="reveal tui-frame group flex flex-col border border-slate-300 bg-white transition hover:border-emerald-500 dark:border-slate-800 dark:bg-[#0e1410] dark:hover:border-emerald-500"
 							style={ fmt.Sprintf("--reveal-delay:%.2fs", 0.08*float64(i)) }
 						>
-							<img src={ "/courses/" + c.Slug + "/card.svg" } alt="" width="640" height="256" loading="lazy" class="block w-full border-b border-slate-300 dark:border-slate-800"/>
+							// invert+hue-rotate relights the dark card art for light mode; see
+							// the catalog card comment.
+							<img src={ "/courses/" + c.Slug + "/card.svg" } alt="" width="640" height="256" loading="lazy" class="block w-full border-b border-slate-300 invert hue-rotate-180 dark:border-slate-800 dark:invert-0 dark:hue-rotate-0"/>
 							<div class="flex flex-1 flex-col p-5">
 								<h3 class="text-lg font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400">{ c.Title }</h3>
 								<div class="mt-auto flex items-center justify-between pt-4">

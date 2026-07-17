@@ -41,7 +41,14 @@ type handlers struct {
 func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses CourseReader, submissions SubmissionStore, enqueuer Enqueuer) {
 	h := &handlers{store: store, courses: courses, submissions: submissions, enqueuer: enqueuer, logger: logger}
 
-	mux.Handle("GET /static/", http.FileServerFS(staticFS))
+	if sh, err := newStaticHandler(staticFS, "static"); err != nil {
+		// Only reachable if the embedded FS is unreadable (a build-time
+		// impossibility); fall back to plain, uncompressed serving.
+		logger.Error("static handler init failed; serving uncompressed", "err", err)
+		mux.Handle("GET /static/", http.FileServerFS(staticFS))
+	} else {
+		mux.Handle("GET /static/", sh)
+	}
 
 	pages := http.NewServeMux()
 	pages.HandleFunc("GET /{$}", h.homePage)

@@ -17,6 +17,65 @@ extended_reading:
 A goroutine is a lightweight thread managed by the Go runtime. Starting one
 costs a few kilobytes of stack, so programs routinely run thousands of them.
 
+Concurrency is about *structuring* work as independent tasks; parallelism is
+about *running* them at once. The violet panel is concurrency (one core,
+tasks interleaved over time); the emerald panel is parallelism (many cores
+running tasks simultaneously — read each core's row left to right, in step).
+Goroutines always give you the violet picture, and when more than one core
+is available (`GOMAXPROCS` defaults to the core count) the runtime runs
+them in parallel too.
+
+```d2
+grid-rows: 2
+grid-gap: 30
+
+concurrency: "Concurrency" {
+  style.stroke: "#8b5cf6"
+  style.stroke-width: 3
+  desc: "one core: A and B interleaved over time" {
+    shape: text
+  }
+  timeline: "" {
+    grid-rows: 1
+    grid-gap: 0
+    s1: A
+    s2: B
+    s3: A
+    s4: B
+    s5: A
+    s6: B
+  }
+}
+
+parallelism: "Parallelism" {
+  style.stroke: "#34d399"
+  style.stroke-width: 3
+  desc: "two cores: A and B run at the same time" {
+    shape: text
+  }
+  cores: "" {
+    grid-rows: 2
+    grid-gap: 8
+    style.stroke-width: 0
+    style.fill: transparent
+    core1: "Core 1" {
+      grid-rows: 1
+      grid-gap: 0
+      a1: A
+      a2: A
+      a3: A
+    }
+    core2: "Core 2" {
+      grid-rows: 1
+      grid-gap: 0
+      b1: B
+      b2: B
+      b3: B
+    }
+  }
+}
+```
+
 ```go
 go func() {
 	fmt.Println("hello from a goroutine")
@@ -108,6 +167,32 @@ func TestSum(t *testing.T) {
 Channels connect goroutines: one sends, another receives. Unbuffered channels
 synchronize both sides — a send blocks until a receiver is ready.
 
+The amber sender and the cyan receiver meet at the unbuffered channel
+(violet): the send blocks until a receiver is ready, then the value is
+handed straight over — nothing is stored in between.
+
+```d2
+direction: right
+
+sender: "Sender\ngoroutine" {
+  style.stroke: "#d97706"
+  style.stroke-width: 2
+}
+
+ch: "ch\nunbuffered channel" {
+  style.stroke: "#a78bfa"
+  style.stroke-width: 2
+}
+
+receiver: "Receiver\ngoroutine" {
+  style.stroke: "#22d3ee"
+  style.stroke-width: 2
+}
+
+sender -> ch: "ch <- 42\nblocks until a\nreceiver is ready"
+ch -> receiver: "<-ch\nhands the value over"
+```
+
 ```go
 ch := make(chan int)
 go func() { ch <- 42 }()
@@ -117,6 +202,24 @@ fmt.Println(<-ch) // 42
 Close a channel to signal "no more values". Receivers can range over a
 channel until it is closed. Only the sending side should close a channel —
 closing an already-closed channel, or sending on a closed one, panics.
+
+```go
+ch := make(chan int)
+go func() {
+	defer close(ch)
+	for i := 1; i <= 3; i++ {
+		ch <- i
+	}
+}()
+for v := range ch { // 1, 2, 3 — the loop ends when ch is closed and drained
+	fmt.Println(v)
+}
+```
+
+The sender closes `ch` (here with `defer`) once it has nothing left to send;
+that close is what lets the `range` loop terminate instead of blocking
+forever on a fourth receive. This producer-closes-then-receiver-ranges shape
+is the backbone of every channel program below.
 
 A receive can also ask whether the channel is still open:
 
@@ -158,6 +261,49 @@ for a != nil || b != nil {
 Setting a drained channel variable to `nil` is the trick that retires it:
 a receive on a `nil` channel never becomes ready, so `select` simply stops
 considering that case and keeps servicing the other one.
+
+### Chaining stages: a pipeline
+
+A *pipeline* is a chain of stages joined by channels, where each stage is a
+goroutine that receives from an upstream channel, does some work, and sends
+downstream. A middle stage is both a receiver and a sender: it ranges over
+its input and closes its output once that input runs dry — the same
+producer-closes-then-receiver-ranges shape from above, one link further down
+the chain.
+
+```go
+// stage 1: emit the numbers, then close
+nums := make(chan int)
+go func() {
+	defer close(nums)
+	for _, n := range []int{1, 2, 3} {
+		nums <- n
+	}
+}()
+
+// stage 2: square each value and forward it
+squares := make(chan int)
+go func() {
+	defer close(squares)
+	for n := range nums { // ends when stage 1 closes nums
+		squares <- n * n
+	}
+}()
+
+// stage 3: the caller consumes the last channel
+total := 0
+for sq := range squares { // ends when stage 2 closes squares
+	total += sq
+}
+fmt.Println(total) // 14
+```
+
+Each stage closing *its own* output channel is what makes the shutdowns
+cascade: stage 1 closing `nums` lets stage 2's `range` finish, which fires
+its `defer close(squares)`, which in turn lets the final loop end. Running
+the last stage in the calling goroutine is what makes it safe to read
+`total` afterward — the `range` over `squares` only returns once every
+upstream stage has closed, so it doubles as the synchronization point.
 
 ## Challenge: Fan In {#fan-in points=15}
 

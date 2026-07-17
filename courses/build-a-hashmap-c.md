@@ -227,8 +227,10 @@ struct hm_entry {
 };
 ```
 
-Each bucket is a chain head; colliding keys queue up behind each other. Here
-`"ada"` and `"ken"` both landed in bucket 1, so bucket 1's chain holds both:
+Each bucket is a chain head; colliding keys queue up behind each other. Under
+the FNV-1a from last lesson, `"ada"` and `"alan"` both fold into bucket 3
+(their hashes agree mod 4), so bucket 3's chain holds both; `"ken"` lands
+alone in bucket 1:
 
 ```d2
 direction: right
@@ -239,11 +241,11 @@ buckets: buckets {
   "2"
   "3"
 }
-n1: "\"ada\" = 0"
-n2: "\"ken\" = 6"
-n3: "\"alan\" = 3"
-buckets."1" -> n1 -> n2 -> x1
-buckets."3" -> n3 -> x2
+n1: "\"ada\""
+n3: "\"alan\""
+n2: "\"ken\""
+buckets."3" -> n1 -> n3 -> x1
+buckets."1" -> n2 -> x2
 x1: "∅" { shape: text }
 x2: "∅" { shape: text }
 ```
