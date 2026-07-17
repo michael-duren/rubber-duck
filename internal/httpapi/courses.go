@@ -105,12 +105,17 @@ func (h *handlers) getVariantSource(w http.ResponseWriter, r *http.Request) {
 }
 
 type challengeJSON struct {
-	LessonSlug  string `json:"lesson_slug"`
-	Slug        string `json:"slug"`
-	Title       string `json:"title"`
-	Points      int    `json:"points"`
-	StarterCode string `json:"starter_code"`
-	TestCode    string `json:"test_code"`
+	LessonSlug string `json:"lesson_slug"`
+	// LessonNumber is the lesson's 1-based position among ALL the variant's
+	// lessons — including lessons with no challenges — so clients can label
+	// challenges with the same numbers the lesson list shows. 0 for the
+	// final challenge, which belongs to no lesson.
+	LessonNumber int    `json:"lesson_number"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	Points       int    `json:"points"`
+	StarterCode  string `json:"starter_code"`
+	TestCode     string `json:"test_code"`
 }
 
 // listChallenges is the public (unauthenticated) endpoint local test runs
@@ -127,12 +132,12 @@ func (h *handlers) listChallenges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]challengeJSON, 0, variant.ChallengeCount())
-	for _, l := range variant.Lessons {
+	for i, l := range variant.Lessons {
 		for _, c := range l.Challenges {
-			items = append(items, challengeJSON{l.Slug, c.Slug, c.Title, c.Points, c.StarterCode, c.TestCode})
+			items = append(items, challengeJSON{l.Slug, i + 1, c.Slug, c.Title, c.Points, c.StarterCode, c.TestCode})
 		}
 	}
-	items = append(items, challengeJSON{"", variant.Final.Slug, variant.Final.Title, variant.Final.Points, variant.Final.StarterCode, variant.Final.TestCode})
+	items = append(items, challengeJSON{"", 0, variant.Final.Slug, variant.Final.Title, variant.Final.Points, variant.Final.StarterCode, variant.Final.TestCode})
 	writeJSON(w, http.StatusOK, map[string]any{"challenges": items})
 }
 

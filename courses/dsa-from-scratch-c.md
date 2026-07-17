@@ -78,20 +78,40 @@ that's a constant ~2 copies per push. Occasional expensive pushes, O(1) on
 average — this argument is called **amortized analysis**, and you'll meet
 it again when your hash map resizes.
 
+## When malloc says no
+
+`malloc` returns `NULL` when it can't give you the block, and in C nothing
+stops the program for you — the failure just sits in the return value,
+waiting to be ignored. Dereference that NULL and you crash somewhere else,
+far from the cause.
+
+A library function has no business calling `exit()` on its caller's
+behalf, so the C convention is to *report*: return an error code (`0` for
+success, `-1` for failure is the usual pair), leave the data structure
+exactly as it was, and let the caller decide what to do about it. The
+"leave it as it was" half matters as much as the return value — a push
+that fails after freeing the old block turns an out-of-memory hiccup into
+a lost array.
+
 ## Challenge: Growable Array {#growable-array points=10}
 
 Implement a growable array of ints:
 
 - `array_init` starts empty: `data` NULL, `len` and `cap` 0.
-- `array_push` writes to the next free slot. When `len == cap`, allocate a
-  new block of **double** the capacity (0 grows to 1), copy the old
-  contents over, free the old block, then push.
+- `array_push` writes to the next free slot and returns 0. When
+  `len == cap`, allocate a new block of **double** the capacity (0 grows
+  to 1), copy the old contents over, free the old block, then push. If
+  that allocation fails, return **-1** and leave the array exactly as it
+  was — nothing freed, nothing lost.
 - `array_get(a, i)` returns the i'th element; callers only pass in-range
   indexes.
 - `array_free` releases the block and resets the struct to empty.
 
 The tests inspect `a.cap` after every push, so the doubling schedule
-(1, 2, 4, 8, …) is part of the contract.
+(1, 2, 4, 8, …) is part of the contract. They also force a failing
+allocation — by forging `len == cap == SIZE_MAX / 8` so the doubling
+`malloc` asks for more memory than the machine can address — and expect
+`-1` back with the struct untouched.
 
 ### Starter
 
@@ -110,13 +130,16 @@ void array_init(struct array *a) {
 	(void)a;
 }
 
-/* array_push appends v, doubling the block when it is full (0 -> 1). */
-void array_push(struct array *a, int v) {
-	/* TODO: if len == cap, malloc a block of 2*cap (or 1), copy the old
-	   contents across, free the old block, and point data at the new one;
-	   then store v at data[len] and bump len */
+/* array_push appends v, doubling the block when it is full (0 -> 1).
+   Returns 0 on success, -1 if allocation fails (array left unchanged). */
+int array_push(struct array *a, int v) {
+	/* TODO: if len == cap, malloc a block of 2*cap (or 1); if malloc
+	   returns NULL, return -1 without touching the array. Otherwise copy
+	   the old contents across, free the old block, and point data at the
+	   new one. Then store v at data[len], bump len, and return 0. */
 	(void)a;
 	(void)v;
+	return 0;
 }
 
 /* array_get returns the i'th element (0-indexed, always in range). */
@@ -137,6 +160,7 @@ void array_free(struct array *a) {
 ### Tests
 
 ```c
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -147,7 +171,7 @@ struct array {
 };
 
 void array_init(struct array *a);
-void array_push(struct array *a, int v);
+int array_push(struct array *a, int v);
 int array_get(const struct array *a, size_t i);
 void array_free(struct array *a);
 
@@ -173,6 +197,10 @@ static size_t next_pow2(size_t n) {
 static void test_init_is_empty(void) {
 	struct array a;
 	array_init(&a);
+	if (a.len != 0 || a.cap != 0) {
+		printf("    after array_init: len=%zu cap=%zu, wanted len=0 cap=0\n",
+		       a.len, a.cap);
+	}
 	check(a.len == 0 && a.cap == 0, "test_init_is_empty");
 	array_free(&a);
 }
@@ -184,13 +212,20 @@ static void test_push_and_get(void) {
 
 	array_init(&a);
 	for (i = 0; i < 100; i++) {
-		array_push(&a, (int)(i * i));
+		if (array_push(&a, (int)(i * i)) != 0) {
+			printf("    push %zu returned -1, wanted 0 (malloc should not fail here)\n", i);
+			ok = 0;
+			break;
+		}
 	}
-	if (a.len != 100) {
+	if (ok && a.len != 100) {
+		printf("    after 100 pushes: len=%zu, wanted 100\n", a.len);
 		ok = 0;
 	}
 	for (i = 0; i < 100 && ok; i++) {
-		if (array_get(&a, i) != (int)(i * i)) {
+		int got = array_get(&a, i);
+		if (got != (int)(i * i)) {
+			printf("    a[%zu] = %d, wanted %d\n", i, got, (int)(i * i));
 			ok = 0;
 		}
 	}
@@ -207,6 +242,8 @@ static void test_doubling_schedule(void) {
 	for (i = 1; i <= 200; i++) {
 		array_push(&a, (int)i);
 		if (a.cap != next_pow2(i)) {
+			printf("    after push %zu: cap=%zu, wanted %zu (doubling schedule 1, 2, 4, 8, ...)\n",
+			       i, a.cap, next_pow2(i));
 			ok = 0;
 			break;
 		}
@@ -221,10 +258,13 @@ static void test_growth_preserves_contents(void) {
 	size_t i, j;
 
 	array_init(&a);
-	for (i = 0; i < 17; i++) {
+	for (i = 0; i < 17 && ok; i++) {
 		array_push(&a, 1000 - (int)i);
-		for (j = 0; j <= i; j++) {
-			if (array_get(&a, j) != 1000 - (int)j) {
+		for (j = 0; j <= i && ok; j++) {
+			int got = array_get(&a, j);
+			if (got != 1000 - (int)j) {
+				printf("    after %zu pushes: a[%zu] = %d, wanted %d (contents lost while growing?)\n",
+				       i + 1, j, got, 1000 - (int)j);
 				ok = 0;
 			}
 		}
@@ -233,11 +273,42 @@ static void test_growth_preserves_contents(void) {
 	array_free(&a);
 }
 
+static void test_push_reports_malloc_failure(void) {
+	struct array a;
+	int ok = 1, rc;
+	const size_t huge = SIZE_MAX / 8;
+
+	array_init(&a);
+	array_push(&a, 42); /* one real element, so data is a real block */
+
+	/* Forge a full array so large that the doubling malloc must fail:
+	   doubling SIZE_MAX/8 ints asks for ~SIZE_MAX bytes. */
+	a.len = huge;
+	a.cap = huge;
+	rc = array_push(&a, 7);
+	if (rc != -1) {
+		printf("    push into a maxed-out array returned %d, wanted -1 (report malloc failure)\n", rc);
+		ok = 0;
+	}
+	if (a.len != huge || a.cap != huge) {
+		printf("    failed push changed the array: len=%zu cap=%zu, wanted len=cap=%zu (leave it untouched)\n",
+		       a.len, a.cap, huge);
+		ok = 0;
+	}
+	check(ok, "test_push_reports_malloc_failure");
+
+	/* Un-forge before freeing. */
+	a.len = 1;
+	a.cap = 1;
+	array_free(&a);
+}
+
 int main(void) {
 	test_init_is_empty();
 	test_push_and_get();
 	test_doubling_schedule();
 	test_growth_preserves_contents();
+	test_push_reports_malloc_failure();
 	return failed;
 }
 ```
@@ -345,7 +416,8 @@ static int cmp_int(const void *x, const void *y) {
 	return (a > b) - (a < b);
 }
 
-/* sorts_like_qsort sorts a copy with qsort(3) and compares. */
+/* sorts_like_qsort sorts a copy with qsort(3) and compares, printing the
+   first difference it finds. */
 static int sorts_like_qsort(const int *in, size_t n) {
 	int *mine = malloc(n * sizeof(int) + 1);
 	int *want = malloc(n * sizeof(int) + 1);
@@ -360,7 +432,11 @@ static int sorts_like_qsort(const int *in, size_t n) {
 	insertion_sort(mine, n);
 	for (i = 0; i < n; i++) {
 		if (mine[i] != want[i]) {
+			printf("    sorting %zu elements (input[0..2]: %d %d %d ...): a[%zu] = %d, wanted %d\n",
+			       n, in[0], n > 1 ? in[1] : 0, n > 2 ? in[2] : 0,
+			       i, mine[i], want[i]);
 			ok = 0;
+			break;
 		}
 	}
 	free(mine);
@@ -514,6 +590,8 @@ static int merges_to(const int *a, size_t na, const int *b, size_t nb,
 	merge(a, na, b, nb, out);
 	for (i = 0; i < na + nb; i++) {
 		if (out[i] != want[i]) {
+			printf("    merging %zu + %zu elements: out[%zu] = %d, wanted %d (-999 means the slot was never written)\n",
+			       na, nb, i, out[i], want[i]);
 			return 0;
 		}
 	}
@@ -548,6 +626,8 @@ int main(void) {
 		merge(src_a, 3, src_b, 3, out);
 		for (i = 0; i < 3; i++) {
 			if (src_a[i] != 1 + 2 * i || src_b[i] != 2 + 2 * i) {
+				printf("    merge modified its inputs: a[%d] = %d (wanted %d), b[%d] = %d (wanted %d)\n",
+				       i, src_a[i], 1 + 2 * i, i, src_b[i], 2 + 2 * i);
 				ok = 0;
 			}
 		}
@@ -632,7 +712,11 @@ static int sorts_like_qsort(const int *in, size_t n) {
 	merge_sort(mine, n);
 	for (i = 0; i < n; i++) {
 		if (mine[i] != want[i]) {
+			printf("    sorting %zu elements (input[0..2]: %d %d %d ...): a[%zu] = %d, wanted %d\n",
+			       n, in[0], n > 1 ? in[1] : 0, n > 2 ? in[2] : 0,
+			       i, mine[i], want[i]);
 			ok = 0;
+			break;
 		}
 	}
 	free(mine);
@@ -829,7 +913,11 @@ static int sorts_like_qsort(const int *in, size_t n) {
 	quicksort(mine, n);
 	for (i = 0; i < n; i++) {
 		if (mine[i] != want[i]) {
+			printf("    sorting %zu elements (input[0..2]: %d %d %d ...): a[%zu] = %d, wanted %d\n",
+			       n, in[0], n > 1 ? in[1] : 0, n > 2 ? in[2] : 0,
+			       i, mine[i], want[i]);
 			ok = 0;
+			break;
 		}
 	}
 	free(mine);
@@ -1067,12 +1155,15 @@ static void check(int ok, const char *name) {
 	}
 }
 
-/* heap_ok verifies the heap property directly on the backing array. */
+/* heap_ok verifies the heap property directly on the backing array,
+   printing the first parent/child pair that violates it. */
 static int heap_ok(const struct minheap *h) {
 	size_t i;
 	for (i = 1; i < h->len; i++) {
 		size_t parent = (i - 1) / 2;
 		if (h->data[parent] > h->data[i]) {
+			printf("    heap property violated: data[%zu]=%d > its child data[%zu]=%d (len=%zu)\n",
+			       parent, h->data[parent], i, h->data[i], h->len);
 			return 0;
 		}
 	}
@@ -1093,12 +1184,19 @@ static void test_push_maintains_invariant(void) {
 	heap_init(&h);
 	for (i = 0; i < 10; i++) {
 		heap_push(&h, vals[i]);
-		if (!heap_ok(&h)) {
+		if (ok && !heap_ok(&h)) {
+			printf("    (that happened right after pushing %d, push #%zu)\n", vals[i], i + 1);
 			ok = 0;
 		}
 	}
 	check(ok, "test_push_maintains_invariant");
+	if (h.len != 10) {
+		printf("    len = %zu after 10 pushes, wanted 10\n", h.len);
+	}
 	check(h.len == 10, "test_len_after_pushes");
+	if (heap_peek(&h) != 1) {
+		printf("    peek = %d, wanted 1 (the minimum of everything pushed)\n", heap_peek(&h));
+	}
 	check(heap_peek(&h) == 1, "test_peek_is_min");
 	heap_free(&h);
 }
@@ -1118,37 +1216,57 @@ static void test_pop_drains_sorted(void) {
 	qsort(want, 10, sizeof(int), cmp_int);
 
 	for (i = 0; i < 10; i++) {
-		if (heap_pop(&h) != want[i] || !heap_ok(&h)) {
+		int got = heap_pop(&h);
+		if (ok && got != want[i]) {
+			printf("    pop #%zu = %d, wanted %d (pops must come out ascending)\n",
+			       i + 1, got, want[i]);
+			ok = 0;
+		}
+		if (ok && !heap_ok(&h)) {
+			printf("    (heap property broken after pop #%zu)\n", i + 1);
 			ok = 0;
 		}
 	}
 	check(ok, "test_pop_drains_sorted");
+	if (h.len != 0) {
+		printf("    len = %zu after popping everything, wanted 0\n", h.len);
+	}
 	check(h.len == 0, "test_len_after_draining");
 	heap_free(&h);
 }
 
 static void test_interleaved(void) {
 	struct minheap h;
-	int ok = 1;
+	int ok = 1, got;
 
 	heap_init(&h);
 	heap_push(&h, 10);
 	heap_push(&h, 4);
-	if (heap_pop(&h) != 4) {
+	got = heap_pop(&h);
+	if (got != 4) {
+		printf("    push 10, push 4, then pop = %d, wanted 4\n", got);
 		ok = 0;
 	}
 	heap_push(&h, 2);
 	heap_push(&h, 8);
-	if (heap_peek(&h) != 2) {
+	got = heap_peek(&h);
+	if (got != 2) {
+		printf("    peek with {10, 2, 8} in the heap = %d, wanted 2\n", got);
 		ok = 0;
 	}
-	if (heap_pop(&h) != 2) {
+	got = heap_pop(&h);
+	if (got != 2) {
+		printf("    first drain pop = %d, wanted 2\n", got);
 		ok = 0;
 	}
-	if (heap_pop(&h) != 8) {
+	got = heap_pop(&h);
+	if (got != 8) {
+		printf("    second drain pop = %d, wanted 8\n", got);
 		ok = 0;
 	}
-	if (heap_pop(&h) != 10) {
+	got = heap_pop(&h);
+	if (got != 10) {
+		printf("    third drain pop = %d, wanted 10\n", got);
 		ok = 0;
 	}
 	check(ok, "test_interleaved");
@@ -1170,11 +1288,14 @@ static void test_many_values(void) {
 		heap_push(&h, vals[i]);
 	}
 	if (!heap_ok(&h)) {
+		printf("    (after %zu pushes)\n", n);
 		ok = 0;
 	}
 	qsort(vals, n, sizeof(int), cmp_int);
 	for (i = 0; i < n; i++) {
-		if (heap_pop(&h) != vals[i]) {
+		int got = heap_pop(&h);
+		if (ok && got != vals[i]) {
+			printf("    pop #%zu of %zu = %d, wanted %d\n", i + 1, n, got, vals[i]);
 			ok = 0;
 		}
 	}
@@ -1263,7 +1384,11 @@ static int sorts_like_qsort(const int *in, size_t n) {
 	heapsort_ints(mine, n);
 	for (i = 0; i < n; i++) {
 		if (mine[i] != want[i]) {
+			printf("    sorting %zu elements (input[0..2]: %d %d %d ...): a[%zu] = %d, wanted %d\n",
+			       n, in[0], n > 1 ? in[1] : 0, n > 2 ? in[2] : 0,
+			       i, mine[i], want[i]);
 			ok = 0;
+			break;
 		}
 	}
 	free(mine);
@@ -1554,12 +1679,22 @@ static void check(int ok, const char *name) {
 	}
 }
 
+static void check_hash(const char *s, uint32_t want, int *ok) {
+	uint32_t got = fnv1a(s);
+	if (got != want) {
+		printf("    fnv1a(\"%s\") = 0x%08x, wanted 0x%08x\n",
+		       s, (unsigned)got, (unsigned)want);
+		*ok = 0;
+	}
+}
+
 static void test_fnv1a_vectors(void) {
 	/* Published FNV-1a 32-bit test vectors. */
-	int ok = fnv1a("") == 0x811c9dc5u &&
-	         fnv1a("a") == 0xe40c292cu &&
-	         fnv1a("hello") == 0x4f9f2cabu &&
-	         fnv1a("user:42") == 0x2f6b7b82u;
+	int ok = 1;
+	check_hash("", 0x811c9dc5u, &ok);
+	check_hash("a", 0xe40c292cu, &ok);
+	check_hash("hello", 0x4f9f2cabu, &ok);
+	check_hash("user:42", 0x2f6b7b82u, &ok);
 	check(ok, "test_fnv1a_vectors");
 }
 
@@ -1569,17 +1704,27 @@ static void test_put_get(void) {
 
 	hm_init(&m);
 	if (hm_get(&m, "missing", &v)) {
+		printf("    hm_get(\"missing\") on an empty map claimed the key exists\n");
 		ok = 0;
 	}
 	hm_put(&m, "a", 1);
 	hm_put(&m, "b", 2);
-	if (!hm_get(&m, "a", &v) || v != 1) {
+	if (!hm_get(&m, "a", &v)) {
+		printf("    hm_get(\"a\") found nothing after hm_put(\"a\", 1)\n");
+		ok = 0;
+	} else if (v != 1) {
+		printf("    hm_get(\"a\") wrote %d, wanted 1\n", v);
 		ok = 0;
 	}
-	if (!hm_get(&m, "b", &v) || v != 2) {
+	if (!hm_get(&m, "b", &v)) {
+		printf("    hm_get(\"b\") found nothing after hm_put(\"b\", 2)\n");
+		ok = 0;
+	} else if (v != 2) {
+		printf("    hm_get(\"b\") wrote %d, wanted 2\n", v);
 		ok = 0;
 	}
 	if (hm_len(&m) != 2) {
+		printf("    hm_len = %zu after 2 distinct puts, wanted 2\n", hm_len(&m));
 		ok = 0;
 	}
 	check(ok, "test_put_get");
@@ -1593,10 +1738,16 @@ static void test_overwrite(void) {
 	hm_init(&m);
 	hm_put(&m, "k", 1);
 	hm_put(&m, "k", 2);
-	if (!hm_get(&m, "k", &v) || v != 2) {
+	if (!hm_get(&m, "k", &v)) {
+		printf("    hm_get(\"k\") found nothing after two puts of \"k\"\n");
+		ok = 0;
+	} else if (v != 2) {
+		printf("    hm_get(\"k\") wrote %d, wanted 2 (the second put wins)\n", v);
 		ok = 0;
 	}
 	if (hm_len(&m) != 1) {
+		printf("    hm_len = %zu after putting \"k\" twice, wanted 1 (overwrite, not insert)\n",
+		       hm_len(&m));
 		ok = 0;
 	}
 	check(ok, "test_overwrite_keeps_size");
@@ -1614,7 +1765,11 @@ static void test_key_is_copied(void) {
 	/* Scribble over the caller's buffer: a map that stored the pointer
 	   instead of copying the key now has a corrupted key. */
 	strcpy(buf, "XXXXXXX");
-	if (!hm_get(&m, "scratch", &v) || v != 99) {
+	if (!hm_get(&m, "scratch", &v)) {
+		printf("    \"scratch\" vanished after the caller reused their buffer — did hm_put store the pointer instead of copying the key?\n");
+		ok = 0;
+	} else if (v != 99) {
+		printf("    hm_get(\"scratch\") wrote %d, wanted 99\n", v);
 		ok = 0;
 	}
 	check(ok, "test_key_is_copied");
@@ -1632,27 +1787,36 @@ static void test_delete(void) {
 		hm_put(&m, key, i);
 	}
 	if (!hm_delete(&m, "key-7")) {
+		printf("    hm_delete(\"key-7\") returned 0, wanted 1 (the key was present)\n");
 		ok = 0;
 	}
 	if (hm_delete(&m, "key-7")) { /* second delete must miss */
+		printf("    deleting \"key-7\" twice claimed to succeed twice\n");
 		ok = 0;
 	}
 	if (hm_delete(&m, "never-existed")) {
+		printf("    hm_delete(\"never-existed\") returned 1, wanted 0\n");
 		ok = 0;
 	}
 	if (hm_get(&m, "key-7", &v)) {
+		printf("    \"key-7\" is still readable after being deleted\n");
 		ok = 0;
 	}
 	if (hm_len(&m) != 19) {
+		printf("    hm_len = %zu after 20 puts and 1 delete, wanted 19\n", hm_len(&m));
 		ok = 0;
 	}
 	/* Every other key must have survived the unlink. */
-	for (i = 0; i < 20; i++) {
+	for (i = 0; i < 20 && ok; i++) {
 		if (i == 7) {
 			continue;
 		}
 		sprintf(key, "key-%d", i);
-		if (!hm_get(&m, key, &v) || v != i) {
+		if (!hm_get(&m, key, &v)) {
+			printf("    \"%s\" vanished when \"key-7\" was deleted (unlinked the wrong entry?)\n", key);
+			ok = 0;
+		} else if (v != i) {
+			printf("    hm_get(\"%s\") wrote %d, wanted %d\n", key, v, i);
 			ok = 0;
 		}
 	}
@@ -1669,6 +1833,7 @@ static void test_growth(void) {
 
 	hm_init(&m);
 	if (m.nbuckets != 8) {
+		printf("    nbuckets = %zu after hm_init, wanted 8\n", m.nbuckets);
 		ok = 0;
 	}
 	for (i = 0; i < n; i++) {
@@ -1676,9 +1841,13 @@ static void test_growth(void) {
 		hm_put(&m, key, i * 10);
 	}
 	if (m.nbuckets <= 8) { /* the map never grew */
+		printf("    nbuckets = %zu after %d puts, wanted > 8 (the map never grew)\n",
+		       m.nbuckets, n);
 		ok = 0;
 	}
 	if ((double)m.size / (double)m.nbuckets > 0.75) {
+		printf("    load factor = %zu/%zu = %.2f, wanted <= 0.75\n",
+		       m.size, m.nbuckets, (double)m.size / (double)m.nbuckets);
 		ok = 0;
 	}
 	/* Chains must be consistent: total chained entries == size. */
@@ -1689,12 +1858,18 @@ static void test_growth(void) {
 		}
 	}
 	if (total != m.size || m.size != (size_t)n) {
+		printf("    %zu entries chained in the buckets, size=%zu, after %d puts (all three should be %d)\n",
+		       total, m.size, n, n);
 		ok = 0;
 	}
 	/* And every key must still resolve after the rehashes. */
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < n && ok; i++) {
 		sprintf(key, "key-%d", i);
-		if (!hm_get(&m, key, &v) || v != i * 10) {
+		if (!hm_get(&m, key, &v)) {
+			printf("    \"%s\" vanished during a rehash\n", key);
+			ok = 0;
+		} else if (v != i * 10) {
+			printf("    hm_get(\"%s\") wrote %d, wanted %d\n", key, v, i * 10);
 			ok = 0;
 		}
 	}
@@ -1827,9 +2002,14 @@ static int distances_are(size_t n, const size_t (*edges)[2], size_t nedges,
 	int dist[16];
 	size_t i;
 
+	for (i = 0; i < 16; i++) {
+		dist[i] = -999;
+	}
 	bfs_distances(n, edges, nedges, src, dist);
 	for (i = 0; i < n; i++) {
 		if (dist[i] != want[i]) {
+			printf("    %zu vertices, %zu edges, src=%zu: dist[%zu] = %d, wanted %d (-999 means the slot was never written)\n",
+			       n, nedges, src, i, dist[i], want[i]);
 			return 0;
 		}
 	}
@@ -2043,12 +2223,24 @@ static int schedules_to(size_t n, const char **tasks, size_t ndeps,
                         const char *(*deps)[2], const char **want) {
 	const char *out[256];
 	size_t i;
+	int rc;
 
-	if (schedule(n, tasks, ndeps, deps, out) != 0) {
+	for (i = 0; i < 256; i++) {
+		out[i] = NULL;
+	}
+	rc = schedule(n, tasks, ndeps, deps, out);
+	if (rc != 0) {
+		printf("    schedule() of %zu tasks / %zu deps returned %d, wanted 0 (there is no cycle here)\n",
+		       n, ndeps, rc);
 		return 0;
 	}
 	for (i = 0; i < n; i++) {
+		if (out[i] == NULL) {
+			printf("    out[%zu] was never written (wanted \"%s\")\n", i, want[i]);
+			return 0;
+		}
 		if (strcmp(out[i], want[i]) != 0) {
+			printf("    out[%zu] = \"%s\", wanted \"%s\"\n", i, out[i], want[i]);
 			return 0;
 		}
 	}
@@ -2059,7 +2251,13 @@ static int schedules_to(size_t n, const char **tasks, size_t ndeps,
 static int detects_cycle(size_t n, const char **tasks, size_t ndeps,
                          const char *(*deps)[2]) {
 	const char *out[256];
-	return schedule(n, tasks, ndeps, deps, out) == -1;
+	int rc = schedule(n, tasks, ndeps, deps, out);
+	if (rc != -1) {
+		printf("    schedule() of %zu tasks / %zu deps returned %d, wanted -1 (these deps contain a cycle)\n",
+		       n, ndeps, rc);
+		return 0;
+	}
+	return 1;
 }
 
 static void test_no_deps_is_alphabetical(void) {

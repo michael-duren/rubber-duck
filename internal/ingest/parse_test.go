@@ -285,3 +285,50 @@ func TestParseErrorLineNumbers(t *testing.T) {
 	}
 	t.Fatal("expected missing-tests problem")
 }
+
+// A challenge slug shaped like a `duck pull` ordering prefix would strip
+// back to the wrong slug on the learner's machine, so ingest rejects it —
+// except a final challenge named "final-…", whose pulled directory gets a
+// second "final-" prepended and still strips back correctly.
+func TestReservedSlugShapes(t *testing.T) {
+	lessonChallenge := func(slug string) string {
+		return validHeader + strings.Replace(validLessonAndFinal, "{#a ", "{#"+slug+" ", 1)
+	}
+	finalChallenge := func(slug string) string {
+		return validHeader + strings.Replace(validLessonAndFinal, "{#fin ", "{#"+slug+" ", 1)
+	}
+
+	cases := []struct {
+		name   string
+		doc    string
+		reject bool
+	}{
+		{"lesson challenge, digit prefix", lessonChallenge("64-bit-ints"), true},
+		{"lesson challenge, digit+letter prefix", lessonChallenge("05a-heap"), true},
+		{"lesson challenge, final- prefix", lessonChallenge("final-lap"), true},
+		{"final, digit prefix", finalChallenge("03-boss"), true},
+		{"lesson challenge, single digit is a slug", lessonChallenge("3-way-partition"), false},
+		{"final may be named final-", finalChallenge("final-duckos"), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Parse([]byte(c.doc))
+			var verr *ValidationError
+			if errors.As(err, &verr) {
+				for _, p := range verr.Problems {
+					if strings.Contains(p.Message, "ordering prefix") {
+						if !c.reject {
+							t.Errorf("slug rejected: %v", p)
+						} else if p.Line <= 0 {
+							t.Errorf("problem has no line number: %+v", p)
+						}
+						return
+					}
+				}
+			}
+			if c.reject {
+				t.Error("slug accepted, want an ordering-prefix problem")
+			}
+		})
+	}
+}
