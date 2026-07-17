@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -40,7 +39,8 @@ func educatorCmd(args []string) error {
 	case "pull":
 		return educatorPullCmd(args[1:])
 	case "push":
-		return educatorPushCmd(args[1:])
+		// Direct publishing is gone: course changes go through review.
+		return fmt.Errorf("`duck educator push` was replaced by `duck propose` — your change becomes a proposal that publishes once the community (or an admin) approves it")
 	case "lint":
 		return educatorLintCmd(args[1:])
 	default:
@@ -58,14 +58,17 @@ func educatorCmd(args []string) error {
 const educatorMetaSuffix = ".meta.json"
 
 // educatorMeta is written by `duck educator pull` alongside the fetched
-// markdown file so `duck educator push` knows where to PUT it back to and
-// can enforce optimistic concurrency (expected_version) without the user
-// re-typing the server URL/course/language every time.
+// markdown file so `duck propose` knows which server the file came from
+// (and which version it was pulled at) without the user re-typing the
+// URL/course/language every time. ProposalID is recorded by `duck propose`
+// so re-proposing the same file updates the open proposal instead of
+// colliding with it.
 type educatorMeta struct {
-	BaseURL  string `json:"base_url"`
-	Course   string `json:"course"`
-	Language string `json:"language"`
-	Version  int    `json:"version"`
+	BaseURL    string `json:"base_url"`
+	Course     string `json:"course"`
+	Language   string `json:"language"`
+	Version    int    `json:"version"`
+	ProposalID int64  `json:"proposal_id,omitempty"`
 }
 
 func writeEducatorMeta(mdPath string, m educatorMeta) error {
@@ -192,18 +195,18 @@ func educatorPullCmd(args []string) error {
 		return usageHelp("educator", "pull")
 	}
 
-	token, tokenSource, err := loadToken()
-	if err != nil {
-		return err
-	}
-
 	baseURL := strings.TrimRight(*base, "/")
 	getURL := baseURL + "/api/v1/courses/" + url.PathEscape(course) + "/variants/" + url.PathEscape(language)
 	req, err := http.NewRequest(http.MethodGet, getURL, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	// The variant-source GET is public; a token isn't required to pull.
+	// Send one when available anyway — harmless, and consistent with the
+	// rest of the CLI's requests.
+	if token, _, err := loadToken(); err == nil {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch variant: %w", err)
@@ -212,9 +215,6 @@ func educatorPullCmd(args []string) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode == http.StatusUnauthorized {
-		return unauthorizedErr(tokenSource, baseURL)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("fetch variant: server said %s: %s", resp.Status, body)
@@ -252,135 +252,6 @@ func educatorPullCmd(args []string) error {
 	}
 
 	fmt.Printf("pulled %s (version %d)\n", mdPath, payload.Version)
-	return nil
-}
-
-// educatorPushCmd sends a local course-variant markdown file back with PUT
-// /api/v1/courses/{slug}/variants/{language}, using the sidecar's recorded
-// expected_version for optimistic concurrency.
-func educatorPushCmd(args []string) error {
-	fs := flag.NewFlagSet("educator push", flag.ContinueOnError)
-	rest, err := parseInterleaved(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(rest) > 1 {
-		return fmt.Errorf("usage: duck educator push [file]")
-	}
-	mdPath, err := resolveEducatorFile(rest)
-	if err != nil {
-		return err
-	}
-
-	meta, err := readEducatorMeta(mdPath)
-	if err != nil {
-		return err
-	}
-
-	src, err := os.ReadFile(mdPath)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", mdPath, err)
-	}
-
-	// Cheap local pre-flight before spending a network round trip: same
-	// checks the server would run, same output shape either way.
-	if probs := lintSource(src); len(probs) > 0 {
-		printProblems(mdPath, probs)
-		return fmt.Errorf("%d problem(s) found — fix before pushing", len(probs))
-	}
-
-	token, tokenSource, err := loadToken()
-	if err != nil {
-		return err
-	}
-
-	expectedVersion := meta.Version
-	reqBody, err := json.Marshal(struct {
-		Markdown        string `json:"markdown"`
-		ExpectedVersion *int   `json:"expected_version,omitempty"`
-	}{Markdown: string(src), ExpectedVersion: &expectedVersion})
-	if err != nil {
-		return err
-	}
-
-	baseURL := strings.TrimRight(meta.BaseURL, "/")
-	putURL := baseURL + "/api/v1/courses/" + url.PathEscape(meta.Course) + "/variants/" + url.PathEscape(meta.Language)
-	req, err := http.NewRequest(http.MethodPut, putURL, bytes.NewReader(reqBody))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("push: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return unauthorizedErr(tokenSource, baseURL)
-	}
-
-	var errResp struct {
-		Error struct {
-			Code    string        `json:"code"`
-			Message string        `json:"message"`
-			Details []lintProblem `json:"details"`
-		} `json:"error"`
-	}
-
-	if resp.StatusCode == http.StatusConflict {
-		_ = json.Unmarshal(body, &errResp)
-		if errResp.Error.Code == "version_conflict" {
-			// Careful with this wording: plain `duck educator pull` would
-			// overwrite exactly the edits the user is trying to push, so
-			// tell them to save those edits first (pull refuses to clobber
-			// a differing file without --force, as a backstop).
-			return fmt.Errorf("someone else changed this course variant since you last pulled it — save your edits elsewhere, run `duck educator pull --force` to fetch the latest version, then reapply them and push again")
-		}
-		if errResp.Error.Message != "" {
-			// e.g. slug_mismatch when frontmatter was edited to disagree
-			// with the sidecar — the server's message is human-readable.
-			return fmt.Errorf("push: %s: %s", resp.Status, errResp.Error.Message)
-		}
-		return fmt.Errorf("push: server said %s: %s", resp.Status, body)
-	}
-	if resp.StatusCode == http.StatusUnprocessableEntity {
-		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Code == "invalid_course_markdown" {
-			printProblems(mdPath, errResp.Error.Details)
-			return fmt.Errorf("%d problem(s) found — fix before pushing", len(errResp.Error.Details))
-		}
-		return fmt.Errorf("push: server said %s: %s", resp.Status, body)
-	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("push: server said %s: %s", resp.Status, body)
-	}
-
-	// Past this point the server has committed the write, so a failure is
-	// local bookkeeping only — say so explicitly, or the next push's stale
-	// expected_version turns it into a phantom "someone else changed this"
-	// conflict with no hint of the real cause.
-	var summary struct {
-		Version     int `json:"version"`
-		Lessons     int `json:"lessons"`
-		Challenges  int `json:"challenges"`
-		TotalPoints int `json:"total_points"`
-	}
-	if err := json.Unmarshal(body, &summary); err != nil {
-		return fmt.Errorf("push succeeded on the server, but parsing its response failed: %w — run `duck educator pull` to resync the sidecar", err)
-	}
-
-	meta.Version = summary.Version
-	if err := writeEducatorMeta(mdPath, meta); err != nil {
-		return fmt.Errorf("push succeeded on the server (now version %d), but updating the local sidecar failed: %w — run `duck educator pull` to resync", summary.Version, err)
-	}
-
-	fmt.Printf("pushed %s — version %d (%d lessons, %d challenges, %d pts)\n",
-		mdPath, summary.Version, summary.Lessons, summary.Challenges, summary.TotalPoints)
 	return nil
 }
 

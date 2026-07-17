@@ -61,16 +61,7 @@ jobs:
             -var region="$REGION" \
             -var image_tag="$(git rev-parse --short HEAD)"
 
-      # Publish the canonical course markdown to the just-deployed service so
-      # main and prod stay in sync. This is safe to run on every merge now
-      # that re-publishing is non-destructive: lessons/challenges diff by slug
-      # and update in place, removed slugs are archived (not deleted), and user
-      # submissions survive edits (#71; see the "Gotchas" note in CLAUDE.md).
-      # GC_URL is the Cloud Run service URL from tofu state (routes to the same
-      # service as duckgc.com, without depending on DNS). GC_API_KEY is an
-      # agent API key (mint with `make apikey-prod`) stored as the production
-      # environment's GC_API_KEY secret.
-      - name: Publish courses
-        env:
-          GC_API_KEY: ${{ secrets.GC_API_KEY }}
-        run: make publish GC_URL="$(tofu -chdir=infra output -raw service_url)"
+      # No course-publish step: the database is the source of truth for
+      # course content now (changes go through the in-app proposal/review
+      # workflow), and courses/ in this repo is a mirror kept fresh by
+      # .github/workflows/course-sync.yml pulling from /api/v1/export.

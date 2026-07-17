@@ -33,13 +33,18 @@ type handlers struct {
 	store       AuthStore
 	courses     CourseReader
 	submissions SubmissionStore
+	proposals   ProposalStore
 	enqueuer    Enqueuer
 	logger      *slog.Logger
+	// threshold is how many current-revision approvals from distinct
+	// non-proposer users publish a proposal (GC_APPROVAL_THRESHOLD; an
+	// admin approval publishes regardless).
+	threshold int
 }
 
 // Register mounts all user-facing routes on mux.
-func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses CourseReader, submissions SubmissionStore, enqueuer Enqueuer) {
-	h := &handlers{store: store, courses: courses, submissions: submissions, enqueuer: enqueuer, logger: logger}
+func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses CourseReader, submissions SubmissionStore, proposals ProposalStore, enqueuer Enqueuer, approvalThreshold int) {
+	h := &handlers{store: store, courses: courses, submissions: submissions, proposals: proposals, enqueuer: enqueuer, logger: logger, threshold: approvalThreshold}
 
 	if sh, err := newStaticHandler(staticFS, "static"); err != nil {
 		// Only reachable if the embedded FS is unreadable (a build-time
@@ -62,8 +67,14 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("GET /courses/{slug}/card.svg", h.courseArt)
 	pages.HandleFunc("GET /courses/{slug}/{lang}", h.variantPage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}/edit", h.requireUser(h.editVariantPage))
-	pages.HandleFunc("POST /courses/{slug}/{lang}/edit", h.requireUser(h.saveVariant))
-	pages.HandleFunc("POST /courses/{slug}/{lang}/edit/preview", h.requireUser(h.previewVariant))
+	pages.HandleFunc("POST /courses/{slug}/{lang}/edit", h.requireUser(h.proposeVariant))
+	pages.HandleFunc("POST /preview/markdown", h.requireUser(h.previewMarkdown))
+	pages.HandleFunc("GET /proposals", h.proposalsPage)
+	pages.HandleFunc("GET /proposals/{id}", h.proposalPage)
+	pages.HandleFunc("POST /proposals/{id}/reviews", h.requireUser(h.createReview))
+	pages.HandleFunc("GET /proposals/{id}/edit", h.requireUser(h.editProposalPage))
+	pages.HandleFunc("POST /proposals/{id}/edit", h.requireUser(h.updateProposal))
+	pages.HandleFunc("POST /proposals/{id}/withdraw", h.requireUser(h.withdrawProposal))
 	pages.HandleFunc("GET /courses/{slug}/{lang}/lessons/{lesson}", h.lessonPage)
 	pages.HandleFunc("GET /courses/{slug}/{lang}/final", h.finalPage)
 	pages.HandleFunc("POST /challenges/{id}/submissions", h.requireUser(h.submit))

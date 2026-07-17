@@ -24,8 +24,10 @@ It serves two audiences from one binary.
 pull a course's coding challenges to their machine, run the tests with their
 own toolchain, and submit graded solutions.
 .B Educators
-(authors) pull a course's markdown, edit it locally, validate it, and push it
-back \(en the whole course is a single markdown document.
+(authors) pull a course's markdown, edit it locally, validate it, and submit
+it as a proposal for community review \(en the whole course is a single
+markdown document, and a change publishes once it collects enough approvals
+(or one admin approval).
 .PP
 Run
 .B duck
@@ -56,7 +58,7 @@ A single graded exercise within a course, addressed by its slug (e.g.
 Your API credential.
 .B duck auth login
 mints and saves one; commands that write to the server
-.RB ( submit ", all of " educator )
+.RB ( submit ", " propose ", " proposals )
 require it.
 .B duck auth status
 shows which token would be sent and whether the server accepts it.
@@ -98,6 +100,24 @@ code together with the claimed verdict, and prints the result immediately; the
 server audits in the background. Requires a token. If the language's toolchain
 is not installed, submit falls back to synchronous server grading.
 .TP
+.BI "duck propose " [ file ]
+Lint a course markdown file locally, then submit it as a proposal for review.
+The course and language come from the document's frontmatter, so this works
+for edits and brand\-new courses alike. Re\-running propose on the same file
+updates your open proposal (resetting its approvals). Accepts
+.BI \-\-title " T"
+and
+.BI \-\-summary " S"
+to describe the change for reviewers. Requires a token.
+.TP
+.B "duck proposals"
+List your proposals \(en id, status, approvals so far, and whether one needs a
+rebase because the course changed underneath it.
+.B duck proposals status
+.I id
+shows one proposal. Reviewing and approving happen on the website's
+/proposals pages.
+.TP
 .B "duck auth login"
 Prompt for credentials, mint an API token, and save it to
 .I ~/.config/duck/token
@@ -136,8 +156,11 @@ Supports subcommands, e.g.
 .B duck educator
 (alias
 .BR "duck ed" )
-round\-trips a course variant's markdown with the server. All three
-subcommands require a token.
+fetches and validates a course variant's markdown. Submitting changes is
+.BR "duck propose" ;
+the old
+.B educator push
+(which published directly, without review) is retired.
 .TP
 .BI "duck educator pull " "course/language"
 Fetch the variant's markdown to
@@ -155,13 +178,6 @@ Validate a course markdown file locally, running the same checks the server
 would with no network round trip, and print any problems with line numbers.
 With no file argument it acts on the single sidecar\-tracked file in the
 current directory.
-.TP
-.BI "duck educator push " [ file ]
-Lint, then upload the file back using the sidecar's recorded version for
-optimistic concurrency. If someone changed the variant since you pulled, the
-push is rejected and duck explains how to reconcile. On success the sidecar's
-version is bumped. With no file argument it acts on the single sidecar\-tracked
-file in the current directory.
 .SH OPTIONS
 .TP
 .BI \-\-base " URL"
@@ -171,6 +187,8 @@ else
 .BR https://duckgc.com .
 Accepted by
 .BR pull ,
+.BR propose ,
+.BR proposals ,
 .BR "auth login" ,
 .BR "auth status" ,
 and
@@ -227,8 +245,8 @@ Force the authoritative server verdict instead of grading locally:
 $ duck submit hello-world --remote
 .fi
 .RE
-.SS Educator workflow: pull, edit, lint, push
-Fetch a variant's markdown plus its version sidecar:
+.SS Educator workflow: pull, edit, lint, propose
+Fetch a variant's markdown plus its sidecar:
 .PP
 .RS 4
 .nf
@@ -237,22 +255,25 @@ pulled intro-to-go-go.md (version 7)
 .fi
 .RE
 .PP
-Edit the markdown, validate it offline, then push it back:
+Edit the markdown, validate it offline, then submit it for review:
 .PP
 .RS 4
 .nf
 $ duck ed lint
 intro-to-go-go.md: no problems found
-$ duck ed push
-pushed intro-to-go-go.md \(en version 8 (3 lessons, 5 challenges, 60 pts)
+$ duck propose --summary "clarify the goroutines lesson"
+proposed intro-to-go/go as proposal #12
+review it at https://duckgc.com/proposals/12
 .fi
 .RE
 .PP
-If the variant changed on the server since you pulled, save your edits, then:
+Track its reviews (it publishes at the approval threshold, or on one admin
+approval):
 .PP
 .RS 4
 .nf
-$ duck educator pull intro-to-go/go --force
+$ duck proposals
+#12   open      intro-to-go/go  "Update intro-to-go/go"  2 approval(s)
 .fi
 .RE
 .SH ENVIRONMENT
@@ -294,8 +315,9 @@ The course source, written by
 .BR "duck educator pull" .
 .TP
 .I <file>.md.meta.json
-Sidecar recording server URL, course, language, and version for
-.BR "duck educator push" .
+Sidecar recording server URL, course, language, version, and the open
+proposal id for
+.BR "duck propose" .
 .SH EXIT STATUS
 .TP
 .B 0

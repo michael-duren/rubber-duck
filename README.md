@@ -1,14 +1,20 @@
 # Rubber Duck 🦆
 
-A friendly home for software-engineering courses written by AI agents.
+A community-maintained home for software-engineering courses.
 (Internal identifiers — Go module, binary, `gc-*` cloud resources — still
-say "getcracked"; the rename is brand-level for now.) Markdown is the
-source of truth: agents publish one markdown document per course + language
-through a small REST API, the backend parses it into lessons and code
-challenges, and users work through the challenges in the browser. Submissions
-are graded by running the course's tests in a sandboxed container; passing a
-challenge earns its points, and a course score is the sum of your best
-submission per challenge.
+say "getcracked"; the rename is brand-level for now.) Every course is one
+markdown document per language; anyone with an account can propose a change
+(in the browser or with the `duck` CLI), the community reviews it on
+`/proposals`, and it publishes once it collects enough approvals — or one
+admin approval. The backend parses the markdown into lessons and code
+challenges, and users work through the challenges in the browser.
+Submissions are graded by running the course's tests in a sandboxed
+container; passing a challenge earns its points, and a course score is the
+sum of your best submission per challenge.
+
+The database is the source of truth for course content; `courses/*.md` in
+this repo is a mirror kept in sync by a scheduled GitHub Action (see
+"Course content workflow").
 
 Stack: Go (stdlib `net/http`), [templ](https://templ.guide), Tailwind
 (standalone CLI, no Node), Postgres (pgx), goldmark + chroma for server-side
@@ -22,7 +28,7 @@ Requirements: Go 1.26+, Docker (with the compose plugin), `templ`.
 make tools            # fetch tailwind standalone binary, install templ
 make runner-images    # build gc-runner-go, gc-runner-python, gc-runner-c
 make dev              # postgres via compose + live-reloading server on :8080
-make seed             # publish seed/intro-to-go.md through the agent API
+make seed             # import seed/intro-to-go.md + courses/*.md straight into the local db
 ```
 
 Or fully containerized:
@@ -39,8 +45,7 @@ submit a solution.
 Other commands:
 
 ```sh
-make apikey KEY_NAME=writer-1                           # mint an agent API key (local db)
-make apikey-prod KEY_NAME=writer-1                      # same, against prod via cloud-sql-proxy
+go run ./cmd/duckserver user promote --username <u>     # make an account an admin (local db)
 go run ./cmd/duckserver migrate up|down                 # run migrations by hand
 make check                                              # vet + stale-generate check + tests
 make test-integration                                   # store tests against compose postgres
@@ -49,16 +54,17 @@ make test-integration                                   # store tests against co
 ## Architecture
 
 ```
-cmd/duckserver        wiring + subcommands (serve, migrate, apikey, seed)
+cmd/duckserver        wiring + subcommands (serve, migrate, user, seed)
 internal/domain       pure types + scoring; no I/O
-internal/ingest       markdown -> course parser + validation (the agent contract)
+internal/ingest       markdown -> course parser + validation (the course document contract)
 internal/markdown     goldmark + chroma renderer (HTML cached at ingest time)
+internal/diff         patience line-diff for the proposal review UI
 internal/store        pgx repositories + embedded migrations
-internal/auth         bcrypt passwords, session/API-key tokens (only hashes stored)
+internal/auth         bcrypt passwords, session/CLI tokens (only hashes stored)
 internal/grader       Grader interface + worker pool
   dockergrader        M1 implementation: docker run per submission
   runners/            per-language runner images
-internal/httpapi      agent-facing JSON API (/api/v1)
+internal/httpapi      JSON API (/api/v1): public course reads + proposal endpoints
 internal/web          templ pages + handlers (the only package that knows HTML)
 ```
 
@@ -73,57 +79,60 @@ too). The app needs access to the docker socket. This is *not* a hardened
 sandbox — milestone 2 swaps in a stronger isolate (e.g. gVisor) behind the
 `grader.Grader` interface.
 
-## Agent API
+## HTTP API
 
-All endpoints live under `/api/v1` and — except the public challenges
-listing, see the table — require a bearer key minted with
-`duckserver apikey create`, **or** a human's `gc_u_...` user CLI token (same
-one `duck submit`/`duck test` use):
+Everything lives under `/api/v1`. **Reads are public** — course content is
+public on the web, and credential-free reads are what let the courses/
+mirror sync run from a plain GitHub Action. **Proposal endpoints require a
+`gc_u_...` user CLI token** (the same one `duck submit` uses; mint with
+`duck auth login` or on `/profile`):
 
 ```
-Authorization: Bearer gc_<40 hex>
 Authorization: Bearer gc_u_<40 hex>
 ```
 
-The variant `GET` response always includes the variant's `version`,
-whichever credential kind authorized it. A user token only changes behavior
-on the variant `PUT` (attribution + optional `expected_version`, see below);
-every other endpoint behaves the same regardless of which credential kind
-authorized it.
+There is no direct-publish endpoint anymore: the old agent `PUT`/`DELETE`
+routes (and the `gc_` agent API keys that authenticated them) were removed
+when course changes moved to the proposal workflow. Publishing happens when
+a proposal is approved on the site.
 
-| Method & path | Behavior |
-|---|---|
-| `PUT /api/v1/courses/{slug}/variants/{language}` | Idempotent upsert. Body `{"markdown": "..."}`. Creates the course + variant, or replaces the variant and bumps its `version`. Returns a summary: `{"course", "language", "version", "lessons", "challenges", "total_points"}`. `201` on first publish, `200` after. |
-| `GET /api/v1/courses` | List courses with tags, languages, `updated_at`. |
-| `GET /api/v1/courses/{slug}` | Course metadata + per-variant summaries. |
-| `GET /api/v1/courses/{slug}/variants/{language}` | The stored markdown, for round-tripping. Response also includes the variant's `version`: `{"markdown": "...", "version": 3}`. |
-| `DELETE /api/v1/courses/{slug}` | Remove a course and all variants. `204`. |
-| `DELETE /api/v1/courses/{slug}/variants/{language}` | Remove one variant. `204`. |
-| `GET /api/v1/tags` | All known tags. |
-| `GET /api/v1/courses/{slug}/variants/{language}/challenges` | **Public, no auth**: starter and test code for each challenge, used by `duck test` local runs. |
+| Method & path | Auth | Behavior |
+|---|---|---|
+| `GET /api/v1/courses` | public | List courses with tags, languages, `updated_at`. |
+| `GET /api/v1/courses/{slug}` | public | Course metadata + per-variant summaries. |
+| `GET /api/v1/courses/{slug}/variants/{language}` | public | The stored markdown + its `version`: `{"markdown": "...", "version": 3}`. |
+| `GET /api/v1/courses/{slug}/variants/{language}/challenges` | public | Starter and test code for each challenge, used by `duck test` local runs. |
+| `GET /api/v1/tags` | public | All known tags. |
+| `GET /api/v1/export` | public | Every live variant's source: `{"variants": [{"course", "language", "version", "markdown"}]}` — what the courses/ mirror sync reads. |
+| `POST /api/v1/proposals` | token | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?}` — course/language come from the frontmatter; sending them too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "base_version", "revision", "status", "url", ...}`. One open proposal per user per variant: `409 duplicate_proposal` otherwise. |
+| `PUT /api/v1/proposals/{id}` | token | Replace your open proposal's content. Bumps `revision` (resetting approvals) and re-captures `base_version` from the live variant (how you rebase). `404` if not yours, `409 proposal_closed` if closed. |
+| `GET /api/v1/proposals?mine=1` | token | Your proposals, newest first. |
+| `GET /api/v1/proposals/{id}` | token | One proposal including its markdown. |
+| `POST /api/v1/proposals/{id}/withdraw` | token | Close your own open proposal. `204`. |
 
 Rules:
 
-- The URL slug/language must match the document frontmatter, else `409`.
-- Invalid documents get `422` with line-numbered problems:
+- Proposal documents are validated on create/update; invalid documents get
+  `422` with line-numbered problems:
 
   ```json
   {"error": {"code": "invalid_course_markdown", "message": "2 problems found",
     "details": [{"line": 41, "message": "challenge \"fan-in\": missing '### Tests' block"}]}}
   ```
 
-- Re-publishing a variant updates its lessons and challenges **in place,
-  keyed by slug** — submissions and scores survive. A challenge whose slug
-  leaves the document is archived (hidden from the course, its submissions
-  kept as history); if the slug later returns, the challenge revives with
-  its history reattached. Slugs are identity: keep them stable, and rename
-  only when you intend "this is a different challenge".
-- `PUT` also accepts a `gc_u_...` human user token (the same CLI token minted
-  for `duck submit`/`duck test`) in place of an agent key. Human-authored
-  writes may include an optional `expected_version` field (from a prior
-  `GET`'s `version`) for optimistic concurrency: a mismatch is rejected with
-  `409 {"error": {"code": "version_conflict", ...}}` instead of overwriting.
-  Agent-key behavior is unchanged — `expected_version` is ignored if sent.
+- Publishing an approved proposal updates the variant's lessons and
+  challenges **in place, keyed by slug** — submissions and scores survive. A
+  challenge whose slug leaves the document is archived (hidden from the
+  course, its submissions kept as history); if the slug later returns, the
+  challenge revives with its history reattached. Slugs are identity: keep
+  them stable, and rename only when you intend "this is a different
+  challenge".
+- A proposal records the live variant `version` it was authored against
+  (`base_version`; `0` = the variant doesn't exist yet, i.e. a new course).
+  If the live variant moves past that base before the proposal publishes,
+  publishing is blocked ("needs rebase") until the proposer updates the
+  proposal — the update re-captures the base — so newer content is never
+  silently overwritten.
 
 ## Course document format
 
@@ -193,77 +202,62 @@ Conventions:
 
 ## Course content workflow
 
-`courses/` holds the canonical markdown for every published course variant
-— one file per course × language, named `<course-slug>-<language>.md` — so
-course content gets git history and PR review like any other change.
-(`seed/intro-to-go.md` is a separate, older fixture the ingest/store tests
-read directly; it's not part of the publish workflow and may drift from
-`courses/intro-to-concurrency-go.md`.)
+**The database is the source of truth.** Course changes are made through
+the proposal workflow (browser or CLI), reviewed on `/proposals`, and
+published on approval. `courses/` in this repo is a **mirror** — one file
+per course × language, named `<course-slug>-<language>.md` — kept in sync
+by `.github/workflows/course-sync.yml`: every six hours it fetches the
+public `GET /api/v1/export`, rewrites `courses/*.md`, and opens an
+auto-merging PR when the mirror has drifted. The mirror gives content git
+history and lets CI (`internal/ingest`'s `TestCanonicalCoursesParse`) keep
+verifying every published document parses. (`seed/intro-to-go.md` is a
+separate fixture the ingest/store tests read directly.)
 
-Agents (or humans) branch and PR markdown changes into `courses/`; publish
-after merge:
+Local dev and break-glass imports write markdown straight into the
+database, bypassing review — `duckserver seed` is idempotent (a document
+byte-identical to what's stored is skipped, so versions don't bump
+spuriously):
 
 ```sh
-GC_API_KEY=<agent key> make publish                       # local server
-GC_API_KEY=<agent key> GC_URL=<service_url> make publish  # prod
+make seed                                    # local: seed fixture + courses/*.md
+make import-courses-prod                     # BREAK-GLASS: import courses/*.md into prod
+make export-courses DUCK_URL=http://localhost:8080   # regenerate the mirror locally
 ```
 
-`make publish` loops `duckserver seed --url $GC_URL <file>` over every
-`courses/*.md`, bumping each variant's version. Re-publishing updates a
-variant's lessons/challenges in place by slug — learner submissions and
-scores survive; removed slugs are archived, not deleted — keep slugs
-stable (see "Course document format" above).
+### The proposal workflow
 
-## Editing courses in the browser
+Any logged-in account can propose a change to any course, or a brand-new
+course; there's no contributor role to request. Reviews are how quality is
+enforced:
 
-Alongside the agent API and the git-based `courses/*.md` workflow above,
-any logged-in user can create or edit course content directly in the
-browser — a "click edit" wiki path, not just a contributor/PR path. This
-was a deliberate product decision (any authenticated account can edit;
-abuse is handled by disabling the account, not by a special role/permission
-gate) and is a first step towards the database, rather than `courses/*.md`,
-becoming the actual source of truth for course content — for now all three
-paths (agent API, git + `make publish`, and the browser editor) write
-through the same validation and storage, so content stays consistent no
-matter which one was used.
+- **Open a proposal.** Hit "Edit" on a course variant page (or "+ New
+  course" / "+ Add language variant" on the catalog/course pages, which
+  seed a valid document template), change the markdown, and submit — or use
+  `duck propose` from the CLI. The document is validated on submission;
+  nothing invalid ever enters review. You get one open proposal per course
+  variant; proposing again updates it.
+- **Review.** `/proposals` lists open proposals; each shows a line diff
+  against the live document, the review history, and approve/reject forms.
+  Anyone logged in can review, except their own proposal.
+- **Publish.** A proposal publishes automatically at
+  `GC_APPROVAL_THRESHOLD` approvals (default 3; approvals must be on the
+  proposal's current revision), or immediately when an **admin** approves.
+  An admin rejection closes it. Admins may approve their own proposals —
+  the bootstrap case for a small deployment. Publishing attributes the
+  variant to the proposer and preserves learner data (see the slug rules
+  above).
+- **Stay current.** If the live course changes while a proposal is open,
+  the proposal is marked "needs rebase" and can't publish until the
+  proposer updates it (which also resets earlier approvals — reviewers
+  approve content, not intent).
 
-**Where to find it.** A course variant's page (`/courses/{slug}/{lang}`)
-has an "Edit" link; a course's page has a "+ Add language variant" link;
-the catalog has a "+ New course" link. All three require being logged in
-(any account, no special role) and redirect anonymous visitors to
-`/login`.
+Admins are minted by an operator: `duckserver user promote --username <u>`
+(via `make psql-prod`'s cloud-sql-proxy pattern for production).
 
-**Creating a course or variant.** "+ New course" / "+ Add language
-variant" opens a small form (slug, title, language, description) that
-seeds a minimal, already-valid frontmatter template — one lesson and one
-final challenge with placeholder starter/test code — into the same editor
-described below, rather than creating anything itself. Nothing is
-persisted until that first Save.
-
-**Editing and saving.** The editor is a raw-markdown textarea, pre-filled
-with the variant's stored source. Saving runs the exact same
-`ingest.Parse` / `ingest.ToDomain` / `store.UpsertVariant` path the agent
-API's `PUT` uses:
-
-- Invalid markdown re-renders the editor with the same line-numbered
-  problems the agent API returns as `422` details — the textarea keeps
-  exactly what you typed, never reverting to the last-saved version.
-- The page carries the version it was loaded at in a hidden field
-  (optimistic concurrency). If someone else saved in the meantime, your
-  save is rejected with "someone else changed this since you opened it —
-  reload to see their version" instead of silently overwriting their
-  change.
-- Saving is never destructive to learner data: like `make publish`, it
-  updates lessons/challenges in place by slug, so submissions and scores
-  survive every save. (There used to be a "saving will reset progress"
-  confirmation step here; it disappeared along with the destructive
-  behavior it warned about.)
-
-**Live preview.** A preview pane next to the textarea shows the rendered
-markdown (headings, code blocks with syntax highlighting) via an AJAX call
-to `POST /courses/{slug}/{lang}/edit/preview`, debounced as you type. It's
-read-only and decoupled from saving: a slow or failed preview never blocks
-or is required for an actual Save, and it never writes anything itself.
+**The editor.** A raw-markdown textarea (CodeMirror-enhanced) with a live
+preview pane rendering via `POST /preview/markdown`, debounced as you type.
+Failed submissions re-render with line-numbered problems and keep exactly
+what you typed. The preview is read-only and decoupled from submitting.
 
 ## Local testing with `duck`
 
@@ -296,128 +290,55 @@ duck submit concurrent-sum --remote # skip the local run; wait for server gradin
 If the course language's toolchain isn't installed, `duck submit` falls back
 to `--remote` behavior automatically.
 
-`duck submit` needs a user token, not an agent API key: run `duck auth login`, or
-mint one from your profile page ("Create CLI token") and either set
-`DUCK_TOKEN` or save it to `~/.config/duck/token`. The `/tokens` page on any
-deployment documents both credential kinds (user CLI tokens vs agent API
-keys) end to end. `duck pull` defaults to `http://localhost:8080`;
-override with `--base` or `DUCK_BASE_URL` (the base URL is then remembered in
-the scaffolded course dir's `.duck-course.json` for `test`/`submit`).
+`duck submit` needs a user token: run `duck auth login`, or mint one from
+your profile page ("Create CLI token") and either set `DUCK_TOKEN` or save
+it to `~/.config/duck/token`. The `/tokens` page on any deployment
+documents tokens end to end. `duck pull` defaults to
+`http://localhost:8080`; override with `--base` or `DUCK_BASE_URL` (the
+base URL is then remembered in the scaffolded course dir's
+`.duck-course.json` for `test`/`submit`).
 
-## Authoring courses with `duck educator`
+## Authoring courses with `duck propose`
 
-`duck educator` (alias `duck ed`) is the author-facing counterpart to the
-learner flow above: instead of scaffolding one directory per challenge, it
-round-trips a single course-variant markdown document with the same
-`/api/v1` endpoints the "Agent API" section documents — `pull` to fetch it,
-your own editor to change it, `lint` to validate locally, `push` to publish.
-It needs the same user token as `duck submit` — same login as above, see
-"Local testing with `duck`" — there's no separate author credential. A
-revoked or invalid token fails with `unauthorized: token missing or
-revoked`; with no token configured at all, `duck` fails before any network
-call and tells you how to mint one. (An agent API key in `DUCK_TOKEN` also
-authenticates, but the server then ignores `expected_version` — use your
-personal `gc_u_...` token so stale pushes are caught.)
+The author-facing flow mirrors the learner flow above but works on the
+whole course document: fetch it, edit with your own editor, validate
+locally, then submit it as a proposal for review. `duck propose` needs the
+same user token as `duck submit` (`duck auth login`); pulling and linting
+need no credentials at all.
 
 ```sh
-duck educator pull intro-to-concurrency/go
+duck educator pull intro-to-concurrency/go   # fetch the markdown + a .meta.json sidecar
+$EDITOR intro-to-concurrency-go.md
+duck ed lint                                 # validate offline; same checks as the server
+duck propose --summary "clarify the goroutines lesson"
 ```
 
 ```
-pulled intro-to-concurrency-go.md (version 3)
+proposed intro-to-concurrency/go as proposal #12
+review it at https://duckgc.com/proposals/12
 ```
 
-This writes two files in the current directory:
+Details worth knowing:
 
-- `intro-to-concurrency-go.md` — the variant's raw markdown, exactly as
-  stored (the same document a `GET` against the Agent API would return).
-- `intro-to-concurrency-go.md.meta.json` — a sidecar recording where the
-  file came from and the version it was pulled at:
+- `educator pull` writes the markdown plus a `<file>.md.meta.json` sidecar
+  recording the server, course, language, and version pulled. It refuses to
+  overwrite a locally-edited file without `--force`.
+- `duck propose` derives course/language from the document's
+  **frontmatter**, so it also works with no sidecar at all — write a brand
+  new course document from scratch and propose it.
+- Proposing again from the same file updates your open proposal (the
+  sidecar remembers its id; without a sidecar the server's
+  `duplicate_proposal` answer routes the update automatically). Updating
+  resets earlier approvals — reviewers approve content.
+- `duck proposals` lists your proposals with approval counts;
+  `duck proposals status <id>` shows one. If the course changed underneath
+  your proposal it's flagged `NEEDS REBASE`: re-pull, reapply your edits,
+  and `duck propose` again.
+- `lint` exits non-zero on problems, so it composes with a pre-commit hook
+  or CI step. A locally-invalid document never generates a request.
 
-  ```json
-  {
-    "base_url": "http://localhost:8080",
-    "course": "intro-to-concurrency",
-    "language": "go",
-    "version": 3
-  }
-  ```
-
-  `push` reads this sidecar to know which server/course/language to send the
-  file back to, and sends its `version` as `expected_version` so a stale
-  push — the variant changed since this pull — is rejected instead of
-  silently overwritten (see below).
-
-Like the learner flow's `duck pull`, `educator pull` defaults to
-`http://localhost:8080`; override with `--base` or `DUCK_BASE_URL` — the
-resolved base is recorded in the sidecar so `push` targets the same server.
-And it protects local work the same way `push` protects the server's: if the
-markdown file already exists with different content (say, unpushed edits),
-`pull` refuses to overwrite it unless you pass `--force`.
-
-Now edit `intro-to-concurrency-go.md` directly with your own editor. It's a
-plain markdown file in the format described in "Course document format"
-above; nothing about the contents is duck-specific.
-
-Before pushing, validate locally — no network round trip:
-
-```sh
-duck educator lint intro-to-concurrency-go.md
-```
-
-```
-intro-to-concurrency-go.md: no problems found
-```
-
-A broken document reports the same line-numbered problems `internal/ingest`
-would raise on the server side (the same validation runs locally):
-
-```
-intro-to-concurrency-go.md: 1 problem(s) found
-  line 41: challenge "fan-in": missing '### Tests' block
-```
-
-`lint` exits non-zero when problems are found, so it composes with a
-pre-commit hook or CI step. `lint`/`push` both take an optional file
-argument; run with none and they look for the single `*.meta.json` sidecar
-left by `pull` in the current directory, erroring if there's zero or more
-than one (pass a path explicitly to disambiguate).
-
-`push` runs this same local lint before touching the network — a
-locally-invalid document never generates a request — then `PUT`s the file
-back with the sidecar's version as `expected_version`:
-
-```sh
-duck educator push intro-to-concurrency-go.md
-```
-
-```
-pushed intro-to-concurrency-go.md — version 4 (1 lessons, 2 challenges, 30 pts)
-```
-
-The sidecar's `version` is updated to the response's new version, so the
-next `push` from the same file doesn't need another `pull` first. If
-someone else — another author's `pull`/`push`, or a save through the web
-editor — changed the variant since this file was pulled, the push is
-rejected with `409 version_conflict` and `duck` prints:
-
-```
-duck: someone else changed this course variant since you last pulled it — save your edits elsewhere, run `duck educator pull --force` to fetch the latest version, then reapply them and push again
-```
-
-The fix is to re-pull (fetching the latest markdown and version) and
-reapply your edits — `--force` is needed there precisely because a plain
-`pull` refuses to overwrite the locally edited file. `push` itself has no
-force/overwrite flag, by design: the server-side conflict can't be
-bypassed. A `422` from the server (rare, since `push` already ran the same
-validation locally) prints line-numbered problems the same way `lint` does.
-
-This is the same `UpsertVariant` / optimistic-concurrency path as the Agent
-API's `PUT` (see "Agent API" above) and the browser editor (see "Editing
-courses in the browser" above) — a human using `duck educator`, the web
-editor, and an agent's `PUT` against the same variant won't silently clobber
-each other; whichever writes last against a stale `expected_version` (or
-loaded version, in the editor's case) gets a conflict instead of overwriting.
+The old `duck educator push`, which published directly with no review, is
+retired and says so if invoked.
 
 ## Deploying to GCP
 

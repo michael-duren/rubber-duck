@@ -22,26 +22,23 @@ type fakeStore struct {
 	nextTok        int64
 	variant        *domain.Variant // set by tests that need VariantDetail to resolve
 	variantSlug    string
-	variantSource  string       // raw markdown returned by VariantSource
-	variantVersion int          // version returned by VariantSource / checked by UpsertVariant
-	upserts        []upsertCall // every *applied* UpsertVariant call, for edited_by assertions
+	variantSource  string // raw markdown returned by VariantSource
+	variantVersion int    // version returned by VariantSource / captured as proposal base
 	submissions    map[int64]domain.Submission
 	nextSub        int64
 	rateLimit      func(userID, challengeID int64) bool // nil = never limited
 	courses        []domain.CourseSummary               // returned by ListCourses (catalog tests)
-}
 
-// upsertCall records one UpsertVariant invocation so tests can assert on the
-// editor attribution (editedBy) the web edit handler passes through.
-type upsertCall struct {
-	Course   domain.Course
-	Variant  domain.Variant
-	EditedBy *int64
+	proposals map[int64]domain.Proposal
+	reviews   map[int64]map[int64]domain.ProposalReview // proposal id -> reviewer id -> review
+	nextProp  int64
+	published []int64 // proposal IDs PublishProposal applied, in order
 }
 
 type fakeUser struct {
 	id   int64
 	hash string
+	role string
 }
 
 type fakeToken struct {
@@ -55,6 +52,7 @@ func newFakeStore() *fakeStore {
 	return &fakeStore{
 		users: map[string]fakeUser{}, sessions: map[string]int64{},
 		tokens: map[int64]fakeToken{}, submissions: map[int64]domain.Submission{},
+		proposals: map[int64]domain.Proposal{}, reviews: map[int64]map[int64]domain.ProposalReview{},
 	}
 }
 
@@ -63,8 +61,24 @@ func (f *fakeStore) CreateUser(_ context.Context, username, passwordHash string)
 		return domain.User{}, domain.ErrUsernameTaken
 	}
 	id := int64(len(f.users) + 1)
-	f.users[username] = fakeUser{id: id, hash: passwordHash}
-	return domain.User{ID: id, Username: username}, nil
+	f.users[username] = fakeUser{id: id, hash: passwordHash, role: domain.RoleUser}
+	return domain.User{ID: id, Username: username, Role: domain.RoleUser}, nil
+}
+
+// promote flips a user's role, mirroring `duckserver user promote`.
+func (f *fakeStore) promote(username, role string) {
+	u := f.users[username]
+	u.role = role
+	f.users[username] = u
+}
+
+func (f *fakeStore) userByID(id int64) (domain.User, bool) {
+	for name, u := range f.users {
+		if u.id == id {
+			return domain.User{ID: id, Username: name, Role: u.role}, true
+		}
+	}
+	return domain.User{}, false
 }
 
 func (f *fakeStore) UserByUsername(_ context.Context, username string) (domain.User, string, error) {
@@ -72,7 +86,7 @@ func (f *fakeStore) UserByUsername(_ context.Context, username string) (domain.U
 	if !ok {
 		return domain.User{}, "", domain.ErrNotFound
 	}
-	return domain.User{ID: u.id, Username: username}, u.hash, nil
+	return domain.User{ID: u.id, Username: username, Role: u.role}, u.hash, nil
 }
 
 func (f *fakeStore) CreateSession(_ context.Context, tokenHash []byte, userID int64, _ time.Time) error {
@@ -85,10 +99,8 @@ func (f *fakeStore) UserBySession(_ context.Context, tokenHash []byte) (domain.U
 	if !ok {
 		return domain.User{}, domain.ErrNotFound
 	}
-	for name, u := range f.users {
-		if u.id == id {
-			return domain.User{ID: id, Username: name}, nil
-		}
+	if u, ok := f.userByID(id); ok {
+		return u, nil
 	}
 	return domain.User{}, domain.ErrNotFound
 }
@@ -107,10 +119,8 @@ func (f *fakeStore) CreateUserToken(_ context.Context, userID int64, name string
 func (f *fakeStore) UserByToken(_ context.Context, tokenHash []byte) (domain.User, error) {
 	for _, t := range f.tokens {
 		if t.hash == string(tokenHash) && !t.revoked {
-			for name, u := range f.users {
-				if u.id == t.userID {
-					return domain.User{ID: u.id, Username: name}, nil
-				}
+			if u, ok := f.userByID(t.userID); ok {
+				return u, nil
 			}
 			return domain.User{ID: t.userID}, nil
 		}
@@ -199,24 +209,172 @@ func (f *fakeStore) VariantSource(_ context.Context, slug, lang string) (string,
 	return f.variantSource, f.variantVersion, nil
 }
 
-// UpsertVariant models optimistic concurrency the same way the real store
-// does: a non-nil expectedVersion that doesn't match variantVersion is
-// rejected with domain.ErrVersionConflict and leaves all state (including
-// upserts, so tests can assert the stale write was never applied)
-// untouched. On success it records the call (so tests can assert editedBy)
-// and updates the fake's state so the save is immediately visible to
-// VariantDetail/VariantSource, mirroring the real store's read-your-writes
-// behavior.
-func (f *fakeStore) UpsertVariant(_ context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error) {
-	if expectedVersion != nil && *expectedVersion != f.variantVersion {
+// --- ProposalStore fake ---
+// Mirrors the real store's semantics closely enough for handler tests:
+// one open proposal per user per variant, revision bumps invalidating
+// approvals, base-version staleness, the admin self-approve carve-out,
+// and publish-through-the-variant with read-your-writes visibility.
+
+// liveVersion is the fake's single variant's version as proposals see it:
+// 0 when no variant is loaded (a new-course proposal), variantVersion
+// otherwise.
+func (f *fakeStore) liveVersion(slug, lang string) int {
+	if f.variant == nil || slug != f.variantSlug || lang != f.variant.Language {
+		return 0
+	}
+	return f.variantVersion
+}
+
+// countApprovals recomputes current-revision non-proposer approvals, the
+// same aggregate the real store's proposal queries compute.
+func (f *fakeStore) countApprovals(p domain.Proposal) int {
+	n := 0
+	for _, rv := range f.reviews[p.ID] {
+		if rv.Verdict == domain.VerdictApprove && rv.Revision == p.Revision && rv.ReviewerID != p.ProposerID {
+			n++
+		}
+	}
+	return n
+}
+
+func (f *fakeStore) refreshProposal(p domain.Proposal) domain.Proposal {
+	p.Approvals = f.countApprovals(p)
+	p.LiveVersion = f.liveVersion(p.CourseSlug, p.Language)
+	return p
+}
+
+func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error) {
+	for _, p := range f.proposals {
+		if p.ProposerID == proposerID && p.CourseSlug == courseSlug && p.Language == language && p.Status == domain.ProposalOpen {
+			return domain.Proposal{}, domain.ErrDuplicateProposal
+		}
+	}
+	f.nextProp++
+	proposer, _ := f.userByID(proposerID)
+	p := domain.Proposal{
+		ID: f.nextProp, ProposerID: proposerID, ProposerUsername: proposer.Username,
+		CourseSlug: courseSlug, Language: language, Title: title, SummaryMD: summary,
+		ProposedMD: markdown, BaseVersion: f.liveVersion(courseSlug, language),
+		Revision: 1, Status: domain.ProposalOpen,
+	}
+	f.proposals[p.ID] = p
+	return f.refreshProposal(p), nil
+}
+
+func (f *fakeStore) UpdateProposalMarkdown(_ context.Context, proposalID, proposerID int64, title, summary, markdown string) (domain.Proposal, error) {
+	p, ok := f.proposals[proposalID]
+	if !ok || p.ProposerID != proposerID {
+		return domain.Proposal{}, domain.ErrNotFound
+	}
+	if p.Status != domain.ProposalOpen {
+		return domain.Proposal{}, domain.ErrProposalClosed
+	}
+	p.Title, p.SummaryMD, p.ProposedMD = title, summary, markdown
+	p.Revision++
+	p.BaseVersion = f.liveVersion(p.CourseSlug, p.Language)
+	f.proposals[proposalID] = p
+	return f.refreshProposal(p), nil
+}
+
+func (f *fakeStore) ProposalByID(_ context.Context, id int64) (domain.Proposal, error) {
+	p, ok := f.proposals[id]
+	if !ok {
+		return domain.Proposal{}, domain.ErrNotFound
+	}
+	return f.refreshProposal(p), nil
+}
+
+func (f *fakeStore) ListProposals(_ context.Context, status string) ([]domain.Proposal, error) {
+	var out []domain.Proposal
+	for _, p := range f.proposals {
+		if status == "" || p.Status == status {
+			out = append(out, f.refreshProposal(p))
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) ListProposalsByUser(_ context.Context, userID int64) ([]domain.Proposal, error) {
+	var out []domain.Proposal
+	for _, p := range f.proposals {
+		if p.ProposerID == userID {
+			out = append(out, f.refreshProposal(p))
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) ListProposalReviews(_ context.Context, proposalID int64) ([]domain.ProposalReview, error) {
+	var out []domain.ProposalReview
+	for _, rv := range f.reviews[proposalID] {
+		out = append(out, rv)
+	}
+	return out, nil
+}
+
+func (f *fakeStore) AddReview(_ context.Context, proposalID, reviewerID int64, verdict, comment string) (domain.ReviewOutcome, error) {
+	p, ok := f.proposals[proposalID]
+	if !ok {
+		return domain.ReviewOutcome{}, domain.ErrNotFound
+	}
+	if p.Status != domain.ProposalOpen {
+		return domain.ReviewOutcome{}, domain.ErrProposalClosed
+	}
+	reviewer, _ := f.userByID(reviewerID)
+	isAdmin := reviewer.IsAdmin()
+	if reviewerID == p.ProposerID && (!isAdmin || verdict != domain.VerdictApprove) {
+		return domain.ReviewOutcome{}, domain.ErrSelfReview
+	}
+	if f.reviews[proposalID] == nil {
+		f.reviews[proposalID] = map[int64]domain.ProposalReview{}
+	}
+	f.reviews[proposalID][reviewerID] = domain.ProposalReview{
+		ProposalID: proposalID, ReviewerID: reviewerID, ReviewerUsername: reviewer.Username,
+		ReviewerIsAdmin: isAdmin, Verdict: verdict, CommentMD: comment, Revision: p.Revision,
+	}
+	closed := false
+	if isAdmin && verdict == domain.VerdictReject {
+		p.Status = domain.ProposalRejected
+		f.proposals[proposalID] = p
+		closed = true
+	}
+	return domain.ReviewOutcome{Proposal: f.refreshProposal(p), ReviewerIsAdmin: isAdmin, Closed: closed}, nil
+}
+
+func (f *fakeStore) PublishProposal(_ context.Context, proposalID int64, course domain.Course, variant domain.Variant) (int, error) {
+	p, ok := f.proposals[proposalID]
+	if !ok {
+		return 0, domain.ErrNotFound
+	}
+	if p.Status != domain.ProposalOpen {
+		return 0, domain.ErrProposalClosed
+	}
+	if p.BaseVersion != f.liveVersion(p.CourseSlug, p.Language) {
 		return 0, domain.ErrVersionConflict
 	}
-	f.upserts = append(f.upserts, upsertCall{Course: course, Variant: variant, EditedBy: editedBy})
 	f.variantSlug = course.Slug
 	f.variant = &variant
 	f.variantSource = variant.SourceMD
 	f.variantVersion++
-	return f.variantVersion, nil
+	version := f.variantVersion
+	p.Status = domain.ProposalPublished
+	p.PublishedVersion = &version
+	f.proposals[proposalID] = p
+	f.published = append(f.published, proposalID)
+	return version, nil
+}
+
+func (f *fakeStore) WithdrawProposal(_ context.Context, proposalID, proposerID int64) error {
+	p, ok := f.proposals[proposalID]
+	if !ok || p.ProposerID != proposerID {
+		return domain.ErrNotFound
+	}
+	if p.Status != domain.ProposalOpen {
+		return domain.ErrProposalClosed
+	}
+	p.Status = domain.ProposalWithdrawn
+	f.proposals[proposalID] = p
+	return nil
 }
 
 // SubmissionStore stubs.
@@ -311,11 +469,15 @@ type noopEnqueuer struct{}
 
 func (noopEnqueuer) Enqueue(int64) {}
 
+// testThreshold is the approval threshold every web test runs with: small
+// enough that a test can reach it with two reviewers.
+const testThreshold = 2
+
 func testMux(t *testing.T) (*http.ServeMux, *fakeStore) {
 	t.Helper()
 	mux := http.NewServeMux()
 	fs := newFakeStore()
-	Register(mux, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), fs, fs, fs, noopEnqueuer{})
+	Register(mux, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), fs, fs, fs, fs, noopEnqueuer{}, testThreshold)
 	return mux, fs
 }
 
