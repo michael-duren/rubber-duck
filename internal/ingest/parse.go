@@ -3,6 +3,7 @@ package ingest
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -208,6 +209,14 @@ func (p *docWalker) flushSection(stop int) {
 	p.contentDst = nil
 }
 
+// slugRe constrains the frontmatter identity fields. course and language
+// become filesystem names (courses/<course>-<language>.md, written by
+// scripts/export-courses.sh in a workflow with push rights) and URL path
+// segments, so anything outside lowercase kebab-case — path separators
+// especially — must be rejected here at the document contract, not
+// re-checked by every consumer.
+var slugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
 func checkFrontmatter(fm Frontmatter) []Problem {
 	var probs []Problem
 	need := []struct{ v, name string }{
@@ -216,6 +225,12 @@ func checkFrontmatter(fm Frontmatter) []Problem {
 	for _, f := range need {
 		if strings.TrimSpace(f.v) == "" {
 			probs = append(probs, Problem{1, "frontmatter is missing required field " + strconv.Quote(f.name)})
+		}
+	}
+	for _, f := range []struct{ v, name string }{{fm.Course, "course"}, {fm.Language, "language"}} {
+		if strings.TrimSpace(f.v) != "" && !slugRe.MatchString(f.v) {
+			probs = append(probs, Problem{1, fmt.Sprintf(
+				"frontmatter field %q must be lowercase letters, numbers, and hyphens (got %q)", f.name, f.v)})
 		}
 	}
 	return probs

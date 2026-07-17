@@ -1,0 +1,183 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/michael-duren/rubber-duck/internal/diff"
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// diffLineNo formats one side's line number, blank when the row doesn't
+// exist on that side.
+func diffLineNo(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+// diffRow renders one line of the unified diff with the shared
+// green/red/neutral treatment.
+templ diffRow(l diff.Line) {
+	switch l.Op {
+		case diff.OpInsert:
+			<tr class="bg-emerald-50 dark:bg-emerald-950/40">
+				<td class="w-12 select-none border-r border-slate-200 px-2 text-right text-slate-400 dark:border-slate-800"></td>
+				<td class="w-12 select-none border-r border-emerald-200 px-2 text-right text-emerald-600 dark:border-emerald-900 dark:text-emerald-400">{ diffLineNo(l.NewN) }</td>
+				<td class="w-6 select-none px-2 text-emerald-600 dark:text-emerald-400">+</td>
+				<td class="whitespace-pre-wrap break-all pr-2 text-emerald-800 dark:text-emerald-200">{ l.Text }</td>
+			</tr>
+		case diff.OpDelete:
+			<tr class="bg-rose-50 dark:bg-rose-950/40">
+				<td class="w-12 select-none border-r border-rose-200 px-2 text-right text-rose-600 dark:border-rose-900 dark:text-rose-400">{ diffLineNo(l.OldN) }</td>
+				<td class="w-12 select-none border-r border-slate-200 px-2 text-right text-slate-400 dark:border-slate-800"></td>
+				<td class="w-6 select-none px-2 text-rose-600 dark:text-rose-400">-</td>
+				<td class="whitespace-pre-wrap break-all pr-2 text-rose-800 dark:text-rose-200">{ l.Text }</td>
+			</tr>
+		default:
+			<tr>
+				<td class="w-12 select-none border-r border-slate-200 px-2 text-right text-slate-400 dark:border-slate-800">{ diffLineNo(l.OldN) }</td>
+				<td class="w-12 select-none border-r border-slate-200 px-2 text-right text-slate-400 dark:border-slate-800">{ diffLineNo(l.NewN) }</td>
+				<td class="w-6 select-none px-2"></td>
+				<td class="whitespace-pre-wrap break-all pr-2 text-slate-700 dark:text-slate-300">{ l.Text }</td>
+			</tr>
+	}
+}
+
+// verdictChip shows one review's standing verdict.
+templ verdictChip(verdict string) {
+	if verdict == domain.VerdictApprove {
+		<span class="border border-emerald-400 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">approved</span>
+	} else {
+		<span class="border border-rose-400 px-1.5 py-0.5 font-mono text-xs text-rose-700 dark:border-rose-800 dark:text-rose-300">rejected</span>
+	}
+}
+
+// ProposalDetail (GET /proposals/{id}) shows one proposed course change:
+// what it changes (a unified diff against the live document), who has
+// reviewed it, and — for eligible viewers — the actions. The review form
+// is shown to any logged-in non-proposer while the proposal is open (plus
+// admins on their own proposal — the store enforces the actual rules; the
+// view only decides what to draw).
+templ ProposalDetail(user *domain.User, p domain.Proposal, reviews []domain.ProposalReview, hunks [][]diff.Line, threshold int, errMsg string) {
+	@Layout(p.Title, user) {
+		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<a href="/proposals" class="hover:text-emerald-600 dark:hover:text-emerald-400">proposals</a> / #{ strconv.FormatInt(p.ID, 10) }
+		</nav>
+		<div class="mt-4 flex flex-wrap items-start justify-between gap-4">
+			<div class="min-w-0">
+				<h1 class="text-2xl font-bold">{ p.Title }</h1>
+				<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+					<a href={ templ.SafeURL("/courses/" + p.CourseSlug + "/" + p.Language) } class="font-mono hover:text-emerald-600 dark:hover:text-emerald-400">{ p.CourseSlug }</a>
+					@langChip(p.Language)
+					<span>proposed by { p.ProposerUsername }</span>
+					if p.BaseVersion == 0 {
+						<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new course</span>
+					}
+					@proposalStatusChip(p.Status)
+				</div>
+				if p.SummaryMD != "" {
+					<p class="mt-3 max-w-2xl text-sm text-slate-600 dark:text-slate-300">{ p.SummaryMD }</p>
+				}
+			</div>
+			<div class="flex items-center gap-3">
+				if p.Status == domain.ProposalOpen {
+					@approvalProgress(p.Approvals, threshold)
+				}
+				if user != nil && user.ID == p.ProposerID && p.Status == domain.ProposalOpen {
+					<a href={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10) + "/edit") } class="border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white">Edit</a>
+					<form method="post" action={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10) + "/withdraw") }>
+						@csrfField()
+						<button type="submit" class="border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950">Withdraw</button>
+					</form>
+				}
+			</div>
+		</div>
+		if errMsg != "" {
+			<p class="mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		if p.Status == domain.ProposalOpen && p.Stale() {
+			<p class="mt-4 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+				The course has changed since this proposal was written (it targets version { strconv.Itoa(p.BaseVersion) }, the course is now at version { strconv.Itoa(p.LiveVersion) }).
+				It can't publish until the proposer updates it against the current content — the diff below compares against the <em>current</em> document.
+			</p>
+		}
+		if p.Status == domain.ProposalPublished && p.PublishedVersion != nil {
+			<p class="mt-4 border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300">
+				Published as version { strconv.Itoa(*p.PublishedVersion) } of
+				<a href={ templ.SafeURL("/courses/" + p.CourseSlug + "/" + p.Language) } class="underline">{ p.CourseSlug }/{ p.Language }</a>.
+			</p>
+		}
+		<h2 class="mt-8 font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Changes vs. current document</h2>
+		if len(hunks) == 0 {
+			<p class="mt-3 font-mono text-sm text-slate-500 dark:text-slate-400">No differences from the current document.</p>
+		} else {
+			<div class="mt-3 overflow-x-auto border border-slate-200 bg-white font-mono text-xs leading-5 dark:border-slate-800 dark:bg-slate-900">
+				<table class="w-full border-collapse">
+					for i, hunk := range hunks {
+						if i > 0 {
+							<tr>
+								<td colspan="4" class="select-none border-y border-slate-200 bg-slate-50 px-2 py-1 text-slate-400 dark:border-slate-800 dark:bg-slate-950">⋯</td>
+							</tr>
+						}
+						for _, l := range hunk {
+							@diffRow(l)
+						}
+					}
+				</table>
+			</div>
+		}
+		<h2 class="mt-10 font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Reviews</h2>
+		if len(reviews) == 0 {
+			<p class="mt-3 font-mono text-sm text-slate-500 dark:text-slate-400">No reviews yet.</p>
+		} else {
+			<ul class="mt-3 flex flex-col gap-3">
+				for _, rv := range reviews {
+					<li class="border border-slate-200 bg-white/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
+						<div class="flex flex-wrap items-center gap-2 text-sm">
+							<span class="font-medium">{ rv.ReviewerUsername }</span>
+							if rv.ReviewerIsAdmin {
+								<span class="border border-rose-400 px-1.5 py-0.5 font-mono text-xs text-rose-700 dark:border-rose-800 dark:text-rose-300">admin</span>
+							}
+							@verdictChip(rv.Verdict)
+							if rv.Stale(p.Revision) {
+								<span class="border border-slate-300 px-1.5 py-0.5 font-mono text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400" title="Left on an earlier revision of this proposal; it doesn't count toward the threshold.">outdated</span>
+							}
+						</div>
+						if rv.CommentMD != "" {
+							<p class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{ rv.CommentMD }</p>
+						}
+					</li>
+				}
+			</ul>
+		}
+		if p.Status == domain.ProposalOpen {
+			if user == nil {
+				<p class="mt-6 text-sm text-slate-500 dark:text-slate-400"><a href="/login" class="underline">Log in</a> to review this proposal.</p>
+			} else if user.ID != p.ProposerID || user.IsAdmin() {
+				<form method="post" action={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10) + "/reviews") } class="mt-6 flex max-w-2xl flex-col gap-3">
+					@csrfField()
+					<!-- The revision this page rendered: a verdict is refused if the
+					     proposer revises before it lands, so approvals can't attach to
+					     content the reviewer never saw. -->
+					<input type="hidden" name="revision" value={ strconv.Itoa(p.Revision) }/>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Comment (optional)</span>
+						<textarea name="comment" rows="3" class="border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900"></textarea>
+					</label>
+					<div class="flex items-center gap-3">
+						<button type="submit" name="verdict" value="approve" class="bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Approve</button>
+						if user.ID != p.ProposerID {
+							<button type="submit" name="verdict" value="reject" class="border border-rose-300 px-3 py-2 font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950">Reject</button>
+						}
+					</div>
+					if user.IsAdmin() {
+						<p class="font-mono text-xs text-slate-500 dark:text-slate-400">Your approval publishes immediately; your rejection closes the proposal.</p>
+					}
+				</form>
+			} else {
+				<p class="mt-6 text-sm text-slate-500 dark:text-slate-400">This is your proposal — others review it. It publishes at { strconv.Itoa(threshold) } approvals.</p>
+			}
+		}
+	}
+}

@@ -10,9 +10,9 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/michael-duren/rubber-duck/internal/domain"
 
-// Tokens documents both credential kinds: personal CLI tokens (duck) and
-// agent API keys (the course-publishing REST API). Examples hard-code the
-// canonical deployment (prodURL) so they're copy-pasteable as-is.
+// Tokens documents the one credential kind left after the agent API's
+// retirement: personal CLI tokens. Examples hard-code the canonical
+// deployment (prodURL) so they're copy-pasteable as-is.
 func Tokens(user *domain.User) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -46,7 +46,7 @@ func Tokens(user *domain.User) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto max-w-3xl\"><h1 class=\"text-3xl font-bold\">Tokens &amp; API keys</h1><p class=\"mt-3 text-slate-600 dark:text-slate-400\">Rubber Duck has two kinds of credentials. A personal <span class=\"font-semibold\">CLI token</span> lets the <span class=\"font-mono\">duck</span> CLI submit solutions as you; an <span class=\"font-semibold\">agent API key</span> lets an agent (or a human with a terminal) publish and manage courses through the REST API. Both are random secrets shown exactly once — the server stores only a SHA-256 hash, so a lost token can't be recovered, only replaced.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto max-w-3xl\"><h1 class=\"text-3xl font-bold\">CLI tokens</h1><p class=\"mt-3 text-slate-600 dark:text-slate-400\">A personal <span class=\"font-semibold\">CLI token</span> lets the <span class=\"font-mono\">duck</span> CLI act as you: submitting solutions, and proposing course changes for review. It's a random secret shown exactly once — the server stores only a SHA-256 hash, so a lost token can't be recovered, only replaced.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -58,7 +58,7 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = cmdRow("browse courses, duck pull, duck test", "None — courses and their challenges are public.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = cmdRow("browse courses, duck pull, duck test, duck educator pull", "None — courses and their challenges are public.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -66,7 +66,7 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = cmdRow("publish / update / delete courses (/api/v1)", "Agent API key (gc_…), minted by an operator.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = cmdRow("duck propose / duck proposals", "User CLI token — proposals are attributed to your account and reviewed on /proposals.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -78,7 +78,7 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\"><span class=\"font-mono\">duck submit</span> authenticates every request with a bearer token. The easiest setup is <span class=\"font-mono\">duck auth login</span>, which prompts for your username and password, mints a token, and saves it where the CLI looks for it:</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">The CLI authenticates every write with a bearer token. The easiest setup is <span class=\"font-mono\">duck auth login</span>, which prompts for your username and password, mints a token, and saves it where the CLI looks for it:</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -127,41 +127,33 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = docHeading("Agent API keys (gc_…)").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = docHeading("What happened to agent API keys?").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">Course publishing — the <span class=\"font-mono\">PUT/DELETE</span> endpoints under <span class=\"font-mono\">/api/v1</span> — requires an agent API key. There's deliberately no web UI for minting these: an operator with database access creates them with the server binary, and the raw key is printed exactly once.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">Retired. Courses used to be published directly through <span class=\"font-mono\">PUT /api/v1</span> with an operator-minted agent key; course changes now go through the human review workflow instead — anyone can ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = shell(
-				"# from a repo checkout — local dev (compose postgres running):",
-				"make apikey KEY_NAME=writer-1",
-				"",
-				"# production (starts cloud-sql-proxy and reads tofu outputs for you):",
-				"make apikey-prod KEY_NAME=writer-1",
-				"",
-				"# or the underlying command against any database:",
-				"go run ./cmd/duckserver apikey create --name writer-1 --db \"<postgres url>\"",
-			).Render(ctx, templ_7745c5c3_Buffer)
+			var templ_7745c5c3_Var5 = []any{docLink}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var5...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">Agents send the key as a bearer header on every API call:</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<a href=\"/proposals\" class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = shell(
-				"curl -X PUT "+prodURL+"/api/v1/courses/<slug>/variants/<language> \\",
-				"  -H \"Authorization: Bearer gc_<40 hex>\" \\",
-				"  -H \"Content-Type: application/json\" \\",
-				"  -d '{\"markdown\": \"…\"}'",
-			).Render(ctx, templ_7745c5c3_Buffer)
+			var templ_7745c5c3_Var6 string
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var5).String())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/tokens.templ`, Line: 1, Col: 0}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p class=\"mt-3 text-slate-700 dark:text-slate-300\">The repo's <span class=\"font-mono\">make publish</span> workflow reads the key from the <span class=\"font-mono\">GC_API_KEY</span> environment variable. There's no revoke command yet — rotating means minting a new key and setting the old row's <span class=\"font-mono\">revoked_at</span> directly in the database.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">propose a change</a>, and it publishes once the community (or an admin) approves it. Reading course data needs no credential at all.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -169,7 +161,7 @@ func Tokens(user *domain.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<ul class=\"mt-3 list-disc space-y-2 pl-5 text-slate-700 dark:text-slate-300\"><li>Copy tokens when they're shown — that's the only time the server knows the raw value.</li><li>Never commit a token; keep it in the environment, the token file, or your secret manager. A <span class=\"font-mono\">gc_u_…</span> token is <em>not</em> an API key — the publish API will reject it.</li><li>One credential per machine or agent, named after its holder, so revoking one doesn't take the rest down.</li></ul></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<ul class=\"mt-3 list-disc space-y-2 pl-5 text-slate-700 dark:text-slate-300\"><li>Copy tokens when they're shown — that's the only time the server knows the raw value.</li><li>Never commit a token; keep it in the environment, the token file, or your secret manager.</li><li>One token per machine, named after its holder, so revoking one doesn't take the rest down.</li></ul></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

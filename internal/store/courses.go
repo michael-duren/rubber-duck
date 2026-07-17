@@ -45,6 +45,16 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	version, err := upsertVariantTx(ctx, tx, course, variant, editedBy, expectedVersion)
+	if err != nil {
+		return 0, err
+	}
+	return version, tx.Commit(ctx)
+}
+
+// upsertVariantTx is UpsertVariant's body, split out so PublishProposal can
+// run the same write plus its proposal bookkeeping inside one transaction.
+func upsertVariantTx(ctx context.Context, tx pgx.Tx, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error) {
 	reading, err := json.Marshal(course.ExtendedReading)
 	if err != nil {
 		return 0, err
@@ -199,7 +209,7 @@ func (s *Store) UpsertVariant(ctx context.Context, course domain.Course, variant
 		return 0, err
 	}
 
-	return version, tx.Commit(ctx)
+	return version, nil
 }
 
 func upsertChallenge(ctx context.Context, tx pgx.Tx, variantID int64, lessonID *int64, c domain.Challenge) error {

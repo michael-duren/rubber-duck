@@ -22,11 +22,11 @@ func (s *Store) CreateUserToken(ctx context.Context, userID int64, name string, 
 func (s *Store) UserByToken(ctx context.Context, tokenHash []byte) (domain.User, error) {
 	var u domain.User
 	err := s.pool.QueryRow(ctx,
-		`SELECT u.id, u.username, u.created_at
+		`SELECT u.id, u.username, u.role, u.created_at
 		 FROM user_tokens t JOIN users u ON u.id = t.user_id
 		 WHERE t.token_hash = $1 AND t.revoked_at IS NULL`,
 		tokenHash,
-	).Scan(&u.ID, &u.Username, &u.CreatedAt)
+	).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, domain.ErrNotFound
 	}

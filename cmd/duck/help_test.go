@@ -71,7 +71,10 @@ func TestHelpCmdTopics(t *testing.T) {
 	}{
 		{"top level", nil, false},
 		{"command", []string{"pull"}, false},
-		{"educator subcommand", []string{"educator", "push"}, false},
+		{"educator subcommand", []string{"educator", "pull"}, false},
+		{"propose command", []string{"propose"}, false},
+		{"proposals command", []string{"proposals"}, false},
+		{"retired educator push", []string{"educator", "push"}, true},
 		{"auth subcommand", []string{"auth", "status"}, false},
 		{"unknown command", []string{"bogus"}, true},
 		{"unknown subcommand", []string{"educator", "bogus"}, true},

@@ -103,6 +103,30 @@ func (s *Store) VariantSource(ctx context.Context, slug, language string) (strin
 	return src, version, err
 }
 
+// ListVariantSources returns every variant's source document, ordered
+// stably by slug then language — the /api/v1/export payload backing the
+// repo-mirror sync.
+func (s *Store) ListVariantSources(ctx context.Context) ([]domain.VariantExport, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.slug, v.language, v.version, v.source_md
+		FROM course_variants v JOIN courses c ON c.id = v.course_id
+		ORDER BY c.slug, v.language`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.VariantExport
+	for rows.Next() {
+		var v domain.VariantExport
+		if err := rows.Scan(&v.CourseSlug, &v.Language, &v.Version, &v.SourceMD); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) DeleteCourse(ctx context.Context, slug string) error {
 	ct, err := s.pool.Exec(ctx, `DELETE FROM courses WHERE slug = $1`, slug)
 	if err != nil {
