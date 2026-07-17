@@ -180,6 +180,12 @@ Conventions:
   next fenced code block after `### Starter` is the starter code; after
   `### Tests`, the test suite. Both are required.
 - Slugs identify lessons/challenges across re-publishes — keep them stable.
+- Don't start a challenge slug with `final-` or with two-plus digits (plus
+  at most one letter) and a dash, e.g. `64-bit-ints`. `duck pull` names
+  challenge directories by prefixing the slug that way (`03a-merge`,
+  `final-task-scheduler`), and the CLI strips exactly those shapes to map
+  a directory back to its slug — a slug shaped like a prefix would strip
+  wrongly. Single leading digits (`3-way-partition`) are fine.
 - Tests must be self-contained and stdlib-only. Go tests run with
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
   import from `solution` (e.g. `from solution import merge`).

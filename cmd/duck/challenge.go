@@ -54,7 +54,8 @@ func challengeDirNames(challenges []challengeJSON) []string {
 // the ordering prefix challengeDirNames adds. Directories from older pulls
 // (no prefix) pass through unchanged — a bare slug never starts with
 // "final-" or two-plus digits (plus at most one letter) and a dash,
-// because those come only from us.
+// because those come only from us. README's authoring conventions forbid
+// slugs shaped like the prefixes, so the ambiguity stays theoretical.
 func challengeSlug(dir string) string {
 	if rest, ok := strings.CutPrefix(dir, "final-"); ok {
 		return rest
@@ -79,6 +80,10 @@ func challengeSlug(dir string) string {
 // directory name, prefixed or not — to the challenge's directory under
 // root and its API slug.
 func resolveChallenge(root, arg string) (dir, slug string, err error) {
+	// Shell tab completion produces "03a-merge/" and "./03a-merge"; without
+	// cleaning, the trailing slash would survive into the slug (and the URL
+	// it's sent in).
+	arg = filepath.Clean(arg)
 	if fi, statErr := os.Stat(filepath.Join(root, arg)); statErr == nil && fi.IsDir() {
 		return arg, challengeSlug(arg), nil
 	}

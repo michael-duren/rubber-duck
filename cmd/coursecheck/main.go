@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,7 +164,12 @@ func build(lang, solution, tests string) (string, error, error) {
 	// The graders build without ASan, where an impossibly large malloc
 	// just returns NULL; ASan's default is to abort instead. Courses test
 	// allocation-failure paths that way, so keep NULL-return semantics.
-	run.Env = append(os.Environ(), "ASAN_OPTIONS=allocator_may_return_null=1")
+	// Drop any inherited ASAN_OPTIONS first: getenv returns the first
+	// match in environ, so a duplicate would shadow ours.
+	env := slices.DeleteFunc(os.Environ(), func(v string) bool {
+		return strings.HasPrefix(v, "ASAN_OPTIONS=")
+	})
+	run.Env = append(env, "ASAN_OPTIONS=allocator_may_return_null=1")
 	run.WaitDelay = time.Second
 	done := make(chan struct{})
 	var out []byte

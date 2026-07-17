@@ -145,6 +145,8 @@ func TestResolveChallenge(t *testing.T) {
 		{"min-heap", "05a-min-heap", "min-heap"},
 		{"task-scheduler", "final-task-scheduler", "task-scheduler"},
 		{"legacy-slug", "legacy-slug", "legacy-slug"},
+		{"01-growable-array/", "01-growable-array", "growable-array"}, // tab completion's trailing slash
+		{"./05a-min-heap", "05a-min-heap", "min-heap"},
 	}
 	for _, tt := range tests {
 		dir, slug, err := resolveChallenge(root, tt.arg)

@@ -93,11 +93,11 @@ var commands = []cmdHelp{
 		long: "Local-first grading: runs the challenge's tests on your machine,\n" +
 			"submits the code together with the claimed pass/fail verdict, and\n" +
 			"prints the result immediately. The challenge can be named by slug\n" +
-			"or by its pulled directory (\"merge\" and \"03-merge\" both work).\n" +
-			"The server re-grades in the\n" +
-			"background as an audit nobody waits on. Requires a saved token (see\n" +
-			"`duck auth login`). If the language's toolchain isn't installed, submit\n" +
-			"automatically falls back to synchronous server grading.",
+			"or by its pulled directory (\"merge\" and \"03-merge\" both work). The\n" +
+			"server re-grades in the background as an audit nobody waits on.\n" +
+			"Requires a saved token (see `duck auth login`). If the language's\n" +
+			"toolchain isn't installed, submit automatically falls back to\n" +
+			"synchronous server grading.",
 		flags: []flagHelp{
 			{"--remote", "skip the local run; grade on the server and wait for the result"},
 		},
