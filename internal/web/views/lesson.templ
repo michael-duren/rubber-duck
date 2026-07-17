@@ -6,37 +6,126 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
-templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain.Lesson, next *domain.Lesson, latestCodeByChallenge map[int64]string, submissionsByChallenge map[int64][]domain.Submission) {
+templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain.Lesson, lessonNum int, next *domain.Lesson, completed map[int64]bool, latestCodeByChallenge map[int64]string, submissionsByChallenge map[int64][]domain.Submission) {
 	@Layout(l.Title, user) {
+		// Reading progress: a thin bar pinned over the ansi-rule that fills
+		// as you scroll through the lesson (script at the bottom of the page).
+		<div class="pointer-events-none fixed inset-x-0 top-0 z-50 h-1" aria-hidden="true">
+			<div id="lesson-progress-bar" class="h-full w-0 bg-emerald-500"></div>
+		</div>
 		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
 			<span class="text-emerald-600 dark:text-emerald-400">~</span>/
 			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Slug }</a> /
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / { l.Slug }
 		</nav>
-		<article class="mx-auto mt-6 max-w-5xl">
-			<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ "// lesson: " + l.Slug }</p>
-			<h1 class="mt-1 text-3xl font-bold">{ l.Title }</h1>
-			<div class="prose prose-slate mt-6 max-w-none dark:prose-invert">
-				@templ.Raw(l.ContentHTML)
+		<div class="mt-6 lg:flex lg:items-start lg:gap-10">
+			<aside class="hidden lg:block lg:w-72 lg:shrink-0">
+				<div class="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+					@lessonSidebar(course, v, l, lessonNum, completed)
+				</div>
+			</aside>
+			<div class="mx-auto min-w-0 max-w-3xl lg:mx-0 lg:max-w-none lg:flex-1">
+				// On small screens the sidebar folds into this dropdown.
+				<details class="border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/60 lg:hidden">
+					<summary class="cursor-pointer px-4 py-3 font-mono text-sm text-slate-700 dark:text-slate-300">
+						lesson { fmt.Sprintf("%d/%d", lessonNum, len(v.Lessons)) } · { l.Title }
+					</summary>
+					<div class="border-t border-slate-200 p-2 dark:border-slate-800">
+						@lessonNav(course, v, l, completed)
+					</div>
+				</details>
+				<article class="mt-6 lg:mt-0">
+					<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ fmt.Sprintf("// lesson %d of %d: %s", lessonNum, len(v.Lessons), l.Slug) }</p>
+					<h1 class="mt-1 text-3xl font-bold">{ l.Title }</h1>
+					<div class="prose prose-slate mt-6 max-w-none dark:prose-invert">
+						@templ.Raw(l.ContentHTML)
+					</div>
+					for _, c := range l.Challenges {
+						@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID], v.Version, v.Language)
+					}
+					// Only load the editor bundle when there's a textarea for it to
+					// enhance: ChallengeCard renders the form only for signed-in users.
+					if user != nil && len(l.Challenges) > 0 {
+						@editorScript()
+					}
+					<div class="mt-10 flex justify-between border-t border-slate-200 pt-6 dark:border-slate-800">
+						<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="font-mono text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
+						if next != nil {
+							<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/lessons/%s", course.Slug, v.Language, next.Slug)) } class="font-mono text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Next: { next.Title } →</a>
+						} else {
+							<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/final", course.Slug, v.Language)) } class="font-mono text-sm font-medium text-amber-600 hover:underline dark:text-amber-400">Final challenge →</a>
+						}
+					</div>
+				</article>
 			</div>
-			for _, c := range l.Challenges {
-				@ChallengeCard(user, c, latestCodeByChallenge[c.ID], submissionsByChallenge[c.ID], v.Version, v.Language)
-			}
-			// Only load the editor bundle when there's a textarea for it to
-			// enhance: ChallengeCard renders the form only for signed-in users.
-			if user != nil && len(l.Challenges) > 0 {
-				@editorScript()
-			}
-			<div class="mt-10 flex justify-between border-t border-slate-200 pt-6 dark:border-slate-800">
-				<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="font-mono text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">← All lessons</a>
-				if next != nil {
-					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/lessons/%s", course.Slug, v.Language, next.Slug)) } class="font-mono text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Next: { next.Title } →</a>
-				} else {
-					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/final", course.Slug, v.Language)) } class="font-mono text-sm font-medium text-amber-600 hover:underline dark:text-amber-400">Final challenge →</a>
+		</div>
+		<script>
+			(function () {
+				var bar = document.getElementById("lesson-progress-bar");
+				function update() {
+					var max = document.documentElement.scrollHeight - window.innerHeight;
+					bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 100) + "%";
 				}
-			</div>
-		</article>
+				addEventListener("scroll", update, { passive: true });
+				addEventListener("resize", update, { passive: true });
+				update();
+			})();
+		</script>
+	}
+}
+
+// lessonSidebar heads the desktop lesson nav with where-am-I context:
+// position in the course, then the full lesson list.
+templ lessonSidebar(course domain.Course, v domain.Variant, current domain.Lesson, lessonNum int, completed map[int64]bool) {
+	<p class="font-mono text-xs text-slate-500 dark:text-slate-400">{ fmt.Sprintf("lesson %d of %d", lessonNum, len(v.Lessons)) }</p>
+	<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="mt-1 block font-semibold hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Title }</a>
+	<div class="mt-4">
+		@lessonNav(course, v, current, completed)
+	</div>
+}
+
+// lessonNav lists every lesson in the variant plus the final challenge,
+// highlighting the current lesson and ✓-marking completed ones. Shared by
+// the desktop sidebar and the mobile dropdown.
+templ lessonNav(course domain.Course, v domain.Variant, current domain.Lesson, completed map[int64]bool) {
+	<ol class="flex flex-col">
+		for i, item := range v.Lessons {
+			<li>
+				if item.Slug == current.Slug {
+					<span aria-current="page" class="flex items-center gap-2 border-l-2 border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+						@lessonNavMarker(i, item, completed)
+						<span class="truncate">{ item.Title }</span>
+					</span>
+				} else {
+					<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/lessons/%s", course.Slug, v.Language, item.Slug)) } class="flex items-center gap-2 border-l-2 border-transparent px-3 py-1.5 text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400">
+						@lessonNavMarker(i, item, completed)
+						<span class="truncate">{ item.Title }</span>
+					</a>
+				}
+			</li>
+		}
+		<li>
+			<a href={ templ.SafeURL(fmt.Sprintf("/courses/%s/%s/final", course.Slug, v.Language)) } class="flex items-center gap-2 border-l-2 border-transparent px-3 py-1.5 text-sm text-slate-600 hover:border-amber-400 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400">
+				if completed[v.Final.ID] {
+					<span class="font-mono text-xs font-bold text-emerald-500">✓</span>
+				} else {
+					<span class="font-mono text-xs font-bold text-amber-400 dark:text-amber-600">★</span>
+				}
+				<span class="truncate">Final: { v.Final.Title }</span>
+			</a>
+		</li>
+	</ol>
+}
+
+// lessonNavMarker is the leading glyph in a lessonNav row: ✓ once every
+// challenge in the lesson has a passing submission, the 01/02/… position
+// otherwise (mirrors the variant page's list markers).
+templ lessonNavMarker(i int, l domain.Lesson, completed map[int64]bool) {
+	if lessonComplete(l, completed) {
+		<span class="font-mono text-xs font-bold text-emerald-500" title="completed">✓</span>
+	} else {
+		<span class="font-mono text-xs font-bold text-slate-300 dark:text-slate-600">{ fmt.Sprintf("%02d", i+1) }</span>
 	}
 }
 
