@@ -182,34 +182,34 @@ func writeStepper(w util.BufWriter, source []byte, frames []d2Frame) {
 	id := "d2s-" + hex.EncodeToString(sum[:5])
 	n := len(frames)
 
-	fmt.Fprintf(w, `<form class="d2-steps" style="--d2n:%d;--d2cyc:d2cycle-%d">`, n, n)
+	_, _ = fmt.Fprintf(w, `<form class="d2-steps" style="--d2n:%d;--d2cyc:d2cycle-%d">`, n, n)
 	for i := range frames {
-		fmt.Fprintf(w, `<input type="radio" name="%s" id="%s-%d">`, id, id, i)
+		_, _ = fmt.Fprintf(w, `<input type="radio" name="%s" id="%s-%d">`, id, id, i)
 	}
 	_, _ = w.WriteString(`<div class="d2-steps-frames">`)
 	for i, f := range frames {
-		fmt.Fprintf(w, `<div class="d2-steps-frame" style="--d2i:%d">`, i)
+		_, _ = fmt.Fprintf(w, `<div class="d2-steps-frame" style="--d2i:%d">`, i)
 		writeDiagram(w, f)
 		_, _ = w.WriteString(`<div class="d2-steps-nav"><span class="d2-steps-ctl">`)
 		// Pause targets this frame's own radio: whichever frame is visible
 		// when it's clicked is the frame the stepper freezes on.
-		fmt.Fprintf(w, `<label class="d2-steps-btn d2-steps-toggle d2-steps-pause" for="%s-%d" title="Pause">&#10074;&#10074;</label>`, id, i)
+		_, _ = fmt.Fprintf(w, `<label class="d2-steps-btn d2-steps-toggle d2-steps-pause" for="%s-%d" title="Pause">&#10074;&#10074;</label>`, id, i)
 		_, _ = w.WriteString(`<button type="reset" class="d2-steps-btn d2-steps-toggle d2-steps-play" title="Play from start">&#9654;&#xFE0E;</button>`)
 		if i > 0 {
-			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">&#8249; Back</label>`, id, i-1)
+			_, _ = fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">&#8249; Back</label>`, id, i-1)
 		} else {
 			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">&#8249; Back</span>`)
 		}
 		_, _ = w.WriteString(`</span>`)
-		fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, n)
+		_, _ = fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, n)
 		if f.name != "" {
-			fmt.Fprintf(w, ` &middot; <span class="d2-steps-name">%s</span>`, html.EscapeString(f.name))
+			_, _ = fmt.Fprintf(w, ` &middot; <span class="d2-steps-name">%s</span>`, html.EscapeString(f.name))
 		}
 		_, _ = w.WriteString(`</span>`)
 		if i < n-1 {
-			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">Next &#8250;</label>`, id, i+1)
+			_, _ = fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">Next &#8250;</label>`, id, i+1)
 		} else {
-			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-0">&#8634;&#xFE0E; Replay</label>`, id)
+			_, _ = fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-0">&#8634;&#xFE0E; Replay</label>`, id)
 		}
 		_, _ = w.WriteString(`</div></div>`)
 	}
