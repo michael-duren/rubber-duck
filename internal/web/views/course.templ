@@ -33,7 +33,11 @@ templ Course(user *domain.User, course domain.Course, variants []domain.VariantS
 					@templ.Raw(course.DescriptionHTML)
 				</div>
 				<div class="mt-10 flex items-center justify-between gap-3">
-					<h2 class="text-xl font-semibold">Pick your language</h2>
+					<h2 class="flex items-center gap-2 text-xl font-semibold">
+						// The teacher duck presents the variant list below.
+						@duckSprite("duck-teacher-pointing", 44, "duck-bob shrink-0")
+						Pick your language
+					</h2>
 					if user != nil {
 						<a href={ templ.SafeURL(newVariantLink(course)) } class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ Add language variant</a>
 					}

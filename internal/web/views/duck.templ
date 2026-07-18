@@ -1,0 +1,54 @@
+package views
+
+import "fmt"
+
+// The duck is the site's resident teaching assistant — one sprite per page,
+// posed for what that page is doing (reading along in lessons, pointing at
+// the language picker, dozing in empty states, reacting to a submission's
+// verdict). Sprites live in static/img/ducks/sm (320px, downscaled from the
+// 1024px originals in static/img/ducks); animations are in assets/input.css
+// under "the resident duck" and all stop under prefers-reduced-motion.
+//
+// The duck is decoration, never the only carrier of information: every
+// sprite is alt="" + aria-hidden, and the text next to it says everything
+// it says.
+
+// duckSprite renders one pose. size is the rendered square in CSS px
+// (sprites are square); class layers placement and animation on top.
+templ duckSprite(pose string, size int, class string) {
+	<img
+		src={ "/static/img/ducks/sm/" + pose + ".png" }
+		alt=""
+		aria-hidden="true"
+		width={ fmt.Sprint(size) }
+		height={ fmt.Sprint(size) }
+		loading="lazy"
+		draggable="false"
+		class={ "select-none", class }
+	/>
+}
+
+// duckSays is a speech bubble sitting to the right of a duck sprite, styled
+// like the profile duck's quip bubble (terminal border, left-pointing tail).
+templ duckSays(text string) {
+	<span class="relative inline-block border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs italic text-slate-600 before:absolute before:top-1/2 before:-left-1.5 before:h-2.5 before:w-2.5 before:-translate-y-1/2 before:rotate-45 before:border-b before:border-l before:border-slate-300 before:bg-white before:content-[''] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:before:border-slate-700 dark:before:bg-slate-900">{ text }</span>
+}
+
+// submissionDuck is the duck's reaction to a submission's status, rendered
+// inside the polled SubmissionResult partial so the pose tracks the grade:
+// dozing in the queue, flying while tests run, a lightbulb on a pass — and
+// on a fail, the listening duck offers the site's namesake ritual.
+templ submissionDuck(status string) {
+	switch status {
+		case "pending":
+			@duckSprite("duck-sleeping", 88, "duck-doze")
+		case "running":
+			@duckSprite("duck-flying", 88, "duck-fly")
+		case "passed":
+			@duckSprite("duck-teacher-idea", 88, "duck-cheer")
+		case "failed":
+			@duckSprite("duck-teacher-listening", 88, "duck-bob")
+		default:
+			@duckSprite("duck-teacher-reading", 88, "")
+	}
+}

@@ -44,7 +44,7 @@ func Layout(title string, user *domain.User) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Rubber Duck</title><link rel=\"icon\" href=\"/static/favicon.svg\" type=\"image/svg+xml\"><link rel=\"stylesheet\" href=\"/static/app.css\"><script>\n\t\t\t\tif (localStorage.getItem(\"theme\") === \"light\") {\n\t\t\t\t\tdocument.documentElement.classList.remove(\"dark\");\n\t\t\t\t}\n\t\t\t</script><script src=\"/static/htmx.min.js\"></script><script defer src=\"/static/alpine.min.js\"></script></head><body class=\"crt min-h-screen bg-[#f1f7f2] text-slate-900 dark:bg-[#0b0f0d] dark:text-slate-100\"><div class=\"site-bg\" aria-hidden=\"true\"></div><div class=\"ansi-rule\" aria-hidden=\"true\"></div><header class=\"border-b border-slate-200 bg-white/75 backdrop-blur-sm dark:border-emerald-900/50 dark:bg-[#0b0f0d]/75\"><nav x-data=\"{ open: false }\" class=\"mx-auto max-w-6xl px-4 py-3\"><div class=\"flex items-center justify-between\"><div class=\"flex items-center gap-6\"><a href=\"/\" class=\"font-mono text-lg font-bold tracking-tight\"><span class=\"text-emerald-600 dark:text-emerald-400\">$</span> rubber-duck <span aria-hidden=\"true\">🦆</span></a><div class=\"hidden items-center gap-4 text-sm md:flex\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Rubber Duck</title><link rel=\"icon\" href=\"/static/favicon.svg\" type=\"image/svg+xml\"><link rel=\"stylesheet\" href=\"/static/app.css\"><script>\n\t\t\t\tif (localStorage.getItem(\"theme\") === \"light\") {\n\t\t\t\t\tdocument.documentElement.classList.remove(\"dark\");\n\t\t\t\t}\n\t\t\t</script><script src=\"/static/htmx.min.js\"></script><script defer src=\"/static/alpine.min.js\"></script></head><body class=\"crt min-h-screen bg-[#f1f7f2] text-slate-900 dark:bg-[#0b0f0d] dark:text-slate-100\"><div class=\"site-bg\" aria-hidden=\"true\"></div><div class=\"ansi-rule\" aria-hidden=\"true\"></div><header class=\"border-b border-slate-200 bg-white/75 backdrop-blur-sm dark:border-emerald-900/50 dark:bg-[#0b0f0d]/75\"><nav x-data=\"{ open: false }\" class=\"mx-auto max-w-6xl px-4 py-3\"><div class=\"flex items-center justify-between\"><div class=\"flex items-center gap-6\"><a href=\"/\" class=\"flex items-center gap-1.5 font-mono text-lg font-bold tracking-tight\"><span><span class=\"text-emerald-600 dark:text-emerald-400\">$</span> rubber-duck</span><img src=\"/static/img/ducks/sm/duck-front-64.png\" alt=\"\" aria-hidden=\"true\" width=\"22\" height=\"22\" draggable=\"false\" class=\"nav-duck select-none\"></a><div class=\"hidden items-center gap-4 text-sm md:flex\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -193,7 +193,7 @@ func navAuth(user *domain.User) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(user.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 100, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 104, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -262,7 +262,7 @@ func csrfField() templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 118, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 122, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -306,7 +306,7 @@ func tagChip(tag string) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(tag)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 124, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 128, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -349,7 +349,7 @@ func langChip(lang string) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(lang)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 129, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 133, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -392,7 +392,7 @@ func pointsBadge(points int) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(points)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 134, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 138, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {

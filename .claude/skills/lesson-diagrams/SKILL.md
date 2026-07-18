@@ -116,6 +116,66 @@ Conventions used in `build-a-hashmap-c.md` (reuse them for consistency):
 | a freed / gone node  | `style.stroke-dash: 4; style.font-color: "#9ca3af"` (grey)  |
 | an "after" pointer   | edge `style.stroke-dash: 4` (dashed), red if it's a rewrite |
 
+## Stepped (click-through) diagrams
+
+A ```d2 block using D2's native `steps:` composition renders as a
+**stepper**: one SVG frame per board, with CSS-only controls (hidden radio
+inputs — no JS; see `.d2-steps` in `assets/input.css`). It **auto-plays** on
+page load (~3 s per frame, looping); any click on Pause/Back/Next switches to
+manual stepping, the last frame's Next is a Replay, and the ▶ button resumes
+auto-play. Use it whenever the point is *how an algorithm proceeds* (a
+partition sweep, a sift-up, BFS rings) rather than a static structure.
+Since frames auto-advance, each frame + caption must be graspable in ~3 s.
+
+```d2
+direction: right
+arr: "…starting state…"
+steps: {
+  "compare 5 and 3": { arr.style.stroke: "#dc2626" }
+  "swap":            { ... }
+}
+```
+
+- The **root board** (content above `steps:`) is frame 1 — the starting
+  state. Each step **inherits cumulatively** from the previous frame and
+  states only the delta.
+- The **step key becomes the frame's caption**, rendered as the highlighted
+  bar above the figure (with the "2 / 5" counter) — it's the per-step
+  explanation, so write keys as short human phrases that say what's
+  happening: `"compare 5 and 3"`, not `s2`. The root board's frame has no
+  step key; the stepper captions it "Starting state".
+- **Keep the node/edge structure identical across steps; change only styles
+  and labels.** Same structure → same layout → frames don't jump around when
+  the reader clicks through. Adding/removing nodes mid-sequence relayouts
+  the whole frame and everything shifts.
+- Max **12 frames** (`maxStepFrames` in `internal/markdown/d2.go`); ingest
+  errors above that. 4–8 is the sweet spot.
+- Every frame obeys the same sizing caps as a static diagram; `preview.sh`
+  writes numbered PNG pairs (`light-1.png` …) — **read every frame** in at
+  least one theme, and frame 1 in both.
+- `layers:` / `scenarios:` are rejected at ingest; only `steps:` is
+  supported in lessons.
+- **Vary the shapes.** Not everything is a rectangle: `shape: circle` for
+  tree/graph vertices, `shape: queue` for a FIFO, `shape: package` for build
+  artifacts, `shape: diamond` for a pivot/decision marker, `shape: oval` for
+  chain nodes. Array cells stay square grid cells. Fixed `width`/`height` on
+  shaped nodes, same as everything else.
+- **Pseudocode panel.** Algorithm steppers carry a `code: ""` container —
+  `grid-columns: 1`, one row per line (fixed `height: 30`, **no fixed
+  width**, `style.font: mono`, base `style.stroke: "#9ca3af"`) — and each
+  step highlights the executing line (stroke `"#d97706"`, width 2, bold)
+  while explicitly reverting the previous one (styles never unset; state
+  the revert). Keep pseudocode language-neutral: the same visual serves
+  the C, Go, and Python courses.
+- **Never give a text-bearing row a fixed `width`.** d2 honors it even when
+  the label is wider and the text overflows the border **in the browser**,
+  while `preview.sh`/rsvg silently substitutes a narrower fallback font and
+  hides the overflow — the one bug the preview cannot catch. Leave width
+  off: a `grid-columns: 1` container stretches every row to the widest
+  sibling anyway, so the panel stays rectangular. Indent with U+2007 figure
+  spaces and start otherwise-flush labels with one U+2007 so text doesn't
+  touch the border (`label.near: center-left` has no left padding).
+
 ## D2 idioms you'll actually use
 
 - **Struct / array / link-cell:** `sql_table`.
