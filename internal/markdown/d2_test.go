@@ -54,7 +54,7 @@ func TestToHTML_D2Steps(t *testing.T) {
 	}
 
 	// Root board + 2 steps = 3 frames, each with a radio and a light/dark pair.
-	if n := strings.Count(got, `<div class="d2-steps-frame">`); n != 3 {
+	if n := strings.Count(got, `class="d2-steps-frame"`); n != 3 {
 		t.Errorf("expected 3 frames, got %d", n)
 	}
 	if n := strings.Count(got, `type="radio"`); n != 3 {
@@ -63,21 +63,29 @@ func TestToHTML_D2Steps(t *testing.T) {
 	if n := strings.Count(got, `<div class="d2-diagram">`); n != 3 {
 		t.Errorf("expected 3 d2-diagram wrappers, got %d", n)
 	}
-	// Step names surface as captions; navigation labels exist.
+	// Step names surface as captions; nav and autoplay controls exist. The
+	// --d2n/--d2cyc/--d2i custom properties drive the CSS autoplay cycle.
 	for _, want := range []string{
-		`<div class="d2-steps">`,
+		`<form class="d2-steps" style="--d2n:3;--d2cyc:d2cycle-3">`,
+		`<div class="d2-steps-frame" style="--d2i:2">`,
 		`insert 4`,
 		`Next &#8250;</label>`,
 		`&#8249; Back</label>`,
-		` checked>`,
+		`&#8634;&#xFE0E; Replay</label>`,
+		`<button type="reset" class="d2-steps-btn d2-steps-toggle d2-steps-play"`,
+		`</div></form>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q", want)
 		}
 	}
-	// Exactly one radio starts checked (frame 1 visible).
-	if n := strings.Count(got, ` checked>`); n != 1 {
-		t.Errorf("expected exactly 1 checked radio, got %d", n)
+	// No radio starts checked: the unchecked state is what auto-plays.
+	if strings.Contains(got, " checked") {
+		t.Error("expected no checked radio (autoplay is the default state)")
+	}
+	// One Pause label per frame, each targeting its own frame's radio.
+	if n := strings.Count(got, `title="Pause"`); n != 3 {
+		t.Errorf("expected 3 pause labels, got %d", n)
 	}
 }
 

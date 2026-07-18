@@ -166,45 +166,54 @@ func writeDiagram(w util.BufWriter, f d2Frame) {
 }
 
 // writeStepper emits a click-through viewer for a multi-frame (D2 `steps:`)
-// diagram: one hidden radio input per frame plus Back/Next <label>s, so the
-// stepping is pure CSS (see .d2-steps in assets/input.css) — no client JS,
-// consistent with the rest of the render pipeline. The radio group name is
-// derived from the diagram source so output is deterministic across ingests.
+// diagram. The stepping is pure CSS (see .d2-steps in assets/input.css) — no
+// client JS, consistent with the rest of the render pipeline.
+//
+// By default no radio is checked: in that state a CSS keyframe cycle
+// (d2cycle-N, offset per frame via the --d2i/--d2n custom properties emitted
+// here) auto-plays the frames. Checking any radio — Back, Next, Replay and
+// Pause are all <label>s — freezes the cycle and shows that one frame. The
+// wrapper is a <form> solely so the Play control can be <button type=reset>:
+// resetting unchecks every radio, which resumes autoplay from the first
+// frame. The radio group name is derived from the diagram source so output
+// is deterministic across ingests.
 func writeStepper(w util.BufWriter, source []byte, frames []d2Frame) {
 	sum := sha256.Sum256(source)
 	id := "d2s-" + hex.EncodeToString(sum[:5])
+	n := len(frames)
 
-	_, _ = w.WriteString(`<div class="d2-steps">`)
+	fmt.Fprintf(w, `<form class="d2-steps" style="--d2n:%d;--d2cyc:d2cycle-%d">`, n, n)
 	for i := range frames {
-		checked := ""
-		if i == 0 {
-			checked = ` checked`
-		}
-		fmt.Fprintf(w, `<input type="radio" name="%s" id="%s-%d"%s>`, id, id, i, checked)
+		fmt.Fprintf(w, `<input type="radio" name="%s" id="%s-%d">`, id, id, i)
 	}
 	_, _ = w.WriteString(`<div class="d2-steps-frames">`)
 	for i, f := range frames {
-		_, _ = w.WriteString(`<div class="d2-steps-frame">`)
+		fmt.Fprintf(w, `<div class="d2-steps-frame" style="--d2i:%d">`, i)
 		writeDiagram(w, f)
-		_, _ = w.WriteString(`<div class="d2-steps-nav">`)
+		_, _ = w.WriteString(`<div class="d2-steps-nav"><span class="d2-steps-ctl">`)
+		// Pause targets this frame's own radio: whichever frame is visible
+		// when it's clicked is the frame the stepper freezes on.
+		fmt.Fprintf(w, `<label class="d2-steps-btn d2-steps-toggle d2-steps-pause" for="%s-%d" title="Pause">&#10074;&#10074;</label>`, id, i)
+		_, _ = w.WriteString(`<button type="reset" class="d2-steps-btn d2-steps-toggle d2-steps-play" title="Play from start">&#9654;&#xFE0E;</button>`)
 		if i > 0 {
 			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">&#8249; Back</label>`, id, i-1)
 		} else {
 			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">&#8249; Back</span>`)
 		}
-		fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, len(frames))
+		_, _ = w.WriteString(`</span>`)
+		fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, n)
 		if f.name != "" {
 			fmt.Fprintf(w, ` &middot; <span class="d2-steps-name">%s</span>`, html.EscapeString(f.name))
 		}
 		_, _ = w.WriteString(`</span>`)
-		if i < len(frames)-1 {
+		if i < n-1 {
 			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">Next &#8250;</label>`, id, i+1)
 		} else {
-			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">Next &#8250;</span>`)
+			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-0">&#8634;&#xFE0E; Replay</label>`, id)
 		}
 		_, _ = w.WriteString(`</div></div>`)
 	}
-	_, _ = w.WriteString(`</div></div>`)
+	_, _ = w.WriteString(`</div></form>`)
 }
 
 // d2Frame is one rendered board of a diagram: the same picture in the light

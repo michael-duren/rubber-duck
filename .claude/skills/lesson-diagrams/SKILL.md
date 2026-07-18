@@ -119,10 +119,13 @@ Conventions used in `build-a-hashmap-c.md` (reuse them for consistency):
 ## Stepped (click-through) diagrams
 
 A ```d2 block using D2's native `steps:` composition renders as a
-**click-through stepper**: one SVG frame per board, with CSS-only Back/Next
-buttons (hidden radio inputs — no JS; see `.d2-steps` in `assets/input.css`).
-Use it whenever the point is *how an algorithm proceeds* (a partition sweep, a
-sift-up, BFS rings) rather than a static structure.
+**stepper**: one SVG frame per board, with CSS-only controls (hidden radio
+inputs — no JS; see `.d2-steps` in `assets/input.css`). It **auto-plays** on
+page load (~3 s per frame, looping); any click on Pause/Back/Next switches to
+manual stepping, the last frame's Next is a Replay, and the ▶ button resumes
+auto-play. Use it whenever the point is *how an algorithm proceeds* (a
+partition sweep, a sift-up, BFS rings) rather than a static structure.
+Since frames auto-advance, each frame + caption must be graspable in ~3 s.
 
 ```d2
 direction: right
@@ -149,6 +152,18 @@ steps: {
   least one theme, and frame 1 in both.
 - `layers:` / `scenarios:` are rejected at ingest; only `steps:` is
   supported in lessons.
+- **Vary the shapes.** Not everything is a rectangle: `shape: circle` for
+  tree/graph vertices, `shape: queue` for a FIFO, `shape: package` for build
+  artifacts, `shape: diamond` for a pivot/decision marker, `shape: oval` for
+  chain nodes. Array cells stay square grid cells. Fixed `width`/`height` on
+  shaped nodes, same as everything else.
+- **Pseudocode panel.** Algorithm steppers carry a `code: ""` container —
+  `grid-columns: 1`, one fixed-size row per line (`width: 250; height: 30`,
+  `style.font: mono`, base `style.stroke: "#9ca3af"`) — and each step
+  highlights the executing line (stroke `"#d97706"`, width 2, bold) while
+  explicitly reverting the previous one (styles never unset; state the
+  revert). Keep pseudocode language-neutral: the same visual serves the C,
+  Go, and Python courses.
 
 ## D2 idioms you'll actually use
 
