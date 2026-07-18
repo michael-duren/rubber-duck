@@ -202,6 +202,222 @@
 	display: block;
 }
 
+/* ---- stepped diagrams (D2 `steps:`) --------------------------------- */
+/* A multi-frame diagram renders as a <form> of hidden radio inputs followed
+   by one .d2-steps-frame per frame. All frames share one grid cell, so the
+   largest frame sets the box once and nothing shifts while stepping.
+
+   Two modes, still pure CSS (lesson HTML carries no JS):
+   - Auto-play (default; no radio checked): every frame runs the shared
+     d2cycle-N keyframes, offset by its index, each visible for its 1/N
+     slice of the cycle. Needs :has(); every evergreen browser has shipped
+     it since 2023.
+   - Manual (any radio checked): the cycle stops and the :checked rules
+     below show exactly one frame. Back/Next/Pause are <label>s; the Play
+     button is type=reset, which unchecks every radio and so resumes
+     auto-play from the first frame.
+   The frame cap here must match maxStepFrames in internal/markdown/d2.go;
+   the --d2n/--d2cyc/--d2i custom properties are emitted by writeStepper. */
+.d2-steps {
+	--d2t: 3s; /* seconds per frame while auto-playing */
+}
+.d2-steps > input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+	width: 0;
+	height: 0;
+}
+.d2-steps-frames {
+	display: grid;
+}
+/* Opaque page-colored background: at an auto-play slice boundary two
+   adjacent frames deliberately overlap for a paint frame (see the keyframe
+   comment), and without a background the two captions would ghost over
+   each other. The colors are the body backgrounds from layout.templ (also
+   duplicated in the lesson-diagrams preview script). */
+.d2-steps-frame {
+	grid-area: 1 / 1;
+	visibility: hidden;
+	display: flex;
+	flex-direction: column;
+	background: #f1f7f2;
+	/* Each frame is an atomic paint layer: without this, plain paint order
+	   draws every frame's background before ANY frame's text, so the text
+	   of the frame underneath would ghost through during the overlap. */
+	isolation: isolate;
+}
+.dark .d2-steps-frame {
+	background: #0b0f0d;
+}
+.d2-steps:not(:has(input:checked)) .d2-steps-frame {
+	animation-name: var(--d2cyc);
+	animation-duration: calc(var(--d2n) * var(--d2t));
+	animation-delay: calc(var(--d2i) * var(--d2t));
+	animation-timing-function: linear;
+	animation-iteration-count: infinite;
+}
+/* Frame N of an N-frame cycle is visible for the first 1/N of its period
+   (visibility interpolation holds "visible" until the hidden keyframe).
+   EVERY fraction is rounded UP past 1/N so consecutive slices always
+   overlap by a hair — a float-rounding gap would flash all-frames-hidden;
+   the overlap is hidden by the frames' opaque backgrounds. */
+/* prettier-ignore */
+@keyframes d2cycle-2  { 0% { visibility: visible } 50.02%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-3  { 0% { visibility: visible } 33.35%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-4  { 0% { visibility: visible } 25.02%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-5  { 0% { visibility: visible } 20.02%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-6  { 0% { visibility: visible } 16.68%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-7  { 0% { visibility: visible } 14.3%,  100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-8  { 0% { visibility: visible } 12.52%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-9  { 0% { visibility: visible } 11.13%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-10 { 0% { visibility: visible } 10.02%, 100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-11 { 0% { visibility: visible } 9.11%,  100% { visibility: hidden } }
+/* prettier-ignore */
+@keyframes d2cycle-12 { 0% { visibility: visible } 8.35%,  100% { visibility: hidden } }
+/* prettier-ignore */
+.d2-steps > input:nth-of-type(1):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(1),
+.d2-steps > input:nth-of-type(2):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(2),
+.d2-steps > input:nth-of-type(3):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(3),
+.d2-steps > input:nth-of-type(4):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(4),
+.d2-steps > input:nth-of-type(5):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(5),
+.d2-steps > input:nth-of-type(6):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(6),
+.d2-steps > input:nth-of-type(7):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(7),
+.d2-steps > input:nth-of-type(8):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(8),
+.d2-steps > input:nth-of-type(9):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(9),
+.d2-steps > input:nth-of-type(10):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(10),
+.d2-steps > input:nth-of-type(11):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(11),
+.d2-steps > input:nth-of-type(12):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(12) {
+	visibility: visible;
+}
+/* The caption leads the frame: it's the per-step explanation, so it gets a
+   highlighted bar (amber = the diagrams' "active element" convention)
+   instead of hiding as fine print in the nav row. */
+.d2-steps-caption {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+	margin: 1.5rem 0 0;
+	padding: 0.375rem 0.875rem;
+	border-left: 3px solid var(--color-amber-600);
+	background: rgba(217, 119, 6, 0.08);
+	font-size: 0.9375rem;
+}
+.d2-steps-caption > .d2-steps-count {
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+	white-space: nowrap;
+}
+/* Caption + figure read as one unit: trim the diagram's usual top margin
+   and hand its bottom one to the nav row. */
+.d2-steps-frame > .d2-diagram {
+	margin-top: 0.5rem;
+	margin-bottom: 0.25rem;
+}
+/* Edge-anchored nav: controls pinned left, Next/Replay pinned right —
+   and because all frames share one grid cell (and the nav hugs the cell
+   bottom via margin-top:auto) the row never moves while stepping. */
+.d2-steps-nav {
+	margin-top: auto;
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: 1.5rem;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+}
+.d2-steps-ctl {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+}
+/* font/background resets: the Play control is a real <button>, the rest are
+   <label>s — this keeps them pixel-identical. */
+.d2-steps-btn {
+	cursor: pointer;
+	user-select: none;
+	padding: 0.125rem 0.625rem;
+	border: 1px solid var(--color-emerald-600);
+	color: var(--color-emerald-700);
+	background: transparent;
+	font: inherit;
+}
+.d2-steps-btn:hover {
+	background: var(--color-emerald-600);
+	color: #ffffff;
+}
+.dark .d2-steps-btn {
+	border-color: var(--color-emerald-500);
+	color: var(--color-emerald-400);
+}
+.dark .d2-steps-btn:hover {
+	background: var(--color-emerald-500);
+	color: #000000;
+}
+/* Pause shows while auto-playing, Play while paused; fixed width so the
+   swap doesn't nudge the Back button beside them. (After the .d2-steps-btn
+   rules on purpose: padding-inline must win over the btn padding.) */
+.d2-steps-toggle {
+	width: 2.25rem;
+	padding-inline: 0;
+	text-align: center;
+}
+.d2-steps-play {
+	display: none;
+}
+.d2-steps:has(input:checked) .d2-steps-play {
+	display: inline-block;
+}
+.d2-steps:has(input:checked) .d2-steps-pause {
+	display: none;
+}
+/* First frame's Back: rendered as an inert span so the row doesn't jump,
+   dimmed to read as disabled. (The last frame's Next is a live Replay.) */
+.d2-steps-btn-off,
+.d2-steps-btn-off:hover,
+.dark .d2-steps-btn-off,
+.dark .d2-steps-btn-off:hover {
+	cursor: default;
+	opacity: 0.35;
+	background: transparent;
+	border-color: var(--color-gray-500);
+	color: var(--color-gray-500);
+}
+.d2-steps-count {
+	color: var(--color-gray-500);
+}
+.d2-steps-name {
+	color: var(--color-gray-800);
+	font-weight: 600;
+}
+.dark .d2-steps-name {
+	color: var(--color-gray-100);
+}
+/* Reduced motion: no auto-play. Show frame 1 statically until the reader
+   steps manually; hide the now-meaningless Play/Pause toggles. Selectors
+   mirror the rules they defeat so this block (later in the sheet) wins. */
+@media (prefers-reduced-motion: reduce) {
+	.d2-steps:not(:has(input:checked)) .d2-steps-frame {
+		animation: none;
+	}
+	.d2-steps:not(:has(input:checked)) .d2-steps-frames > .d2-steps-frame:first-child {
+		visibility: visible;
+	}
+	.d2-steps .d2-steps-pause,
+	.d2-steps:has(input:checked) .d2-steps-play {
+		display: none;
+	}
+}
+
 /* Idle terminal cursor (the ▊ in the search prompt). */
 @keyframes tui-blink {
 	50% {
