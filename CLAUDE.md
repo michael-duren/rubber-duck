@@ -26,16 +26,20 @@ result file's first line = test exit code). Core logic
 
 ## Commands
 
-- `make dev` — Postgres (compose) + live-reload server on :8080 (templ
-  proxy on :7331 injects auto-reload; browser opens there)
+- `make dev` — Postgres (compose) + live-reload server (templ proxy
+  injects auto-reload; browser opens there). Ports are per-worktree:
+  base 5432/8080/7331 shifted by a hash of the worktree dir name so
+  sibling worktrees don't collide (`make db` echoes the pg port;
+  override with PG_PORT/HTTP_PORT/PROXY_PORT)
 - `make check` — vet + stale-templ-generate check + all tests (the gate
   before any commit)
 - `make test-integration` — store tests against compose Postgres
 - `make runner-images` — build gc-runner-go / gc-runner-python / gc-runner-c
   (needed for dockergrader e2e tests, which skip if images are missing)
 - `make seed` — import seed/intro-to-go.md plus every course in `courses/`
-  straight into the local compose DB (no server, no credentials);
-  idempotent — unchanged docs are skipped, versions don't bump
+  and every path in `paths/` straight into the local compose DB (no
+  server, no credentials); idempotent — unchanged docs are skipped,
+  versions don't bump
 - `make import-courses-prod` — BREAK-GLASS: import `courses/*.md` into the
   prod DB via cloud-sql-proxy, bypassing review (bootstrap/disaster only)
 - `make export-courses [DUCK_URL=...]` — regenerate the `courses/` mirror
@@ -67,7 +71,8 @@ result file's first line = test exit code). Core logic
 
 ## Gotchas
 
-- Killing `go run` can orphan the server on :8080 — `pkill -f duckserver`.
+- Killing `go run` can orphan the server on its HTTP_PORT — `pkill -f
+  duckserver`.
 - Grading containers: killing the docker CLI doesn't kill the container;
   dockergrader force-removes by name (don't regress this).
 - Re-publishing a course variant diffs lessons/challenges by slug: rows
@@ -118,3 +123,7 @@ result file's first line = test exit code). Core logic
 - `courses/` — mirror of published course markdown, one file per
   course×language, synced by course-sync.yml; edit via proposals, not PRs
   (except break-glass imports)
+- `paths/` — canonical learning-path markdown (ordered course tracks shown
+  at /paths). Paths have no proposal flow: edit via repo PRs, import with
+  `make seed` locally / `make import-courses-prod` for prod (paths import
+  after courses — a path upsert rejects unknown course slugs)

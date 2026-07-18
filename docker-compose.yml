@@ -22,7 +22,10 @@ services:
       POSTGRES_PASSWORD: duckserver
       POSTGRES_DB: duckserver
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host port is per-worktree so sibling checkouts don't fight over
+      # 5432 — the Makefile derives PG_PORT from the worktree dir name and
+      # exports it. Bare `docker compose up` falls back to 5432.
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -22,6 +22,11 @@ type CourseReader interface {
 	// VariantSource returns the raw stored markdown: the editor's
 	// pre-filled textarea and the "current" side of a proposal's diff.
 	VariantSource(ctx context.Context, courseSlug, language string) (string, int, error)
+	// Learning paths: curated, ordered tracks of courses (see
+	// domain.LearningPath). Read-only here like everything else — paths
+	// are published via `duckserver seed`, not the browser.
+	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
+	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
 }
 
 func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {

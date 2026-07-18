@@ -18,6 +18,11 @@ type CourseStore interface {
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
 	ListVariantSources(ctx context.Context) ([]domain.VariantExport, error)
 	ListTags(ctx context.Context) ([]string, error)
+
+	// Learning paths: ordered tracks of courses. Read-only here — path
+	// writes go through `duckserver seed`, not HTTP (see paths.go).
+	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
+	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
 }
 
 // ProposalStore is the slice of the store the proposal API needs. Reviewing
@@ -49,6 +54,12 @@ func Register(mux *http.ServeMux, logger *slog.Logger, users UserStore, store Co
 	mux.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}/challenges", h.listChallenges)
 	mux.HandleFunc("GET /api/v1/tags", h.listTags)
 	mux.HandleFunc("GET /api/v1/export", h.export)
+
+	// Learning paths are read-only over HTTP: they have no proposal flow,
+	// so writes happen only via `duckserver seed` (paths/ in the repo is
+	// canonical, unlike the courses/ mirror).
+	mux.HandleFunc("GET /api/v1/paths", h.listPaths)
+	mux.HandleFunc("GET /api/v1/paths/{slug}", h.getPath)
 
 	api := http.NewServeMux()
 	api.HandleFunc("POST /api/v1/proposals", h.createProposal)

@@ -278,3 +278,75 @@
 .tui-frame:focus-within::after {
 	opacity: 1;
 }
+
+/* ---- learning-path gophers ------------------------------------------ */
+/* CC0 gopher illustrations (static/img/gophers/) living on the /paths
+   pages. The animations are ambient — slow, a few px, looping — and are
+   switched off wholesale under prefers-reduced-motion. */
+
+/* Reading gopher on the paths index: a gentle hover-in-place. */
+@keyframes gopher-bob {
+	50% {
+		transform: translateY(-6px);
+	}
+}
+.gopher-bob {
+	animation: gopher-bob 3.5s ease-in-out infinite;
+}
+
+/* Hiking gopher at the head of a track: trudging uphill. */
+@keyframes gopher-hike {
+	0%,
+	100% {
+		transform: translateY(0) rotate(-1.5deg);
+	}
+	50% {
+		transform: translateY(-4px) rotate(1.5deg);
+	}
+}
+.gopher-hike {
+	animation: gopher-hike 4s ease-in-out infinite;
+}
+
+/* Sage gopher at the end of the rail: a slow, knowing sway. */
+@keyframes gopher-sway {
+	0%,
+	100% {
+		transform: rotate(-2deg);
+	}
+	50% {
+		transform: rotate(2deg);
+	}
+}
+.gopher-sway {
+	animation: gopher-sway 5s ease-in-out infinite;
+	transform-origin: 50% 90%;
+}
+
+/* Powerlifting gopher when the path hits 100%: reps, with a pause at
+   lockout. */
+@keyframes gopher-lift {
+	0%,
+	60%,
+	100% {
+		transform: translateY(0);
+	}
+	72% {
+		transform: translateY(4px);
+	}
+	84% {
+		transform: translateY(-3px);
+	}
+}
+.gopher-lift {
+	animation: gopher-lift 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gopher-bob,
+	.gopher-hike,
+	.gopher-sway,
+	.gopher-lift {
+		animation: none;
+	}
+}

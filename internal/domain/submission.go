@@ -114,3 +114,9 @@ type VariantProgress struct {
 	LessonsTotal int // all live lessons in the variant
 	LastActivity time.Time
 }
+
+// Complete reports whether every lesson in the variant is done — the
+// "course finished" mark on learning-path tracks.
+func (p VariantProgress) Complete() bool {
+	return p.LessonsTotal > 0 && p.LessonsDone == p.LessonsTotal
+}

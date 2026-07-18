@@ -7,6 +7,22 @@ SQL_PROXY := bin/cloud-sql-proxy
 # regenerate *_templ.go differently and trip `make check`'s staleness gate.
 TEMPL_VERSION := v0.3.1020
 
+# --- per-worktree ports ---
+# Compose already namespaces containers/volumes by directory name
+# (learning-paths-postgres-1 etc.), but sibling worktrees collide on every
+# fixed host port: postgres 5432, the dev server 8080, and templ's live-
+# reload proxy 7331 — and the postgres loser can end up talking to a
+# sibling worktree's database. Derive one stable offset (0..499) from the
+# worktree dir name and shift all three ports by it; override any single
+# port (PG_PORT=... etc.) if two worktree names ever hash together.
+WORKTREE := $(notdir $(CURDIR))
+WT_OFFSET := $(shell expr $$(printf '%s' '$(WORKTREE)' | cksum | cut -d' ' -f1) % 500)
+PG_PORT ?= $(shell expr 5432 + $(WT_OFFSET))
+HTTP_PORT ?= $(shell expr 8080 + $(WT_OFFSET))
+PROXY_PORT ?= $(shell expr 7331 + $(WT_OFFSET))
+export PG_PORT   # docker-compose.yml substitutes ${PG_PORT} into the port mapping
+DB_URL := postgres://duckserver:duckserver@localhost:$(PG_PORT)/duckserver?sslmode=disable
+
 .PHONY: tools generate css build duck install uninstall db dev prune runner-images test test-integration seed import-courses-prod export-courses psql psql-prod check push-images deploy infra-validate clean lint editor-bundle
 
 tools: $(TAILWIND) $(SQL_PROXY)
@@ -60,6 +76,7 @@ uninstall:
 
 db:
 	docker compose up -d --wait postgres
+	@echo "db: $(WORKTREE) postgres on localhost:$(PG_PORT)"
 
 # WARN: USE WITH CAUTION - wipes this project's containers and pgdata volume
 prune:
@@ -70,11 +87,13 @@ dev: db generate css
 # First boot of a fresh database: once the server answers (it runs
 # migrations on start), seed the quickstart courses. Skipped whenever any
 # course exists (seed is idempotent anyway; this just avoids the wait).
-	( i=0; until curl -sf -o /dev/null http://localhost:8080/; do \
+	( i=0; until curl -sf -o /dev/null http://localhost:$(HTTP_PORT)/; do \
 	    i=$$((i+1)); test $$i -lt 120 || exit 0; sleep 0.5; done; \
 	  n="$$(docker compose exec -T postgres psql -U duckserver -d duckserver -tAc 'select count(*) from courses' 2>/dev/null)"; \
 	  if [ "$$n" = "0" ]; then echo "dev: empty database, seeding quickstart courses"; $(MAKE) seed; fi ) &
-	templ generate --watch --proxy=http://localhost:8080 --cmd="go run ./cmd/duckserver serve"
+	DATABASE_URL="$(DB_URL)" PORT=$(HTTP_PORT) templ generate --watch \
+		--proxy=http://localhost:$(HTTP_PORT) --proxyport=$(PROXY_PORT) \
+		--cmd="go run ./cmd/duckserver serve"
 
 runner-images:
 	docker build -t gc-runner-go internal/grader/runners/go
@@ -85,25 +104,29 @@ test:
 	go test ./...
 
 test-integration: db
-	TEST_DATABASE_URL=postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable go test ./...
+	TEST_DATABASE_URL="$(DB_URL)" go test ./...
 
 # Seed writes straight to the local compose Postgres (no server round trip,
-# no credentials): the quickstart fixture plus every course in courses/, so
-# local dev has the same catalog as prod. Idempotent — unchanged documents
-# are skipped, so re-running never bumps variant versions. --db is pinned to
-# the compose URL so an exported DATABASE_URL (say, a cloud-sql-proxy to
-# prod) can't silently redirect a "local" seed into another database.
+# no credentials): the quickstart fixture plus every course in courses/ and
+# every learning path in paths/ (paths last — a path upsert rejects course
+# slugs that don't exist yet), so local dev has the same catalog as prod.
+# Idempotent — unchanged documents are skipped, so re-running never bumps
+# variant versions. --db is pinned to this worktree's compose URL so an
+# exported DATABASE_URL (say, a cloud-sql-proxy to prod) can't silently
+# redirect a "local" seed into another database.
 seed:
-	@for f in seed/intro-to-go.md courses/*.md; do \
+	@for f in seed/intro-to-go.md courses/*.md paths/*.md; do \
 		echo "seeding $$f"; \
-		go run ./cmd/duckserver seed --db "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable" "$$f" || exit 1; \
+		go run ./cmd/duckserver seed --db "$(DB_URL)" "$$f" || exit 1; \
 	done
 
-# BREAK-GLASS ONLY: import courses/*.md straight into the prod database,
-# bypassing the proposal/review workflow (needs gcloud ADC + tofu state).
-# The normal way content reaches prod is a proposal getting approved on the
-# site; this exists for bootstrap and disaster recovery. Imports are
-# idempotent (unchanged documents are skipped) and unattributed.
+# BREAK-GLASS ONLY for courses: import courses/*.md straight into the prod
+# database, bypassing the proposal/review workflow (needs gcloud ADC + tofu
+# state). The normal way course content reaches prod is a proposal getting
+# approved on the site; this exists for bootstrap and disaster recovery.
+# paths/*.md is included because paths have no proposal flow — this IS how
+# path changes deploy (paths/ is canonical in the repo, unlike courses/).
+# Imports are idempotent (unchanged documents are skipped) and unattributed.
 import-courses-prod: $(SQL_PROXY)
 	@set -e; \
 	conn=$$(tofu -chdir=infra output -raw sql_connection_name); \
@@ -111,7 +134,7 @@ import-courses-prod: $(SQL_PROXY)
 	$(SQL_PROXY) "$$conn" --port 5433 & proxy=$$!; \
 	trap 'kill $$proxy 2>/dev/null || true' EXIT; \
 	sleep 3; \
-	for f in courses/*.md; do \
+	for f in courses/*.md paths/*.md; do \
 		echo "importing $$f"; \
 		go run ./cmd/duckserver seed --db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable" "$$f" || exit 1; \
 	done
@@ -132,7 +155,7 @@ export-courses:
 # `gcloud auth login` first), opens a Cloud SQL proxy on :5433, and tears
 # it down when psql exits.
 psql:
-	psql "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable"
+	psql "$(DB_URL)"
 
 psql-prod: $(SQL_PROXY)
 	@test -n "$(PROJECT)" || (echo "set PROJECT=<gcp-project-id>" && exit 1)

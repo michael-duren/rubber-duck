@@ -242,6 +242,42 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	ctx := context.Background()
+	st, err := store.Open(ctx, *dbURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
+	// A "path:" frontmatter key marks a learning-path document (paths/*.md);
+	// everything else is a course variant. Paths have no proposal flow —
+	// this direct import is their only publish path, so paths/ stays
+	// canonical in the repo (unlike the courses/ mirror).
+	if ingest.IsPathDocument(src) {
+		res, err := ingest.ParsePath(src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
+		}
+		path, err := ingest.PathToDomain(res, src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
+		}
+		stored, _, err := st.PathBySlug(ctx, path.Slug)
+		if err == nil && stored.SourceMD == path.SourceMD {
+			fmt.Printf("unchanged path %s\n", path.Slug)
+			return nil
+		}
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return err
+		}
+		if _, err := st.UpsertPath(ctx, path); err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
+		}
+		fmt.Printf("seeded path %s\n", path.Slug)
+		return nil
+	}
+
 	res, err := ingest.Parse(src)
 	if err != nil {
 		return fmt.Errorf("%s: %w", fs.Arg(0), err)
@@ -250,13 +286,6 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", fs.Arg(0), err)
 	}
-
-	ctx := context.Background()
-	st, err := store.Open(ctx, *dbURL)
-	if err != nil {
-		return err
-	}
-	defer st.Close()
 
 	stored, _, err := st.VariantSource(ctx, course.Slug, variant.Language)
 	if err == nil && stored == variant.SourceMD {

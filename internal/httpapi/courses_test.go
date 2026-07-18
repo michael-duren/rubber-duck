@@ -22,6 +22,7 @@ type fakeStore struct {
 	courses  map[string]domain.Course
 	sources  map[string]string
 	variants map[string]domain.Variant
+	paths map[string]domain.LearningPath
 
 	users map[string]domain.User // token hash -> user, for UserByToken
 
@@ -36,6 +37,7 @@ func newFakeStore() *fakeStore {
 		versions: map[string]int{}, courses: map[string]domain.Course{},
 		sources: map[string]string{}, variants: map[string]domain.Variant{},
 		users: map[string]domain.User{}, proposals: map[int64]domain.Proposal{},
+		paths: map[string]domain.LearningPath{},
 	}
 }
 

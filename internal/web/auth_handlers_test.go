@@ -28,6 +28,10 @@ type fakeStore struct {
 	nextSub        int64
 	rateLimit      func(userID, challengeID int64) bool // nil = never limited
 	courses        []domain.CourseSummary               // returned by ListCourses (catalog tests)
+	paths       []domain.PathSummary     // returned by ListPaths
+	path        *domain.LearningPath     // set by tests that need PathBySlug to resolve
+	pathCourses []domain.CourseSummary   // PathBySlug's member-course summaries, in order
+	progress    []domain.VariantProgress // returned by UserVariantProgress
 
 	proposals  map[int64]domain.Proposal
 	reviews    map[int64]map[int64]domain.ProposalReview // proposal id -> reviewer id -> review
@@ -417,7 +421,7 @@ func (f *fakeStore) UserCourseScores(context.Context, int64) ([]domain.CourseSco
 }
 
 func (f *fakeStore) UserVariantProgress(context.Context, int64) ([]domain.VariantProgress, error) {
-	return nil, nil
+	return f.progress, nil
 }
 
 func (f *fakeStore) UserStats(_ context.Context, userID int64) (domain.UserStats, error) {

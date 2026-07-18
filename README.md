@@ -27,8 +27,11 @@ Requirements: Go 1.26+, Docker (with the compose plugin), `templ`.
 ```sh
 make tools            # fetch tailwind standalone binary, install templ
 make runner-images    # build gc-runner-go, gc-runner-python, gc-runner-c
-make dev              # postgres via compose + live-reloading server on :8080
-make seed             # import seed/intro-to-go.md + courses/*.md straight into the local db
+make dev              # postgres via compose + live-reloading server (ports are
+                      # per-checkout: 5432/8080/7331 + a hash of the dir name,
+                      # so sibling git worktrees don't collide)
+make seed             # import seed/intro-to-go.md + courses/*.md + paths/*.md
+                      # straight into the local db
 ```
 
 Or fully containerized:
@@ -39,8 +42,8 @@ docker compose up --build
 go run ./cmd/duckserver seed seed/intro-to-go.md
 ```
 
-Sign up at http://localhost:8080 (any username, no email), open the course,
-submit a solution.
+Sign up in the browser tab `make dev` opens (any username, no email), open
+the course, submit a solution.
 
 Other commands:
 
@@ -104,6 +107,8 @@ a proposal is approved on the site.
 | `GET /api/v1/courses/{slug}/variants/{language}/challenges` | public | Starter and test code for each challenge, used by `duck test` local runs. |
 | `GET /api/v1/tags` | public | All known tags. |
 | `GET /api/v1/export` | public | Every live variant's source: `{"variants": [{"course", "language", "version", "markdown"}]}` — what the courses/ mirror sync reads. |
+| `GET /api/v1/paths` | public | List learning paths with course counts. |
+| `GET /api/v1/paths/{slug}` | public | The stored path markdown plus the resolved course order (see "Learning paths" below). |
 | `POST /api/v1/proposals` | token | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?}` — course/language come from the frontmatter; sending them too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "base_version", "revision", "status", "url", ...}`. One open proposal per user per variant: `409 duplicate_proposal` otherwise. |
 | `PUT /api/v1/proposals/{id}` | token | Replace your open proposal's content. Bumps `revision` (resetting approvals) and re-captures `base_version` from the live variant (how you rebase). `404` if not yours, `409 proposal_closed` if closed. |
 | `GET /api/v1/proposals?mine=1` | token | Your proposals, newest first. |
@@ -208,6 +213,45 @@ Conventions:
   grader can score partial credit; run every test rather than aborting on
   the first failure.
 
+## Learning paths
+
+A learning path is a curated, ordered track of courses ("start here, then
+this"), shown at `/paths` — think boot.dev tracks. Paths are published as
+markdown like courses, with a much smaller contract: frontmatter naming the
+path and its ordered course slugs, and a free markdown body rendered as the
+path page's overview.
+
+```markdown
+---
+path: go-developer                  # required, stable path slug
+title: Go Developer                 # required
+description: One-paragraph pitch.   # required
+courses:                            # required: ordered course slugs
+  - go-basics
+  - intro-to-concurrency
+---
+
+## Why this order
+
+Any markdown — rendered on the path page under the description.
+```
+
+Rules and behavior:
+
+- Every slug in `courses:` must already exist in the catalog; unknown slugs
+  reject the import — `make seed` and `make import-courses-prod` order
+  `paths/` after `courses/` for this reason.
+- Paths carry no learner data and no version counter: re-importing replaces
+  the course list wholesale, and last write wins. Progress shown on a path
+  page is derived live from the member courses' submissions.
+- Deleting a course simply drops it from any paths that referenced it;
+  deleting a path never touches its courses.
+- Unlike `courses/` (a synced mirror), `paths/*.md` is **canonical**: paths
+  have no proposal flow, so they're edited via ordinary repo PRs and
+  imported with `duckserver seed` (`make seed` locally,
+  `make import-courses-prod` for prod). Over HTTP they're read-only
+  (`GET /api/v1/paths`).
+
 ## Course content workflow
 
 **The database is the source of truth.** Course changes are made through
@@ -227,8 +271,8 @@ byte-identical to what's stored is skipped, so versions don't bump
 spuriously):
 
 ```sh
-make seed                                    # local: seed fixture + courses/*.md
-make import-courses-prod                     # BREAK-GLASS: import courses/*.md into prod
+make seed                                    # local: seed fixture + courses/*.md + paths/*.md
+make import-courses-prod                     # BREAK-GLASS for courses/*.md; also how paths/*.md deploy
 make export-courses DUCK_URL=http://localhost:8080   # regenerate the mirror locally
 ```
 
