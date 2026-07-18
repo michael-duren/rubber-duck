@@ -1,0 +1,99 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/michael-duren/rubber-duck/internal/domain"
+)
+
+// proposalStatusChip color-codes a proposal's lifecycle state in the shared
+// ANSI palette: open emerald (it wants attention), published cyan (done and
+// live), rejected rose, withdrawn slate.
+templ proposalStatusChip(status string) {
+	switch status {
+		case domain.ProposalOpen:
+			<span class="border border-emerald-400 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">open</span>
+		case domain.ProposalPublished:
+			<span class="border border-cyan-400 px-1.5 py-0.5 font-mono text-xs text-cyan-700 dark:border-cyan-800 dark:text-cyan-300">published</span>
+		case domain.ProposalRejected:
+			<span class="border border-rose-400 px-1.5 py-0.5 font-mono text-xs text-rose-700 dark:border-rose-800 dark:text-rose-300">rejected</span>
+		default:
+			<span class="border border-slate-400 px-1.5 py-0.5 font-mono text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400">{ status }</span>
+	}
+}
+
+// staleBadge marks an open proposal whose base the live course has moved
+// past — it needs a rebase (the proposer editing it) before it can publish.
+templ staleBadge() {
+	<span class="border border-amber-400 px-1.5 py-0.5 font-mono text-xs text-amber-700 dark:border-amber-800 dark:text-amber-300" title="The course changed since this proposal was written — the proposer needs to update it.">needs rebase</span>
+}
+
+// approvalProgress shows "n/threshold approvals" for an open proposal.
+templ approvalProgress(approvals, threshold int) {
+	<span class="font-mono text-xs text-slate-500 dark:text-slate-400">{ strconv.Itoa(approvals) }/{ strconv.Itoa(threshold) } approvals</span>
+}
+
+// proposalsFilter renders one status-filter link, highlighting the active
+// one.
+templ proposalsFilter(label, href string, active bool) {
+	if active {
+		<span class="border border-emerald-500 bg-emerald-600/10 px-2 py-1 font-mono text-xs text-emerald-700 dark:text-emerald-300">{ label }</span>
+	} else {
+		<a href={ templ.SafeURL(href) } class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white">{ label }</a>
+	}
+}
+
+// Proposals is the review queue (GET /proposals): every course change
+// waiting on — or resolved by — community review.
+templ Proposals(user *domain.User, proposals []domain.Proposal, status string, mine bool, threshold int) {
+	@Layout("Proposals", user) {
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold">Proposals</h1>
+				<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+					Course changes are proposed, reviewed, and published here. An edit goes live after { strconv.Itoa(threshold) } approvals, or one admin approval.
+				</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				@proposalsFilter("open", "/proposals", !mine && status == domain.ProposalOpen)
+				@proposalsFilter("published", "/proposals?status=published", !mine && status == domain.ProposalPublished)
+				@proposalsFilter("rejected", "/proposals?status=rejected", !mine && status == domain.ProposalRejected)
+				@proposalsFilter("withdrawn", "/proposals?status=withdrawn", !mine && status == domain.ProposalWithdrawn)
+				@proposalsFilter("all", "/proposals?status=all", !mine && status == "all")
+				if user != nil {
+					@proposalsFilter("mine", "/proposals?mine=1", mine)
+				}
+			</div>
+		</div>
+		if len(proposals) == 0 {
+			<p class="mt-10 font-mono text-sm text-slate-500 dark:text-slate-400">Nothing here. Propose a change from any course page's editor.</p>
+		} else {
+			<ul class="mt-8 flex flex-col divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+				for _, p := range proposals {
+					<li class="flex flex-wrap items-center justify-between gap-3 bg-white/60 px-4 py-3 dark:bg-slate-900/40">
+						<div class="flex min-w-0 flex-col gap-1">
+							<a href={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10)) } class="truncate font-medium hover:text-emerald-600 dark:hover:text-emerald-400">{ p.Title }</a>
+							<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+								<span class="font-mono">{ p.CourseSlug }</span>
+								@langChip(p.Language)
+								<span>by { p.ProposerUsername }</span>
+								if p.BaseVersion == 0 {
+									<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new course</span>
+								}
+							</div>
+						</div>
+						<div class="flex items-center gap-3">
+							if p.Status == domain.ProposalOpen {
+								@approvalProgress(p.Approvals, threshold)
+								if p.Stale() {
+									@staleBadge()
+								}
+							}
+							@proposalStatusChip(p.Status)
+						</div>
+					</li>
+				}
+			</ul>
+		}
+	}
+}

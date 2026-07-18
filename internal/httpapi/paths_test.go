@@ -12,21 +12,6 @@ import (
 
 // --- fakeStore's learning-path slice (fields in courses_test.go) ---
 
-func (f *fakeStore) UpsertPath(_ context.Context, p domain.LearningPath) (bool, error) {
-	var missing []string
-	for _, slug := range p.CourseSlugs {
-		if _, ok := f.courses[slug]; !ok {
-			missing = append(missing, slug)
-		}
-	}
-	if len(missing) > 0 {
-		return false, &domain.UnknownCoursesError{Slugs: missing}
-	}
-	_, existed := f.paths[p.Slug]
-	f.paths[p.Slug] = p
-	return !existed, nil
-}
-
 func (f *fakeStore) ListPaths(context.Context) ([]domain.PathSummary, error) {
 	var out []domain.PathSummary
 	for _, p := range f.paths {
@@ -51,15 +36,8 @@ func (f *fakeStore) PathBySlug(_ context.Context, slug string) (domain.LearningP
 	return p, courses, nil
 }
 
-func (f *fakeStore) DeletePath(_ context.Context, slug string) error {
-	if _, ok := f.paths[slug]; !ok {
-		return domain.ErrNotFound
-	}
-	delete(f.paths, slug)
-	return nil
-}
-
-// --- endpoint tests ---
+// --- endpoint tests (reads only: path writes go through `duckserver
+// seed`, so there is no PUT/DELETE surface here) ---
 
 const pathDoc = `---
 path: go-developer
@@ -72,83 +50,13 @@ courses:
 Start with the basics, then build up.
 `
 
-// seedCourse publishes the seed course so path documents have a member
-// course to reference.
-func seedCourse(t *testing.T, mux *http.ServeMux) {
-	t.Helper()
-	rec := doJSON(mux, "PUT", "/api/v1/courses/intro-to-concurrency/variants/go",
-		map[string]string{"markdown": seedDoc(t)})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("seed course = %d body %s", rec.Code, rec.Body)
-	}
-}
-
-func TestPutPath(t *testing.T) {
-	t.Run("create then update", func(t *testing.T) {
-		mux, _ := testAPI(t)
-		seedCourse(t, mux)
-
-		rec := doJSON(mux, "PUT", "/api/v1/paths/go-developer", map[string]string{"markdown": pathDoc})
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("first put = %d body %s", rec.Code, rec.Body)
-		}
-		var resp struct {
-			Path    string   `json:"path"`
-			Courses []string `json:"courses"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-			t.Fatal(err)
-		}
-		if resp.Path != "go-developer" || len(resp.Courses) != 1 {
-			t.Errorf("resp = %+v", resp)
-		}
-
-		rec = doJSON(mux, "PUT", "/api/v1/paths/go-developer", map[string]string{"markdown": pathDoc})
-		if rec.Code != http.StatusOK {
-			t.Errorf("second put = %d, want 200", rec.Code)
-		}
-	})
-
-	t.Run("slug mismatch is 409", func(t *testing.T) {
-		mux, _ := testAPI(t)
-		seedCourse(t, mux)
-		rec := doJSON(mux, "PUT", "/api/v1/paths/other-name", map[string]string{"markdown": pathDoc})
-		if rec.Code != http.StatusConflict {
-			t.Errorf("put = %d body %s, want 409", rec.Code, rec.Body)
-		}
-	})
-
-	t.Run("invalid document is 422 with line problems", func(t *testing.T) {
-		mux, _ := testAPI(t)
-		rec := doJSON(mux, "PUT", "/api/v1/paths/go-developer",
-			map[string]string{"markdown": "---\npath: go-developer\n---\nno title, no courses\n"})
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("put = %d body %s, want 422", rec.Code, rec.Body)
-		}
-		if !strings.Contains(rec.Body.String(), "invalid_path_markdown") {
-			t.Errorf("body = %s", rec.Body)
-		}
-	})
-
-	t.Run("unknown course slug is 422", func(t *testing.T) {
-		mux, _ := testAPI(t)
-		// No course seeded: intro-to-concurrency doesn't exist.
-		rec := doJSON(mux, "PUT", "/api/v1/paths/go-developer", map[string]string{"markdown": pathDoc})
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("put = %d body %s, want 422", rec.Code, rec.Body)
-		}
-		if !strings.Contains(rec.Body.String(), "unknown_course_slugs") ||
-			!strings.Contains(rec.Body.String(), "intro-to-concurrency") {
-			t.Errorf("body = %s", rec.Body)
-		}
-	})
-}
-
-func TestGetDeletePath(t *testing.T) {
-	mux, _ := testAPI(t)
-	seedCourse(t, mux)
-	if rec := doJSON(mux, "PUT", "/api/v1/paths/go-developer", map[string]string{"markdown": pathDoc}); rec.Code != http.StatusCreated {
-		t.Fatalf("put = %d body %s", rec.Code, rec.Body)
+func TestGetPaths(t *testing.T) {
+	mux, fs := testAPI(t)
+	fs.courses["intro-to-concurrency"] = domain.Course{Slug: "intro-to-concurrency", Title: "Intro to Concurrency"}
+	fs.paths["go-developer"] = domain.LearningPath{
+		Slug: "go-developer", Title: "Go Developer",
+		SourceMD:    pathDoc,
+		CourseSlugs: []string{"intro-to-concurrency"},
 	}
 
 	rec := doJSON(mux, "GET", "/api/v1/paths/go-developer", nil)
@@ -174,10 +82,7 @@ func TestGetDeletePath(t *testing.T) {
 		t.Errorf("list = %d body %s", rec.Code, rec.Body)
 	}
 
-	if rec := doJSON(mux, "DELETE", "/api/v1/paths/go-developer", nil); rec.Code != http.StatusNoContent {
-		t.Errorf("delete = %d", rec.Code)
-	}
-	if rec := doJSON(mux, "GET", "/api/v1/paths/go-developer", nil); rec.Code != http.StatusNotFound {
-		t.Errorf("get after delete = %d", rec.Code)
+	if rec := doJSON(mux, "GET", "/api/v1/paths/nope", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("get missing = %d, want 404", rec.Code)
 	}
 }

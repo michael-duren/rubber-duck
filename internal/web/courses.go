@@ -11,33 +11,20 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
-// CourseReader is the slice of the store the course pages need. Despite the
-// name it also carries the two write operations the web markdown editor
-// needs (VariantSource/UpsertVariant): the read pages and the editor share
-// one *store.Store, so one interface keeps the wiring in Register simple.
+// CourseReader is the slice of the store the course pages need. The web
+// layer no longer writes variants directly — edits go through proposals
+// (see ProposalStore); publishing happens in store.PublishProposal.
 type CourseReader interface {
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
 
-	// VariantSource returns the raw stored markdown for the edit form, plus
-	// its current version so the form can carry it in a hidden field and
-	// detect a concurrent edit on save (see UpsertVariant's expectedVersion).
+	// VariantSource returns the raw stored markdown: the editor's
+	// pre-filled textarea and the "current" side of a proposal's diff.
 	VariantSource(ctx context.Context, courseSlug, language string) (string, int, error)
-	// UpsertVariant persists a parsed course/variant. editedBy is the acting
-	// user's ID for human web edits, nil for agent/system writes.
-	// expectedVersion, if non-nil, rejects the write with
-	// domain.ErrVersionConflict when the stored version has moved on since
-	// the caller loaded it (optimistic concurrency for the web editor); the
-	// web save handler always passes it, other callers pass nil.
-	// Re-publishing diffs lessons/challenges by slug and preserves
-	// submissions (removed challenges are archived, not deleted), so saving
-	// is never destructive to learner data.
-	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
-
 	// Learning paths: curated, ordered tracks of courses (see
-	// domain.LearningPath). Read-only here — paths are published through
-	// the agent API, not the browser.
+	// domain.LearningPath). Read-only here like everything else — paths
+	// are published via `duckserver seed`, not the browser.
 	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
 	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
 }

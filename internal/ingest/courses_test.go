@@ -6,8 +6,9 @@ import (
 	"testing"
 )
 
-// TestCanonicalCoursesParse guards courses/*.md — the PR-reviewed content
-// published via make publish — against agent-contract regressions.
+// TestCanonicalCoursesParse guards courses/*.md — the mirror of what's
+// published on the server (synced by course-sync.yml, importable via
+// `make seed` / `make import-courses-prod`) — against contract regressions.
 func TestCanonicalCoursesParse(t *testing.T) {
 	files, err := filepath.Glob(filepath.FromSlash("../../courses/*.md"))
 	if err != nil {

@@ -23,7 +23,7 @@ PROXY_PORT ?= $(shell expr 7331 + $(WT_OFFSET))
 export PG_PORT   # docker-compose.yml substitutes ${PG_PORT} into the port mapping
 DB_URL := postgres://duckserver:duckserver@localhost:$(PG_PORT)/duckserver?sslmode=disable
 
-.PHONY: tools generate css build duck install uninstall db dev prune runner-images test test-integration seed publish sync-courses apikey apikey-prod psql psql-prod check push-images deploy infra-validate clean lint editor-bundle
+.PHONY: tools generate css build duck install uninstall db dev prune runner-images test test-integration seed import-courses-prod export-courses psql psql-prod check push-images deploy infra-validate clean lint editor-bundle
 
 tools: $(TAILWIND) $(SQL_PROXY)
 	@command -v templ >/dev/null || go install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
@@ -85,8 +85,8 @@ prune:
 dev: db generate css
 	$(TAILWIND) -i assets/input.css -o internal/web/static/app.css --watch &
 # First boot of a fresh database: once the server answers (it runs
-# migrations on start), publish the quickstart courses. Skipped whenever any
-# course exists — re-seeding would cascade-delete lessons/submissions.
+# migrations on start), seed the quickstart courses. Skipped whenever any
+# course exists (seed is idempotent anyway; this just avoids the wait).
 	( i=0; until curl -sf -o /dev/null http://localhost:$(HTTP_PORT)/; do \
 	    i=$$((i+1)); test $$i -lt 120 || exit 0; sleep 0.5; done; \
 	  n="$$(docker compose exec -T postgres psql -U duckserver -d duckserver -tAc 'select count(*) from courses' 2>/dev/null)"; \
@@ -106,61 +106,49 @@ test:
 test-integration: db
 	TEST_DATABASE_URL="$(DB_URL)" go test ./...
 
-# GC_API_KEY is cleared and GC_URL pinned to this worktree's dev server so
-# a key/URL exported in the developer's shell profile can't leak in: make
-# seed always mints a throwaway local key and targets localhost. Seeds the quickstart fixture plus every course in
-# courses/ and every learning path in paths/ (paths last — a path upsert
-# rejects course slugs that don't exist yet), so local dev has the same
-# catalog as prod.
+# Seed writes straight to the local compose Postgres (no server round trip,
+# no credentials): the quickstart fixture plus every course in courses/ and
+# every learning path in paths/ (paths last — a path upsert rejects course
+# slugs that don't exist yet), so local dev has the same catalog as prod.
+# Idempotent — unchanged documents are skipped, so re-running never bumps
+# variant versions. --db is pinned to this worktree's compose URL so an
+# exported DATABASE_URL (say, a cloud-sql-proxy to prod) can't silently
+# redirect a "local" seed into another database.
 seed:
 	@for f in seed/intro-to-go.md courses/*.md paths/*.md; do \
 		echo "seeding $$f"; \
-		GC_API_KEY= GC_URL=http://localhost:$(HTTP_PORT) DATABASE_URL="$(DB_URL)" go run ./cmd/duckserver seed "$$f" || exit 1; \
+		go run ./cmd/duckserver seed --db "$(DB_URL)" "$$f" || exit 1; \
 	done
 
-# Mint an agent API key (the gc_ kind that authenticates /api/v1 course
-# publishing — NOT the gc_u_ user tokens `duck auth login` mints). The raw key
-# prints once; store it (e.g. as the GC_API_KEY repo secret for CD).
-KEY_NAME ?= writer-1
-
-apikey:   ## mint against the local compose postgres
-	go run ./cmd/duckserver apikey create --name $(KEY_NAME) --db "$(DB_URL)"
-
-apikey-prod: $(SQL_PROXY)   ## mint against prod via cloud-sql-proxy (needs gcloud ADC + tofu state)
+# BREAK-GLASS ONLY for courses: import courses/*.md straight into the prod
+# database, bypassing the proposal/review workflow (needs gcloud ADC + tofu
+# state). The normal way course content reaches prod is a proposal getting
+# approved on the site; this exists for bootstrap and disaster recovery.
+# paths/*.md is included because paths have no proposal flow — this IS how
+# path changes deploy (paths/ is canonical in the repo, unlike courses/).
+# Imports are idempotent (unchanged documents are skipped) and unattributed.
+import-courses-prod: $(SQL_PROXY)
 	@set -e; \
 	conn=$$(tofu -chdir=infra output -raw sql_connection_name); \
 	pass=$$(tofu -chdir=infra output -raw db_password); \
 	$(SQL_PROXY) "$$conn" --port 5433 & proxy=$$!; \
 	trap 'kill $$proxy 2>/dev/null || true' EXIT; \
 	sleep 3; \
-	go run ./cmd/duckserver apikey create --name $(KEY_NAME) \
-		--db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable"
-
-# GC_URL/GC_API_KEY: where to publish and how to authenticate. Defaults
-# target a local `make dev` server; override both for prod.
-GC_URL ?= http://localhost:$(HTTP_PORT)
-
-publish:
-	@test -n "$$GC_API_KEY" || (echo "set GC_API_KEY=<key>" && exit 1)
-	@for f in courses/*.md paths/*.md; do \
-		echo "publishing $$f"; \
-		go run ./cmd/duckserver seed --url $(GC_URL) "$$f" || exit 1; \
+	for f in courses/*.md paths/*.md; do \
+		echo "importing $$f"; \
+		go run ./cmd/duckserver seed --db "postgres://getcracked:$$pass@localhost:5433/getcracked?sslmode=disable" "$$f" || exit 1; \
 	done
 
-# Diff courses/*.md against a running server and push only the variants that
-# actually differ — unlike `publish`, which re-seeds every course
-# unconditionally (and so cascade-deletes lessons/challenges/submissions even
-# for courses that never changed). Auth is the `duck auth login` user token, not
-# GC_API_KEY: only a user-attributed caller gets the optimistic-concurrency
-# check that keeps a concurrent editor from being clobbered.
+# Regenerate the courses/ mirror from a running server's /api/v1/export
+# (the DB is the source of truth; courses/ is a synced copy kept fresh by
+# .github/workflows/course-sync.yml — this target is the same script for
+# local use).
 #
-#   make sync-courses DRY_RUN=1                       # report, write nothing
-#   make sync-courses DUCK_URL=http://localhost:8080  # against `make dev`
+#   make export-courses DUCK_URL=http://localhost:8080  # against `make dev`
 DUCK_URL ?= https://duckgc.com
 
-sync-courses: duck
-	DUCK=./duck DUCK_BASE_URL=$(DUCK_URL) \
-		./scripts/sync-courses.sh $(if $(DRY_RUN),--dry-run)
+export-courses:
+	DUCK_BASE_URL=$(DUCK_URL) ./scripts/export-courses.sh
 
 # Interactive SQL shells. psql: the compose Postgres from `make dev`.
 # psql-prod: fetches the app's DATABASE_URL from Secret Manager (needs

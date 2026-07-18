@@ -1,20 +1,19 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/michael-duren/rubber-duck/internal/auth"
+	"github.com/michael-duren/rubber-duck/internal/domain"
 	"github.com/michael-duren/rubber-duck/internal/grader"
 	"github.com/michael-duren/rubber-duck/internal/grader/cloudrungrader"
 	"github.com/michael-duren/rubber-duck/internal/grader/dockergrader"
@@ -33,15 +32,15 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: duckserver <serve|migrate|apikey|seed> [flags]")
+		return fmt.Errorf("usage: duckserver <serve|migrate|user|seed> [flags]")
 	}
 	switch args[0] {
 	case "serve":
 		return serve(args[1:])
 	case "migrate":
 		return migrateCmd(args[1:])
-	case "apikey":
-		return apikeyCmd(args[1:])
+	case "user":
+		return userCmd(args[1:])
 	case "seed":
 		return seedCmd(args[1:])
 	default:
@@ -51,6 +50,22 @@ func run(args []string) error {
 
 func databaseURL() string {
 	return envOr("DATABASE_URL", "postgres://duckserver:duckserver@localhost:5432/duckserver?sslmode=disable")
+}
+
+// approvalThreshold reads GC_APPROVAL_THRESHOLD — how many community
+// approvals publish a proposal (an admin approval always publishes
+// immediately). Unset defaults to 3; anything but a positive integer is a
+// startup error, not a silent fallback.
+func approvalThreshold() (int, error) {
+	v := os.Getenv("GC_APPROVAL_THRESHOLD")
+	if v == "" {
+		return 3, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("GC_APPROVAL_THRESHOLD must be a positive integer, got %q", v)
+	}
+	return n, nil
 }
 
 func serve(args []string) error {
@@ -85,9 +100,14 @@ func serve(args []string) error {
 		return fmt.Errorf("requeue pending submissions: %w", err)
 	}
 
+	threshold, err := approvalThreshold()
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
-	web.Register(mux, logger, st, st, st, pool)
-	httpapi.Register(mux, logger, st, st)
+	web.Register(mux, logger, st, st, st, st, pool, threshold)
+	httpapi.Register(mux, logger, st, st, st)
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -159,21 +179,29 @@ func migrateCmd(args []string) error {
 	}
 }
 
-func apikeyCmd(args []string) error {
-	if len(args) < 1 || args[0] != "create" {
-		return fmt.Errorf("usage: duckserver apikey create --name <name>")
+// userCmd holds operator actions on accounts. Promotion is deliberately not
+// a web flow: the first admin has to come from somewhere outside the app,
+// and keeping it CLI-only means there is no privilege-escalation surface to
+// defend in the web layer.
+func userCmd(args []string) error {
+	if len(args) < 1 || args[0] != "promote" {
+		return fmt.Errorf("usage: duckserver user promote --username <username> [--role admin|user]")
 	}
-	fs := flag.NewFlagSet("apikey create", flag.ContinueOnError)
-	name := fs.String("name", "", "key name, e.g. writer-1")
+	fs := flag.NewFlagSet("user promote", flag.ContinueOnError)
+	username := fs.String("username", "", "account to change")
+	role := fs.String("role", "admin", "role to assign: admin or user")
 	dbURL := fs.String("db", databaseURL(), "postgres connection URL")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	// Leftover positionals mean flags after them were silently ignored
 	// (stdlib flag stops at the first positional) — refuse rather than,
-	// say, minting into the default DB because --db came last.
-	if *name == "" || fs.NArg() != 0 {
-		return fmt.Errorf("usage: duckserver apikey create --name <name> [--db URL]")
+	// say, promoting against the default DB because --db came last.
+	if *username == "" || fs.NArg() != 0 {
+		return fmt.Errorf("usage: duckserver user promote --username <username> [--role admin|user]")
+	}
+	if *role != "admin" && *role != "user" {
+		return fmt.Errorf("--role must be admin or user, got %q", *role)
 	}
 
 	ctx := context.Background()
@@ -183,86 +211,96 @@ func apikeyCmd(args []string) error {
 	}
 	defer st.Close()
 
-	key, hash := auth.NewAPIKey()
-	if _, err := st.CreateAPIKey(ctx, *name, hash); err != nil {
-		return err
+	if err := st.PromoteUser(ctx, *username, *role); err != nil {
+		// Name the user: a bare "not found" from a typo'd --username (or the
+		// wrong --db) is unactionable at an operator's terminal.
+		return fmt.Errorf("promote %q: %w", *username, err)
 	}
-	fmt.Printf("api key %q (shown once, store it now):\n%s\n", *name, key)
+	fmt.Printf("user %q is now role %q\n", *username, *role)
 	return nil
 }
 
-// seedCmd publishes a course document through the agent API, exercising the
-// same path agents use. It mints a throwaway key unless GC_API_KEY is set.
+// seedCmd imports a course document straight into the database, bypassing
+// the proposal workflow — the bootstrap path for a fresh local database
+// (`make seed`) and the documented break-glass import for prod (run against
+// a cloud-sql-proxy URL). Unattributed (editedBy nil) like agent publishes
+// used to be, and idempotent: a document byte-identical to what's stored is
+// skipped entirely, so re-running the full seed loop doesn't bump variant
+// versions and spuriously trigger the "completed before the course was
+// updated" notice on submissions.
 func seedCmd(args []string) error {
 	fs := flag.NewFlagSet("seed", flag.ContinueOnError)
-	baseURL := fs.String("url", envOr("GC_URL", "http://localhost:8080"), "server base URL")
-	dbURL := fs.String("db", databaseURL(), "postgres connection URL (for key minting)")
+	dbURL := fs.String("db", databaseURL(), "postgres connection URL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: duckserver seed <course.md>")
+		return fmt.Errorf("usage: duckserver seed [--db <url>] <course.md>")
 	}
 
 	src, err := os.ReadFile(fs.Arg(0))
 	if err != nil {
 		return err
 	}
+
+	ctx := context.Background()
+	st, err := store.Open(ctx, *dbURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
 	// A "path:" frontmatter key marks a learning-path document (paths/*.md);
-	// everything else is a course variant. Both publish through their
-	// respective /api/v1 endpoints below.
-	var endpoint string
+	// everything else is a course variant. Paths have no proposal flow —
+	// this direct import is their only publish path, so paths/ stays
+	// canonical in the repo (unlike the courses/ mirror).
 	if ingest.IsPathDocument(src) {
 		res, err := ingest.ParsePath(src)
 		if err != nil {
 			return fmt.Errorf("%s: %w", fs.Arg(0), err)
 		}
-		endpoint = fmt.Sprintf("/api/v1/paths/%s", res.Path.Path)
-	} else {
-		res, err := ingest.Parse(src)
+		path, err := ingest.PathToDomain(res, src)
 		if err != nil {
 			return fmt.Errorf("%s: %w", fs.Arg(0), err)
 		}
-		endpoint = fmt.Sprintf("/api/v1/courses/%s/variants/%s", res.Course.Course, res.Course.Language)
-	}
-
-	key := os.Getenv("GC_API_KEY")
-	if key == "" {
-		ctx := context.Background()
-		st, err := store.Open(ctx, *dbURL)
-		if err != nil {
+		stored, _, err := st.PathBySlug(ctx, path.Slug)
+		if err == nil && stored.SourceMD == path.SourceMD {
+			fmt.Printf("unchanged path %s\n", path.Slug)
+			return nil
+		}
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			return err
 		}
-		defer st.Close()
-		var hash []byte
-		key, hash = auth.NewAPIKey()
-		if _, err := st.CreateAPIKey(ctx, "seed", hash); err != nil {
-			return err
+		if _, err := st.UpsertPath(ctx, path); err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
 		}
+		fmt.Printf("seeded path %s\n", path.Slug)
+		return nil
 	}
 
-	body, err := json.Marshal(map[string]string{"markdown": string(src)})
+	res, err := ingest.Parse(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", fs.Arg(0), err)
 	}
-	url := *baseURL + endpoint
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	course, variant, err := ingest.ToDomain(res, src)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", fs.Arg(0), err)
 	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	stored, _, err := st.VariantSource(ctx, course.Slug, variant.Language)
+	if err == nil && stored == variant.SourceMD {
+		fmt.Printf("unchanged %s/%s\n", course.Slug, variant.Language)
+		return nil
+	}
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+
+	version, err := st.UpsertVariant(ctx, course, variant, nil, nil)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	out, _ := io.ReadAll(resp.Body)
-	fmt.Printf("%s %s\n%s", resp.Status, url, out)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("seed failed")
-	}
+	fmt.Printf("seeded %s/%s version %d\n", course.Slug, variant.Language, version)
 	return nil
 }
 

@@ -1,0 +1,51 @@
+# Keeps courses/*.md a faithful mirror of what's published on the server.
+# The database is the source of truth (content changes go through the
+# in-app proposal/review workflow); this workflow pulls the public
+# /api/v1/export on a schedule and opens a PR when the mirror has drifted.
+# CI's ingest tests (internal/ingest TestCanonicalCoursesParse) verify
+# every document parses; review and merge the PR when ready.
+#
+# A fixed branch name + force-push keeps at most one sync PR open; each new
+# drift updates the same PR rather than stacking new ones.
+name: Course sync
+
+on:
+  schedule:
+    # once a day at 1 am
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# One sync at a time: overlapping runs (schedule + manual dispatch) would
+# race the force-push and the PR create/merge sequence.
+concurrency:
+  group: course-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # COURSE_SYNC_TOKEN is a fine-grained PAT (contents + pull-requests:
+      # write, this repo only). It exists because events created with the
+      # default GITHUB_TOKEN deliberately don't trigger other workflows: a
+      # sync PR pushed with github.token would never get a CI run, so
+      # auto-merge would either wait forever (required checks) or be
+      # rejected outright (no checks to wait on). The github.token fallback
+      # keeps the job producing a PR (manually mergeable) if the secret is
+      # ever missing.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
+
+      - name: Export courses from production
+        run: DUCK_BASE_URL=https://duckgc.com ./scripts/export-courses.sh
+
+      - name: Open (or update) the sync PR
+        env:
+          GH_TOKEN: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
+        run: |
+          ./scripts/course-sync.sh

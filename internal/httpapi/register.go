@@ -8,63 +8,67 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
-// CourseStore is the slice of the store the agent API needs.
+// CourseStore is the slice of the store the read API needs.
 type CourseStore interface {
-	// editedBy/expectedVersion are both nil for agent-key callers (writes
-	// stay unattributed and unversioned, see issue #36's scope); a human
-	// caller authenticated via a gc_u_ user token (see currentUser in
-	// middleware.go) is attributed and may pass a non-nil expectedVersion
-	// for optimistic concurrency (see internal/store.Store.UpsertVariant's
-	// doc comment).
-	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
 	ListCourses(ctx context.Context) ([]domain.CourseSummary, error)
 	CourseBySlug(ctx context.Context, slug string) (domain.Course, []domain.VariantSummary, error)
-	// VariantSource's int return is the variant's current version;
-	// getVariantSource includes it in the GET response so a human caller
-	// can round-trip it back as expected_version on a later PUT.
+	// VariantSource's int return is the variant's current version; a caller
+	// authoring a proposal records it to know what base they edited against.
 	VariantSource(ctx context.Context, slug, language string) (string, int, error)
 	VariantDetail(ctx context.Context, courseSlug, language string) (domain.Course, domain.Variant, error)
-	DeleteCourse(ctx context.Context, slug string) error
-	DeleteVariant(ctx context.Context, slug, language string) error
+	ListVariantSources(ctx context.Context) ([]domain.VariantExport, error)
 	ListTags(ctx context.Context) ([]string, error)
 
-	// Learning paths: ordered tracks of courses, published as markdown like
-	// course variants but without versioning (no learner data hangs off a
-	// path, so last write wins — see store.UpsertPath).
-	UpsertPath(ctx context.Context, path domain.LearningPath) (created bool, err error)
+	// Learning paths: ordered tracks of courses. Read-only here — path
+	// writes go through `duckserver seed`, not HTTP (see paths.go).
 	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
 	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
-	DeletePath(ctx context.Context, slug string) error
+}
+
+// ProposalStore is the slice of the store the proposal API needs. Reviewing
+// and publishing are web-only flows; the CLI only authors.
+type ProposalStore interface {
+	CreateProposal(ctx context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error)
+	UpdateProposalMarkdown(ctx context.Context, proposalID, proposerID int64, title, summary, markdown string) (domain.Proposal, error)
+	ProposalByID(ctx context.Context, id int64) (domain.Proposal, error)
+	ListProposalsByUser(ctx context.Context, userID int64) ([]domain.Proposal, error)
+	WithdrawProposal(ctx context.Context, proposalID, proposerID int64) error
 }
 
 type handlers struct {
-	store  CourseStore
-	logger *slog.Logger
+	store     CourseStore
+	proposals ProposalStore
+	logger    *slog.Logger
 }
 
-// Register mounts the agent API under /api/v1, guarded by bearer auth —
-// either an agent API key or a human user token (see requireKey).
-func Register(mux *http.ServeMux, logger *slog.Logger, keys KeyStore, store CourseStore) {
-	h := &handlers{store: store, logger: logger}
+// Register mounts the API under /api/v1. Reads are public — course content
+// is public on the web, and credential-free reads are what let the
+// repo-mirror sync (see /api/v1/export) run from a plain GitHub Action.
+// Proposal routes require a user token.
+func Register(mux *http.ServeMux, logger *slog.Logger, users UserStore, store CourseStore, proposals ProposalStore) {
+	h := &handlers{store: store, proposals: proposals, logger: logger}
+
+	mux.HandleFunc("GET /api/v1/courses", h.listCourses)
+	mux.HandleFunc("GET /api/v1/courses/{slug}", h.getCourse)
+	mux.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}", h.getVariantSource)
+	mux.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}/challenges", h.listChallenges)
+	mux.HandleFunc("GET /api/v1/tags", h.listTags)
+	mux.HandleFunc("GET /api/v1/export", h.export)
+
+	// Learning paths are read-only over HTTP: they have no proposal flow,
+	// so writes happen only via `duckserver seed` (paths/ in the repo is
+	// canonical, unlike the courses/ mirror).
+	mux.HandleFunc("GET /api/v1/paths", h.listPaths)
+	mux.HandleFunc("GET /api/v1/paths/{slug}", h.getPath)
 
 	api := http.NewServeMux()
-	api.HandleFunc("PUT /api/v1/courses/{slug}/variants/{language}", h.putVariant)
-	api.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}", h.getVariantSource)
-	api.HandleFunc("DELETE /api/v1/courses/{slug}/variants/{language}", h.deleteVariant)
-	api.HandleFunc("GET /api/v1/courses/{slug}", h.getCourse)
-	api.HandleFunc("DELETE /api/v1/courses/{slug}", h.deleteCourse)
-	api.HandleFunc("GET /api/v1/courses", h.listCourses)
-	api.HandleFunc("GET /api/v1/tags", h.listTags)
-	api.HandleFunc("PUT /api/v1/paths/{slug}", h.putPath)
-	api.HandleFunc("GET /api/v1/paths/{slug}", h.getPath)
-	api.HandleFunc("DELETE /api/v1/paths/{slug}", h.deletePath)
-	api.HandleFunc("GET /api/v1/paths", h.listPaths)
-
-	mux.Handle("/api/v1/", requireKey(logger, keys, api))
-
-	// Public: challenge prompts and tests aren't secret on a learning
-	// platform, and local test runs need them without a bearer key.
-	mux.HandleFunc("GET /api/v1/courses/{slug}/variants/{language}/challenges", h.listChallenges)
+	api.HandleFunc("POST /api/v1/proposals", h.createProposal)
+	api.HandleFunc("GET /api/v1/proposals", h.listMyProposals)
+	api.HandleFunc("GET /api/v1/proposals/{id}", h.getProposal)
+	api.HandleFunc("PUT /api/v1/proposals/{id}", h.updateProposal)
+	api.HandleFunc("POST /api/v1/proposals/{id}/withdraw", h.withdrawProposal)
+	mux.Handle("/api/v1/proposals", requireUser(logger, users, api))
+	mux.Handle("/api/v1/proposals/", requireUser(logger, users, api))
 }
 
 func (h *handlers) serverError(w http.ResponseWriter, r *http.Request, err error) {
