@@ -429,3 +429,48 @@ func variantEditedBy(t *testing.T, s *Store, courseSlug, language string) *int64
 	}
 	return editedBy
 }
+
+func TestListVariantSources(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	// Empty database: empty export, not an error.
+	if got, err := s.ListVariantSources(ctx); err != nil || len(got) != 0 {
+		t.Fatalf("empty export = %+v, %v; want none", got, err)
+	}
+
+	// Two languages of one course plus a second course, inserted out of
+	// order to exercise the slug-then-language ordering contract.
+	course, variant := loadSeedCourse(t)
+	python := variant
+	python.Language = "python"
+	other := course
+	other.Slug = "aaa-first"
+	if _, err := s.UpsertVariant(ctx, course, python, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpsertVariant(ctx, other, variant, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ListVariantSources(ctx)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("export = %d rows, %v; want 3", len(got), err)
+	}
+	wantOrder := []struct{ slug, lang string }{
+		{other.Slug, variant.Language},
+		{course.Slug, variant.Language},
+		{course.Slug, "python"},
+	}
+	for i, w := range wantOrder {
+		if got[i].CourseSlug != w.slug || got[i].Language != w.lang {
+			t.Errorf("row %d = %s/%s, want %s/%s", i, got[i].CourseSlug, got[i].Language, w.slug, w.lang)
+		}
+	}
+	if got[0].Version != 1 || got[0].SourceMD != variant.SourceMD {
+		t.Errorf("row 0 version=%d, source round-trip ok=%v", got[0].Version, got[0].SourceMD == variant.SourceMD)
+	}
+}

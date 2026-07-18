@@ -46,6 +46,10 @@ func run(args []string) error {
 		return testCmd(args[1:])
 	case "submit":
 		return submitCmd(args[1:])
+	case "propose":
+		return proposeCmd(args[1:])
+	case "proposals":
+		return proposalsCmd(args[1:])
 	case "auth":
 		return authCmd(args[1:])
 	case "login":

@@ -7,11 +7,9 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
-	"github.com/michael-duren/rubber-duck/internal/ingest"
 	"github.com/michael-duren/rubber-duck/internal/markdown"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
@@ -129,10 +127,11 @@ func seedCodeStubs(language string) (starter, tests string) {
 }
 
 // editVariantPage renders the raw markdown for a course variant in an
-// editable textarea. Reuses store.VariantSource, the same lookup the agent
-// API's GET /courses/{slug}/variants/{language} uses to round-trip a
-// document. The version it was loaded at rides along in a hidden form field
-// (see views.EditVariant) so saveVariant can detect a concurrent edit.
+// editable textarea. Reuses store.VariantSource, the same lookup the API's
+// GET /courses/{slug}/variants/{language} uses to round-trip a document.
+// Submitting no longer writes the variant — it opens a proposal (see
+// proposeVariant); there is no version hidden field anymore because the
+// proposal captures its base version server-side at creation.
 //
 // A missing variant is a 404, same as before issue #38, UNLESS new=1 is
 // present in the query string: that only arrives via createCourse's
@@ -143,144 +142,128 @@ func seedCodeStubs(language string) (starter, tests string) {
 // page.
 func (h *handlers) editVariantPage(w http.ResponseWriter, r *http.Request) {
 	slug, lang := r.PathValue("slug"), r.PathValue("lang")
-	src, version, err := h.courses.VariantSource(r.Context(), slug, lang)
+	src, _, err := h.courses.VariantSource(r.Context(), slug, lang)
 	if errors.Is(err, domain.ErrNotFound) {
 		if r.URL.Query().Get("new") == "1" {
 			q := r.URL.Query()
-			tmpl := newVariantTemplate(slug, lang, q.Get("title"), q.Get("description"))
-			h.render(w, r, views.EditVariant(currentUser(r), slug, lang, tmpl, 0, "", nil))
+			src = newVariantTemplate(slug, lang, q.Get("title"), q.Get("description"))
+		} else {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
+	} else if err != nil {
 		h.serverError(w, r, err)
 		return
 	}
-	h.render(w, r, views.EditVariant(currentUser(r), slug, lang, src, version, "", nil))
+	h.render(w, r, views.EditVariant(currentUser(r), variantEditorForm(slug, lang, src)))
 }
 
-// versionConflictMsg is shown both by the pre-write version peek and by
-// UpsertVariant's own conflict result (see saveVariant) — same wording
-// either way, since to the user it's the same situation either time.
-const versionConflictMsg = "Someone else changed this since you opened it — reload to see their version before saving over it."
-
-// saveVariant runs a submitted markdown document through the same
-// ingest.Parse/ToDomain/store.UpsertVariant path the agent API's putVariant
-// uses (see internal/httpapi/courses.go), attributing the write to the
-// logged-in user instead of leaving it unattributed (agent writes pass nil),
-// and passing through the version the form was loaded at so a concurrent
-// edit is rejected instead of silently overwritten (issue #36).
+// proposeVariant handles the editor's submit: instead of writing the
+// variant directly (the pre-review-workflow behavior), it lints the
+// document and opens a proposal for others to review. The one-open-
+// proposal-per-user-per-variant rule turns a duplicate submit into a
+// redirect to editing the existing proposal, carrying the new content is
+// NOT possible across a redirect — the user lands in the existing
+// proposal's editor with its current content and a notice explaining why.
 //
-// On any failure — a missing/invalid version, validation problems, a
-// slug/language mismatch against the URL, or a version conflict — the edit
-// page is re-rendered with exactly what the user submitted, never a re-fetch
-// from storage, so a failed save never discards in-progress edits.
-//
-// The VariantSource peek below only chooses which message to show;
-// UpsertVariant's own atomic WHERE-clause check (unchanged from issue #36)
-// remains the real guard against a race between this read and the write.
-// (Saving used to also require confirming a destructive re-publish — issue
-// #37 — but UpsertVariant now diffs content by slug and preserves
-// submissions, so there's nothing to confirm anymore.)
-func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
+// On validation problems or a frontmatter/URL mismatch the editor is
+// re-rendered with exactly what the user submitted, never a re-fetch from
+// storage, so a failed submit never discards in-progress edits.
+func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 	slug, lang := r.PathValue("slug"), r.PathValue("lang")
 	mdText := r.FormValue("markdown")
-	src := []byte(mdText)
+	title, summary := formTitleSummary(r, slug, lang)
 
-	// The hidden "version" field always round-trips from views.EditVariant;
-	// a missing/unparseable value only happens from a stale form or
-	// tampering, not normal use, so there's no stored version to preserve
-	// here — render with 0 and ask the user to reload.
-	version, verr := strconv.Atoi(r.FormValue("version"))
-	if verr != nil {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, 0,
-			"Missing or invalid version — reload the page and try again.", nil))
-		return
-	}
+	form := variantEditorForm(slug, lang, mdText)
+	form.Title, form.Summary = r.FormValue("title"), summary
 
-	res, err := ingest.Parse(src)
-	if pErr, ok := errors.AsType[*ingest.ValidationError](err); ok {
-		problems := make([]views.EditProblem, len(pErr.Problems))
-		for i, p := range pErr.Problems {
-			problems[i] = views.EditProblem{Line: p.Line, Message: p.Message}
-		}
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, "", problems))
-		return
-	}
+	res, problems, err := parseForEditor(mdText)
 	if err != nil {
 		h.serverError(w, r, err)
+		return
+	}
+	if problems != nil {
+		form.Problems = problems
+		h.render(w, r, views.EditVariant(currentUser(r), form))
 		return
 	}
 
 	if res.Course.Course != slug || res.Course.Language != lang {
-		msg := fmt.Sprintf("This page edits %s/%s but the document's frontmatter says %s/%s — fix the frontmatter or navigate to the matching course/language before saving.",
+		form.ErrMsg = fmt.Sprintf("This page edits %s/%s but the document's frontmatter says %s/%s — fix the frontmatter or navigate to the matching course/language before proposing.",
 			slug, lang, res.Course.Course, res.Course.Language)
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, msg, nil))
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
+	if msg, err := renderCheckMsg(res, mdText); err != nil {
+		h.serverError(w, r, err)
+		return
+	} else if msg != "" {
+		form.ErrMsg = msg
+		h.render(w, r, views.EditVariant(currentUser(r), form))
 		return
 	}
 
-	course, variant, err := ingest.ToDomain(res, src)
+	user := currentUser(r) // non-nil: this route is behind h.requireUser
+	p, err := h.proposals.CreateProposal(r.Context(), user.ID, slug, lang, title, summary, mdText)
+	if errors.Is(err, domain.ErrDuplicateProposal) {
+		if existing, ok := h.openProposalFor(r, user.ID, slug, lang); ok {
+			http.Redirect(w, r, fmt.Sprintf("/proposals/%d/edit?dup=1", existing.ID), http.StatusSeeOther)
+			return
+		}
+		form.ErrMsg = "You already have an open proposal for this course variant."
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
 	if err != nil {
 		h.serverError(w, r, err)
 		return
 	}
 
-	// See the doc comment above for why this runs, and wins, before the
-	// submission-count confirmation check. srcErr is branched on explicitly
-	// (rather than only used as a boolean gate) because domain.ErrNotFound
-	// here can mean the variant was deleted by someone else since this
-	// user's GET — falling through to UpsertVariant in that case would let
-	// a non-nil, non-zero expectedVersion sail past Postgres's ON CONFLICT
-	// check (no conflicting row to trigger it), silently resurrecting a
-	// deleted course/variant from stale content. version == 0 is excluded
-	// from that: it's the createCourse/new=1 template flow's legitimate
-	// first save of a variant that has never existed, so ErrNotFound there
-	// is expected, not a concurrent deletion — same version == 0 carve-out
-	// UpsertVariant's own existence check applies below.
-	_, storedVersion, srcErr := h.courses.VariantSource(r.Context(), slug, lang)
-	if errors.Is(srcErr, domain.ErrNotFound) && version != 0 {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version,
-			"This course variant no longer exists — it may have been deleted since you opened it.", nil))
-		return
-	}
-	if srcErr != nil && !errors.Is(srcErr, domain.ErrNotFound) {
-		h.serverError(w, r, srcErr)
-		return
-	}
-	if srcErr == nil && storedVersion != version {
-		h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, versionConflictMsg, nil))
-		return
-	}
-
-	user := currentUser(r) // non-nil: this route is behind h.requireUser
-	if _, err := h.courses.UpsertVariant(r.Context(), course, variant, &user.ID, &version); err != nil {
-		if errors.Is(err, domain.ErrVersionConflict) {
-			h.render(w, r, views.EditVariant(currentUser(r), slug, lang, mdText, version, versionConflictMsg, nil))
-			return
-		}
-		h.serverError(w, r, err)
-		return
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/courses/%s/%s", slug, lang), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
 }
 
-// previewVariant renders whatever markdown a user currently has in the
+// openProposalFor finds the user's open proposal for a course variant —
+// the row the one-open-proposal unique index just pointed at.
+func (h *handlers) openProposalFor(r *http.Request, userID int64, slug, lang string) (domain.Proposal, bool) {
+	mine, err := h.proposals.ListProposalsByUser(r.Context(), userID)
+	if err != nil {
+		// Degrades to the generic duplicate-proposal message rather than a
+		// redirect into the editor; log so the failure isn't invisible.
+		h.logger.Error("listing user proposals for duplicate redirect", "err", err)
+		return domain.Proposal{}, false
+	}
+	for _, p := range mine {
+		if p.CourseSlug == slug && p.Language == lang && p.Status == domain.ProposalOpen {
+			return p, true
+		}
+	}
+	return domain.Proposal{}, false
+}
+
+// variantEditorForm is the views.EditorForm for proposing from a course
+// page (vs. editing an existing proposal, see proposalEditorForm).
+func variantEditorForm(slug, lang, markdown string) views.EditorForm {
+	return views.EditorForm{
+		Slug:     slug,
+		Lang:     lang,
+		Markdown: markdown,
+		Action:   fmt.Sprintf("/courses/%s/%s/edit", slug, lang),
+		Cancel:   fmt.Sprintf("/courses/%s/%s", slug, lang),
+	}
+}
+
+// previewMarkdown renders whatever markdown a user currently has in the
 // editor's textarea (not necessarily saved, not necessarily even valid) as
-// an HTML fragment for the editor's live preview pane (issue #39). It's
-// reached by the page's own inline script, POSTing the textarea's current
-// value on a debounce, and gated behind h.requireUser same as the edit page
-// itself and saveVariant — an anonymous visitor gets no preview endpoint any
-// more than they get the editor that calls it.
+// an HTML fragment for the editor's live preview pane (issue #39). One
+// fixed route (POST /preview/markdown) serves every editor — proposing
+// from a course page and editing an existing proposal — since the preview
+// doesn't depend on what the document targets. Gated behind h.requireUser
+// same as the editors that call it.
 //
-// This intentionally shares almost nothing with saveVariant: no
-// ingest.Parse/ToDomain, no store write, no version or submission-count
-// check. The preview is read-only and side-effect-free, so it can't
-// interfere with — or be blocked behind — those checks, and a save can
-// still succeed (or correctly fail) independent of whatever the preview
-// pane is currently showing.
+// This intentionally shares nothing with the submit paths: no
+// ingest.Parse/ToDomain, no store write. The preview is read-only and
+// side-effect-free, so a broken or slow preview never blocks a real
+// submit.
 //
 // The submitted markdown is a full course document, frontmatter included,
 // which markdown.ToHTML doesn't know how to render as anything but stray
@@ -288,7 +271,7 @@ func (h *handlers) saveVariant(w http.ResponseWriter, r *http.Request) {
 // markdown.StripFrontmatter) before rendering the remainder, the same
 // lesson/challenge prose a learner would actually see on the rendered
 // course page.
-func (h *handlers) previewVariant(w http.ResponseWriter, r *http.Request) {
+func (h *handlers) previewMarkdown(w http.ResponseWriter, r *http.Request) {
 	body := markdown.StripFrontmatter([]byte(r.FormValue("markdown")))
 	html, err := markdown.ToHTML(body)
 	if err != nil {
