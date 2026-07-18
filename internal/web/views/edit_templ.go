@@ -49,6 +49,9 @@ type EditorForm struct {
 // to POST /preview/markdown and swaps the pane's innerHTML with the
 // response. That endpoint is read-only and entirely separate from this
 // form's submit — a broken or slow preview never blocks a real submit.
+// A "sync scroll" toggle above the pane (on by default, persisted in
+// localStorage) proportionally mirrors scroll position between the editor
+// and the preview in both directions.
 //
 // The textarea carries data-editor, so cm6.js upgrades it into the same
 // CodeMirror editor as challenge submissions (markdown grammar, vim mode,
@@ -97,7 +100,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var3 templ.SafeURL
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/courses/" + f.Slug))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 56, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 59, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -110,7 +113,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(f.Slug)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 56, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 59, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -123,7 +126,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var5 templ.SafeURL
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/courses/" + f.Slug + "/" + f.Lang))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 57, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 60, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -136,7 +139,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(f.Lang)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 57, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 60, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -149,7 +152,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(f.Slug)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 59, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 62, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -162,7 +165,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(f.Lang)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 59, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 62, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -180,7 +183,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(f.Notice)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 64, Col: 158}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 67, Col: 158}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -203,7 +206,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(f.ErrMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 67, Col: 146}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 70, Col: 146}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -226,7 +229,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(len(f.Problems)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 71, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 74, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -239,7 +242,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(plural(len(f.Problems)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 71, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 74, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -257,7 +260,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.Line))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 74, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 77, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -270,7 +273,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(p.Message)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 74, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 77, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -293,7 +296,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var15 templ.SafeURL
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(f.Action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 79, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 82, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -314,7 +317,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 87, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 90, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -327,7 +330,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue("Update " + f.Slug + "/" + f.Lang)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 88, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 91, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -340,7 +343,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.Summary)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 97, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 100, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -353,7 +356,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(f.Markdown)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 113, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 116, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -366,13 +369,13 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			var templ_7745c5c3_Var20 templ.SafeURL
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(f.Cancel))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 117, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/edit.templ`, Line: 120, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" class=\"border border-slate-300 px-3 py-2 font-medium text-slate-600 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white\">Cancel</a></div></div><div class=\"flex flex-col gap-3\"><span class=\"font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400\">Preview</span><div id=\"markdown-preview\" class=\"prose prose-slate h-[70vh] max-w-none overflow-auto border border-slate-300 bg-white p-3 dark:prose-invert dark:border-slate-700 dark:bg-slate-900\"></div></div></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" class=\"border border-slate-300 px-3 py-2 font-medium text-slate-600 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white\">Cancel</a></div></div><div class=\"flex flex-col gap-3\"><div class=\"flex items-center justify-between\"><span class=\"font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400\">Preview</span> <label class=\"flex cursor-pointer items-center gap-1.5 font-mono text-xs text-slate-500 dark:text-slate-400\"><input type=\"checkbox\" id=\"sync-scroll\" class=\"accent-emerald-600\"> sync scroll</label></div><div id=\"markdown-preview\" class=\"prose prose-slate h-[70vh] max-w-none overflow-auto border border-slate-300 bg-white p-3 dark:prose-invert dark:border-slate-700 dark:bg-slate-900\"></div></div></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -380,7 +383,7 @@ func EditVariant(user *domain.User, f EditorForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " <script>\n\t\t\t(function () {\n\t\t\t\tvar textarea = document.getElementById(\"markdown-editor\");\n\t\t\t\tvar preview = document.getElementById(\"markdown-preview\");\n\t\t\t\tif (!textarea || !preview) return;\n\n\t\t\t\tvar debounce;\n\n\t\t\t\tfunction renderPreview() {\n\t\t\t\t\tvar csrf = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\t\t\tvar body = new URLSearchParams({\n\t\t\t\t\t\tmarkdown: textarea.value,\n\t\t\t\t\t\tcsrf_token: csrf ? csrf.value : \"\",\n\t\t\t\t\t});\n\t\t\t\t\tfetch(\"/preview/markdown\", {\n\t\t\t\t\t\tmethod: \"POST\",\n\t\t\t\t\t\theaders: { \"Content-Type\": \"application/x-www-form-urlencoded\" },\n\t\t\t\t\t\tbody: body,\n\t\t\t\t\t}).then(function (res) {\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\tres.text().then(function (html) {\n\t\t\t\t\t\t\t\tpreview.innerHTML = html;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t}).catch(function () {\n\t\t\t\t\t\t// A network hiccup shouldn't disrupt editing; the next\n\t\t\t\t\t\t// debounced keystroke retries.\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\ttextarea.addEventListener(\"input\", function () {\n\t\t\t\t\tclearTimeout(debounce);\n\t\t\t\t\tdebounce = setTimeout(renderPreview, 400);\n\t\t\t\t});\n\t\t\t\trenderPreview();\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " <script>\n\t\t\t(function () {\n\t\t\t\tvar textarea = document.getElementById(\"markdown-editor\");\n\t\t\t\tvar preview = document.getElementById(\"markdown-preview\");\n\t\t\t\tif (!textarea || !preview) return;\n\n\t\t\t\tvar debounce;\n\n\t\t\t\tfunction renderPreview() {\n\t\t\t\t\tvar csrf = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\t\t\tvar body = new URLSearchParams({\n\t\t\t\t\t\tmarkdown: textarea.value,\n\t\t\t\t\t\tcsrf_token: csrf ? csrf.value : \"\",\n\t\t\t\t\t});\n\t\t\t\t\tfetch(\"/preview/markdown\", {\n\t\t\t\t\t\tmethod: \"POST\",\n\t\t\t\t\t\theaders: { \"Content-Type\": \"application/x-www-form-urlencoded\" },\n\t\t\t\t\t\tbody: body,\n\t\t\t\t\t}).then(function (res) {\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\tres.text().then(function (html) {\n\t\t\t\t\t\t\t\tpreview.innerHTML = html;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t}).catch(function () {\n\t\t\t\t\t\t// A network hiccup shouldn't disrupt editing; the next\n\t\t\t\t\t\t// debounced keystroke retries.\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\ttextarea.addEventListener(\"input\", function () {\n\t\t\t\t\tclearTimeout(debounce);\n\t\t\t\t\tdebounce = setTimeout(renderPreview, 400);\n\t\t\t\t});\n\t\t\t\trenderPreview();\n\n\t\t\t\t// --- scroll sync (issueless QoL): mirror scroll position between\n\t\t\t\t// the editor and the preview, proportionally, in both directions.\n\t\t\t\t// The editor's scrollable element is CodeMirror's .cm-scroller once\n\t\t\t\t// cm6.js mounts, or the raw textarea if it never does (mobile), so\n\t\t\t\t// it's looked up per event rather than captured at load. Scroll\n\t\t\t\t// events don't bubble, but they ARE observable in the capture\n\t\t\t\t// phase on document — which also sidesteps mount-order timing.\n\t\t\t\tvar syncToggle = document.getElementById(\"sync-scroll\");\n\t\t\t\tvar SYNC_KEY = \"rd.editSyncScroll\";\n\t\t\t\ttry {\n\t\t\t\t\tsyncToggle.checked = localStorage.getItem(SYNC_KEY) !== \"false\";\n\t\t\t\t} catch (e) {\n\t\t\t\t\tsyncToggle.checked = true;\n\t\t\t\t}\n\t\t\t\tsyncToggle.addEventListener(\"change\", function () {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tlocalStorage.setItem(SYNC_KEY, String(syncToggle.checked));\n\t\t\t\t\t} catch (e) {\n\t\t\t\t\t\t// Private mode: the toggle still works, just won't persist.\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tfunction editorScroller() {\n\t\t\t\t\treturn document.querySelector(\".cm-scroller\") || textarea;\n\t\t\t\t}\n\n\t\t\t\t// Whichever pane the user is actively scrolling \"leads\"; the\n\t\t\t\t// programmatic scrollTop we set on the other pane fires its own\n\t\t\t\t// scroll event, which must not echo back. The lead expires after\n\t\t\t\t// a beat of inactivity so the user can switch panes.\n\t\t\t\tvar lead = null;\n\t\t\t\tvar leadTimer;\n\t\t\t\tfunction follow(from, to) {\n\t\t\t\t\tif (lead && lead !== from) return;\n\t\t\t\t\tlead = from;\n\t\t\t\t\tclearTimeout(leadTimer);\n\t\t\t\t\tleadTimer = setTimeout(function () { lead = null; }, 150);\n\t\t\t\t\tvar fromMax = from.scrollHeight - from.clientHeight;\n\t\t\t\t\tvar toMax = to.scrollHeight - to.clientHeight;\n\t\t\t\t\tif (fromMax <= 0 || toMax <= 0) return;\n\t\t\t\t\tto.scrollTop = (from.scrollTop / fromMax) * toMax;\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener(\"scroll\", function (e) {\n\t\t\t\t\tif (!syncToggle.checked) return;\n\t\t\t\t\tvar scroller = editorScroller();\n\t\t\t\t\tif (e.target === scroller) {\n\t\t\t\t\t\tfollow(scroller, preview);\n\t\t\t\t\t} else if (e.target === preview) {\n\t\t\t\t\t\tfollow(preview, scroller);\n\t\t\t\t\t}\n\t\t\t\t}, true);\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
