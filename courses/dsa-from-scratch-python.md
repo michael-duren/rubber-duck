@@ -55,6 +55,201 @@ can't grow in place (something else may live right after them in memory).
 You must allocate a *bigger* block, copy everything across, and abandon the
 old one.
 
+Watch the moment the block runs out of room — amber is the incoming value, dashed grey is freed memory:
+
+```d2
+direction: right
+
+code: "" {
+  grid-columns: 1
+  grid-gap: 0
+  l1: "append(x):" {
+    height: 30
+    style.stroke: "#d97706"
+    style.stroke-width: 2
+    style.font: mono
+    style.bold: true
+  }
+  l2: "  if len == cap:" {
+    height: 30
+    style.stroke: "#9ca3af"
+    style.font: mono
+    style.bold: false
+  }
+  l3: "    grow: new block, 2×cap" {
+    height: 30
+    style.stroke: "#9ca3af"
+    style.font: mono
+    style.bold: false
+  }
+  l4: "    copy elements, free old" {
+    height: 30
+    style.stroke: "#9ca3af"
+    style.font: mono
+    style.bold: false
+  }
+  l5: "  a[len] = x; len += 1" {
+    height: 30
+    style.stroke: "#9ca3af"
+    style.font: mono
+    style.bold: false
+  }
+}
+
+heap: "" {
+  grid-columns: 1
+  grid-gap: 12
+
+  r0: "" {
+    grid-rows: 1
+    grid-gap: 0
+    style.opacity: 0
+    x: "9" {
+      shape: circle
+      width: 64
+      height: 64
+      style.opacity: 1
+      style.stroke: "#d97706"
+      style.stroke-width: 3
+    }
+    pad: "" { width: 448; height: 64; style.opacity: 0 }
+  }
+
+  r1: "" {
+    grid-rows: 1
+    grid-gap: 0
+    style.opacity: 0
+    old: "cap 4" {
+      grid-rows: 1
+      grid-gap: 0
+      style.opacity: 1
+      c0: "5" { width: 64; height: 64; style.opacity: 1 }
+      c1: "8" { width: 64; height: 64; style.opacity: 1 }
+      c2: "3" { width: 64; height: 64; style.opacity: 1 }
+      c3: "" { width: 64; height: 64; style.opacity: 1; style.stroke-dash: 4 }
+    }
+    pad: "" { width: 256; height: 64; style.opacity: 0 }
+  }
+
+  new: "cap 8" {
+    grid-rows: 1
+    grid-gap: 0
+    style.opacity: 0
+    c0: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c1: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c2: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c3: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c4: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c5: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c6: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+    c7: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  }
+}
+
+code -> heap: { style.opacity: 0 }
+
+steps: {
+  "append(9): 9 takes the spare slot — len 4, cap 4": {
+    heap.r1.old.c3.label: "9"
+    heap.r1.old.c3.style.stroke: "#d97706"
+    heap.r1.old.c3.style.stroke-width: 3
+    heap.r1.old.c3.style.stroke-dash: 0
+    heap.r0.x.style.stroke: "#9ca3af"
+    heap.r0.x.style.stroke-width: 1
+    heap.r0.x.style.stroke-dash: 4
+    code.l1.style.stroke: "#9ca3af"
+    code.l1.style.stroke-width: 1
+    code.l1.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+  }
+  "append(2): no room — len 4 == cap 4": {
+    heap.r1.old.style.stroke: "#dc2626"
+    heap.r1.old.style.stroke-width: 3
+    heap.r1.old.c3.style.stroke-width: 2
+    heap.r0.x.label: "2"
+    heap.r0.x.style.stroke: "#d97706"
+    heap.r0.x.style.stroke-width: 3
+    heap.r0.x.style.stroke-dash: 0
+    code.l5.style.stroke: "#9ca3af"
+    code.l5.style.stroke-width: 1
+    code.l5.style.bold: false
+    code.l2.style.stroke: "#d97706"
+    code.l2.style.stroke-width: 2
+    code.l2.style.bold: true
+  }
+  "grow: allocate a new array with cap 8": {
+    heap.new.style.opacity: 1
+    heap.new.c0.style.opacity: 1
+    heap.new.c1.style.opacity: 1
+    heap.new.c2.style.opacity: 1
+    heap.new.c3.style.opacity: 1
+    heap.new.c4.style.opacity: 1
+    heap.new.c5.style.opacity: 1
+    heap.new.c6.style.opacity: 1
+    heap.new.c7.style.opacity: 1
+    code.l2.style.stroke: "#9ca3af"
+    code.l2.style.stroke-width: 1
+    code.l2.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+  }
+  "copy all 4 elements, free the old array": {
+    heap.new.c0.label: "5"
+    heap.new.c1.label: "8"
+    heap.new.c2.label: "3"
+    heap.new.c3.label: "9"
+    heap.new.c0.style.stroke: "#16a34a"
+    heap.new.c1.style.stroke: "#16a34a"
+    heap.new.c2.style.stroke: "#16a34a"
+    heap.new.c3.style.stroke: "#16a34a"
+    heap.new.c0.style.stroke-dash: 0
+    heap.new.c1.style.stroke-dash: 0
+    heap.new.c2.style.stroke-dash: 0
+    heap.new.c3.style.stroke-dash: 0
+    heap.r1.old.style.stroke: "#9ca3af"
+    heap.r1.old.style.stroke-dash: 4
+    heap.r1.old.style.stroke-width: 2
+    heap.r1.old.style.font-color: "#9ca3af"
+    heap.r1.old.c0.style.stroke: "#9ca3af"
+    heap.r1.old.c1.style.stroke: "#9ca3af"
+    heap.r1.old.c2.style.stroke: "#9ca3af"
+    heap.r1.old.c3.style.stroke: "#9ca3af"
+    heap.r1.old.c0.style.stroke-dash: 4
+    heap.r1.old.c1.style.stroke-dash: 4
+    heap.r1.old.c2.style.stroke-dash: 4
+    heap.r1.old.c3.style.stroke-dash: 4
+    heap.r1.old.c0.style.font-color: "#9ca3af"
+    heap.r1.old.c1.style.font-color: "#9ca3af"
+    heap.r1.old.c2.style.font-color: "#9ca3af"
+    heap.r1.old.c3.style.font-color: "#9ca3af"
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+  }
+  "append(2) lands in slot 4 — len 5, cap 8": {
+    heap.new.c4.label: "2"
+    heap.new.c4.style.stroke: "#d97706"
+    heap.new.c4.style.stroke-width: 3
+    heap.new.c4.style.stroke-dash: 0
+    heap.r0.x.style.stroke: "#9ca3af"
+    heap.r0.x.style.stroke-width: 1
+    heap.r0.x.style.stroke-dash: 4
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+  }
+}
+```
+
 ## Why doubling, and not +1
 
 How much bigger? This choice is the whole ballgame. Grow by one slot each
@@ -206,6 +401,154 @@ sorted prefix | next
 [ 3  5  7  9 ]            3 ≤ 5, drop 5 in the hole
 ```
 
+Watch a full run on `[3 7 5 1]` — amber is the element being placed, green the sorted prefix:
+
+```d2
+direction: right
+
+code: "" {
+  grid-columns: 1
+  grid-gap: 0
+  l1: " for i in 1..n-1:" {
+    height: 30
+    label.near: center-left
+    style: {stroke: "#9ca3af"; font: mono}
+  }
+  l2: "   key = a[i]; j = i" {
+    height: 30
+    label.near: center-left
+    style: {stroke: "#9ca3af"; font: mono}
+  }
+  l3: "   while j>0 and a[j-1]>key:" {
+    height: 30
+    label.near: center-left
+    style: {stroke: "#9ca3af"; font: mono}
+  }
+  l4: "     a[j] = a[j-1]; j -= 1" {
+    height: 30
+    label.near: center-left
+    style: {stroke: "#9ca3af"; font: mono}
+  }
+  l5: "   a[j] = key" {
+    height: 30
+    label.near: center-left
+    style: {stroke: "#9ca3af"; font: mono}
+  }
+}
+
+key: "∅" {
+  shape: circle
+  width: 64
+  height: 64
+  style.stroke: "#9ca3af"
+}
+
+arr: "" {
+  grid-rows: 1
+  grid-gap: 0
+  c0: "3" { width: 64; height: 64 }
+  c1: "7" { width: 64; height: 64 }
+  c2: "5" { width: 64; height: 64 }
+  c3: "1" { width: 64; height: 64 }
+}
+
+code -> key: {style.opacity: 0}
+key -> arr: {style.opacity: 0}
+
+code.l1.style.stroke: "#d97706"
+code.l1.style.stroke-width: 2
+code.l1.style.bold: true
+
+steps: {
+  "key = 7: 3 ≤ 7, already in place": {
+    code.l1.style.stroke: "#9ca3af"
+    code.l1.style.stroke-width: 1
+    code.l1.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+    key.label: "7"
+    key.style.stroke: "#d97706"
+    key.style.stroke-width: 3
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.style.stroke: "#d97706"
+    arr.c1.style.stroke-width: 3
+  }
+  "key = 5: 7 > 5, so 7 shifts right": {
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+    key.label: "5"
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.label: "→"
+    arr.c1.style.stroke: "#dc2626"
+    arr.c1.style.stroke-width: 3
+    arr.c2.label: "7"
+    arr.c2.style.stroke: "#d97706"
+    arr.c2.style.stroke-width: 3
+  }
+  "5 drops into the gap: [3 5 7] sorted": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+    key.label: "∅"
+    key.style.stroke: "#9ca3af"
+    key.style.stroke-width: 1
+    arr.c1.label: "5"
+    arr.c1.style.stroke: "#16a34a"
+    arr.c1.style.stroke-width: 2
+    arr.c2.style.stroke: "#16a34a"
+    arr.c2.style.stroke-width: 2
+  }
+  "key = 1: smaller than all three, all shift": {
+    code.l5.style.stroke: "#9ca3af"
+    code.l5.style.stroke-width: 1
+    code.l5.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+    key.label: "1"
+    key.style.stroke: "#d97706"
+    key.style.stroke-width: 3
+    arr.c1.label: "→"
+    arr.c2.label: "→"
+    arr.c3.label: "→"
+    arr.c1.style.stroke: "#dc2626"
+    arr.c2.style.stroke: "#dc2626"
+    arr.c3.style.stroke: "#dc2626"
+    arr.c3.style.stroke-width: 3
+  }
+  "1 lands at the front: [1 3 5 7], done": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+    key.label: "∅"
+    key.style.stroke: "#9ca3af"
+    key.style.stroke-width: 1
+    arr.c0.label: "1"
+    arr.c1.label: "3"
+    arr.c2.label: "5"
+    arr.c3.label: "7"
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.style.stroke: "#16a34a"
+    arr.c2.style.stroke: "#16a34a"
+    arr.c3.style.stroke: "#16a34a"
+    arr.c1.style.stroke-width: 2
+    arr.c2.style.stroke-width: 2
+    arr.c3.style.stroke-width: 2
+  }
+}
+```
+
 Thinking in invariants is the transferable skill here: every structure in
 this course (heap property, load factor, BFS frontier) is defined by an
 invariant its operations promise to preserve.
@@ -301,6 +644,186 @@ take 2 (4>2)  → out [1 2]
 take 3 (4>3)  → out [1 2 3]
 take 4 (4<8)  → out [1 2 3 4]
 take 8, then drain a's leftovers → [1 2 3 4 8 9]
+```
+
+Watch the merge of `[1 4 9]` and `[2 3 8]` — amber marks the pair under comparison, dashed grey the consumed cells:
+
+```d2
+grid-columns: 2
+grid-gap: 40
+
+m: "" {
+  grid-rows: 3
+  grid-gap: 12
+
+  lft: "" {
+    grid-rows: 2
+    grid-gap: 0
+    s0: "" { width: 40; height: 28; style: { stroke: transparent; fill: transparent } }
+    p0: "i" { width: 64; height: 28; shape: oval; style: { stroke: "#d97706"; font-color: "#d97706"; fill: transparent } }
+    p1: "i" { width: 64; height: 28; shape: oval; style: { stroke: transparent; font-color: transparent; fill: transparent } }
+    p2: "i" { width: 64; height: 28; shape: oval; style: { stroke: transparent; font-color: transparent; fill: transparent } }
+    n: "a" { width: 40; height: 64; style: { stroke: transparent; fill: transparent } }
+    c0: "1" { width: 64; height: 64 }
+    c1: "4" { width: 64; height: 64 }
+    c2: "9" { width: 64; height: 64 }
+  }
+
+  rgt: "" {
+    grid-rows: 2
+    grid-gap: 0
+    s0: "" { width: 40; height: 28; style: { stroke: transparent; fill: transparent } }
+    p0: "j" { width: 64; height: 28; shape: oval; style: { stroke: "#d97706"; font-color: "#d97706"; fill: transparent } }
+    p1: "j" { width: 64; height: 28; shape: oval; style: { stroke: transparent; font-color: transparent; fill: transparent } }
+    p2: "j" { width: 64; height: 28; shape: oval; style: { stroke: transparent; font-color: transparent; fill: transparent } }
+    n: "b" { width: 40; height: 64; style: { stroke: transparent; fill: transparent } }
+    c0: "2" { width: 64; height: 64 }
+    c1: "3" { width: 64; height: 64 }
+    c2: "8" { width: 64; height: 64 }
+  }
+
+  out: "" {
+    grid-rows: 1
+    grid-gap: 0
+    n: "out" { width: 40; height: 64; style: { stroke: transparent; fill: transparent } }
+    c0: "" { width: 64; height: 64 }
+    c1: "" { width: 64; height: 64 }
+    c2: "" { width: 64; height: 64 }
+    c3: "" { width: 64; height: 64 }
+    c4: "" { width: 64; height: 64 }
+    c5: "" { width: 64; height: 64 }
+  }
+}
+
+code: "" {
+  grid-columns: 1
+  grid-gap: 0
+  # transparent wrapper: the root grid stretches this container to the arrays'
+  # height, and a default fill would paint the leftover space as a phantom row
+  style: { fill: transparent; stroke: transparent }
+  l1: "while i < len(a), j < len(b):" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l2: "  if a[i] <= b[j]:" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l3: "    take a[i]; i += 1" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l4: "  else: take b[j]; j += 1" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l5: "append the leftovers" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+}
+
+code.l1.style.stroke: "#d97706"
+code.l1.style.stroke-width: 2
+code.l1.style.bold: true
+
+steps: {
+  "compare 1 vs 2 → 1 wins, fills out[0]": {
+    code.l1.style.stroke: "#9ca3af"
+    code.l1.style.stroke-width: 1
+    code.l1.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+    m.lft.c0.style.stroke: "#d97706"
+    m.lft.c0.style.stroke-width: 3
+    m.lft.c0.style.stroke-dash: 4
+    m.lft.c0.style.font-color: "#9ca3af"
+    m.rgt.c0.style.stroke: "#d97706"
+    m.rgt.c0.style.stroke-width: 3
+    m.out.c0.label: "1"
+    m.out.c0.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 2 → 2 wins, fills out[1]": {
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+    m.lft.p0.style.stroke: transparent
+    m.lft.p0.style.font-color: transparent
+    m.lft.p1.style.stroke: "#d97706"
+    m.lft.p1.style.font-color: "#d97706"
+    m.lft.c0.style.stroke: "#9ca3af"
+    m.lft.c0.style.stroke-width: 2
+    m.lft.c1.style.stroke: "#d97706"
+    m.lft.c1.style.stroke-width: 3
+    m.rgt.c0.style.stroke-dash: 4
+    m.rgt.c0.style.font-color: "#9ca3af"
+    m.out.c1.label: "2"
+    m.out.c1.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 3 → 3 wins, fills out[2]": {
+    m.rgt.p0.style.stroke: transparent
+    m.rgt.p0.style.font-color: transparent
+    m.rgt.p1.style.stroke: "#d97706"
+    m.rgt.p1.style.font-color: "#d97706"
+    m.rgt.c0.style.stroke: "#9ca3af"
+    m.rgt.c0.style.stroke-width: 2
+    m.rgt.c1.style.stroke: "#d97706"
+    m.rgt.c1.style.stroke-width: 3
+    m.rgt.c1.style.stroke-dash: 4
+    m.rgt.c1.style.font-color: "#9ca3af"
+    m.out.c2.label: "3"
+    m.out.c2.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 8 → now 4 wins, fills out[3]": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+    m.rgt.p1.style.stroke: transparent
+    m.rgt.p1.style.font-color: transparent
+    m.rgt.p2.style.stroke: "#d97706"
+    m.rgt.p2.style.font-color: "#d97706"
+    m.rgt.c1.style.stroke: "#9ca3af"
+    m.rgt.c1.style.stroke-width: 2
+    m.lft.c1.style.stroke-dash: 4
+    m.lft.c1.style.font-color: "#9ca3af"
+    m.rgt.c2.style.stroke: "#d97706"
+    m.rgt.c2.style.stroke-width: 3
+    m.out.c3.label: "4"
+    m.out.c3.style.stroke: "#16a34a"
+  }
+  "compare 9 vs 8 → 8 wins; right is empty": {
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+    m.lft.p1.style.stroke: transparent
+    m.lft.p1.style.font-color: transparent
+    m.lft.p2.style.stroke: "#d97706"
+    m.lft.p2.style.font-color: "#d97706"
+    m.lft.c1.style.stroke: "#9ca3af"
+    m.lft.c1.style.stroke-width: 2
+    m.lft.c2.style.stroke: "#d97706"
+    m.lft.c2.style.stroke-width: 3
+    m.rgt.c2.style.stroke-dash: 4
+    m.rgt.c2.style.font-color: "#9ca3af"
+    m.out.c4.label: "8"
+    m.out.c4.style.stroke: "#16a34a"
+  }
+  "no compare left: 9 drains in — ≤ n compares": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+    m.rgt.p2.style.stroke: transparent
+    m.rgt.p2.style.font-color: transparent
+    m.lft.p2.style.stroke: transparent
+    m.lft.p2.style.font-color: transparent
+    m.lft.c2.style.stroke: "#9ca3af"
+    m.lft.c2.style.stroke-width: 2
+    m.lft.c2.style.stroke-dash: 4
+    m.lft.c2.style.font-color: "#9ca3af"
+    m.rgt.c2.style.stroke: "#9ca3af"
+    m.rgt.c2.style.stroke-width: 2
+    m.out.c5.label: "9"
+    m.out.c5.style.stroke: "#16a34a"
+  }
+}
 ```
 
 The only subtlety is the end: one side runs dry, and the other side's
@@ -475,6 +998,132 @@ pivot = a[hi] = 4;  i = boundary of the "< pivot" zone
      ^ pivot placed: [<4] 4 [≥4]
 ```
 
+Watch Lomuto's sweep on `[3 8 2 5 1 4]` — violet is the pivot, green the growing ≤-pivot zone:
+
+```d2
+direction: right
+
+code: "" {
+  grid-columns: 1
+  grid-gap: 0
+  l1: " 1 p = a[hi]; i = lo" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l2: " 2 for j in lo..hi-1:" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l3: " 3   if a[j] < p:" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l4: " 4     swap(a[i], a[j]); i += 1" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l5: " 5 swap(a[i], a[hi])" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+}
+
+viz: "" {
+  grid-columns: 1
+  style.stroke: transparent
+  style.fill: transparent
+  grid-gap: 16
+  mk: "" {
+    grid-rows: 1
+    style.stroke: transparent
+    style.fill: transparent
+    grid-gap: 0
+    sp: "" { width: 284; height: 60; style.opacity: 0 }
+    pv: "pivot" {
+      shape: diamond
+      width: 100
+      height: 60
+      style.stroke: "#7c3aed"
+      style.stroke-width: 2
+    }
+  }
+  arr: "" {
+    grid-rows: 1
+    grid-gap: 0
+    c0: "3" { width: 64; height: 64 }
+    c1: "8" { width: 64; height: 64 }
+    c2: "2" { width: 64; height: 64 }
+    c3: "5" { width: 64; height: 64 }
+    c4: "1" { width: 64; height: 64 }
+    c5: "4" { width: 64; height: 64 }
+  }
+}
+
+viz.mk.pv -> viz.arr.c5: {
+  style.stroke: "#7c3aed"
+  style.stroke-width: 2
+}
+
+steps: {
+  "pivot 4 — walk j left→right; i marks the ≤-edge": {
+    viz.arr.c5.style.stroke: "#7c3aed"
+    viz.arr.c5.style.stroke-width: 3
+    code.l1.style.stroke: "#d97706"
+    code.l1.style.stroke-width: 2
+    code.l1.style.bold: true
+  }
+  "j=0: 3 ≤ 4 — joins the ≤-side, i=1": {
+    viz.arr.c0.style.stroke: "#16a34a"
+    code.l1.style.stroke: "#9ca3af"
+    code.l1.style.stroke-width: 1
+    code.l1.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+  }
+  "j=1: 8 > 4 — stays put, no swap": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+  }
+  "j=2: 2 ≤ 4 — swap 8↔2, i=2": {
+    viz.arr.c1.label: "2"
+    viz.arr.c1.style.stroke: "#16a34a"
+    viz.arr.c2.label: "8"
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+  }
+  "j=3: 5 > 4 — no swap": {
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+  }
+  "j=4: 1 ≤ 4 — swap 1↔8, i=3": {
+    viz.arr.c2.label: "1"
+    viz.arr.c2.style.stroke: "#16a34a"
+    viz.arr.c4.label: "8"
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+  }
+  "pivot → slot i=3: left ≤ 4, right > 4 — 4 is HOME": {
+    viz.arr.c3.label: "4"
+    viz.arr.c3.style.stroke: "#16a34a"
+    viz.arr.c3.style.stroke-width: 3
+    viz.arr.c3.style.font-color: "#7c3aed"
+    viz.arr.c5.label: "5"
+    viz.arr.c5.style.stroke: "#dc2626"
+    viz.arr.c5.style.stroke-width: 2
+    (viz.mk.pv -> viz.arr.c5)[0].style.stroke: "#9ca3af"
+    (viz.mk.pv -> viz.arr.c5)[0].style.stroke-dash: 4
+    code.l4.style.stroke: "#9ca3af"
+    code.l4.style.stroke-width: 1
+    code.l4.style.bold: false
+    code.l5.style.stroke: "#d97706"
+    code.l5.style.stroke-width: 2
+    code.l5.style.bold: true
+  }
+}
+```
+
 Then recurse on `[2]` and `[9 7]`. Each partition pass is O(n), and if the
 pivot lands near the middle each time, you halve the problem log n times:
 O(n log n), like merge sort, but with no extra array and a tight,
@@ -644,6 +1293,154 @@ then repair it locally until it holds again.
 tree complete). It may now be smaller than its parent — **sift up**: while
 it's smaller than its parent, swap with the parent. The path to the root
 has log n nodes, so at most log n swaps.
+
+Watch `push(1)` on a min-heap — the new value swaps upward until its parent is smaller:
+
+```d2
+steps: {
+  "push(1) — new value goes in the next free slot": {
+    grid-columns: 2
+    grid-gap: 40
+
+    panel: "" {
+      style.stroke: transparent
+      style.fill: transparent
+      grid-columns: 1
+      grid-gap: 28
+
+      code: "" {
+        grid-columns: 1
+        grid-gap: 0
+        l1: "push(x): a.append(x)" {
+          height: 30
+          style.stroke: "#d97706"
+          style.stroke-width: 2
+          style.bold: true
+          style.font: mono
+        }
+        l2: "i = len(a) - 1" {
+          height: 30
+          style.stroke: "#9ca3af"
+          style.font: mono
+        }
+        l3: "while i > 0 and a[i] < a[par]:" {
+          height: 30
+          style.stroke: "#9ca3af"
+          style.font: mono
+        }
+        l4: "  swap(a[i], a[par]); i = par" {
+          height: 30
+          style.stroke: "#9ca3af"
+          style.font: mono
+        }
+      }
+
+      arr: "" {
+        grid-rows: 1
+        grid-gap: 0
+        a0: "2" { width: 44; height: 44 }
+        a1: "4" { width: 44; height: 44 }
+        a2: "3" { width: 44; height: 44 }
+        a3: "8" { width: 44; height: 44 }
+        a4: "7" { width: 44; height: 44 }
+        a5: "9" { width: 44; height: 44 }
+        a6: "" { width: 44; height: 44; style.stroke-dash: 4 }
+      }
+    }
+
+    tree: "" {
+      style.stroke: transparent
+      style.fill: transparent
+      n0: "2" { shape: circle; width: 44; height: 44 }
+      n1: "4" { shape: circle; width: 44; height: 44 }
+      n2: "3" { shape: circle; width: 44; height: 44 }
+      n3: "8" { shape: circle; width: 44; height: 44 }
+      n4: "7" { shape: circle; width: 44; height: 44 }
+      n5: "9" { shape: circle; width: 44; height: 44 }
+      n6: "" { shape: circle; width: 44; height: 44; style.stroke-dash: 4 }
+      n0 -> n1
+      n0 -> n2
+      n1 -> n3
+      n1 -> n4
+      n2 -> n5
+      n2 -> n6
+    }
+  }
+  "1 sits below its parent 3 — heap rule broken?": {
+    panel.code.l1.style.stroke: "#9ca3af"
+    panel.code.l1.style.stroke-width: 1
+    panel.code.l1.style.bold: false
+    panel.code.l3.style.stroke: "#d97706"
+    panel.code.l3.style.stroke-width: 2
+    panel.code.l3.style.bold: true
+
+    tree.n6.label: "1"
+    tree.n6.style.stroke-dash: 0
+    tree.n6.style.stroke: "#d97706"
+    tree.n6.style.stroke-width: 3
+    panel.arr.a6.label: "1"
+    panel.arr.a6.style.stroke-dash: 0
+    panel.arr.a6.style.stroke: "#d97706"
+    panel.arr.a6.style.stroke-width: 3
+  }
+  "1 < 3 → swap with parent; 3 settles below": {
+    panel.code.l3.style.stroke: "#9ca3af"
+    panel.code.l3.style.stroke-width: 1
+    panel.code.l3.style.bold: false
+    panel.code.l4.style.stroke: "#d97706"
+    panel.code.l4.style.stroke-width: 2
+    panel.code.l4.style.bold: true
+
+    tree.n2.label: "1"
+    tree.n2.style.stroke: "#d97706"
+    tree.n2.style.stroke-width: 3
+    tree.n6.label: "3"
+    tree.n6.style.stroke: "#16a34a"
+    tree.n6.style.stroke-width: 2
+    panel.arr.a2.label: "1"
+    panel.arr.a2.style.stroke: "#d97706"
+    panel.arr.a2.style.stroke-width: 3
+    panel.arr.a6.label: "3"
+    panel.arr.a6.style.stroke: "#16a34a"
+    panel.arr.a6.style.stroke-width: 2
+  }
+  "1 < 2 → swap again; 1 reaches the root": {
+    tree.n0.label: "1"
+    tree.n0.style.stroke: "#d97706"
+    tree.n0.style.stroke-width: 3
+    tree.n2.label: "2"
+    tree.n2.style.stroke: "#16a34a"
+    tree.n2.style.stroke-width: 2
+    panel.arr.a0.label: "1"
+    panel.arr.a0.style.stroke: "#d97706"
+    panel.arr.a0.style.stroke-width: 3
+    panel.arr.a2.label: "2"
+    panel.arr.a2.style.stroke: "#16a34a"
+    panel.arr.a2.style.stroke-width: 2
+  }
+  "root is the minimum — O(log n) swaps, one per level": {
+    panel.code.l4.style.stroke: "#9ca3af"
+    panel.code.l4.style.stroke-width: 1
+    panel.code.l4.style.bold: false
+    panel.code.l3.style.stroke: "#d97706"
+    panel.code.l3.style.stroke-width: 2
+    panel.code.l3.style.bold: true
+
+    tree.n0.style.stroke: "#16a34a"
+    tree.n0.style.stroke-width: 2
+    tree.n1.style.stroke: "#16a34a"
+    tree.n3.style.stroke: "#16a34a"
+    tree.n4.style.stroke: "#16a34a"
+    tree.n5.style.stroke: "#16a34a"
+    panel.arr.a0.style.stroke: "#16a34a"
+    panel.arr.a0.style.stroke-width: 2
+    panel.arr.a1.style.stroke: "#16a34a"
+    panel.arr.a3.style.stroke: "#16a34a"
+    panel.arr.a4.style.stroke: "#16a34a"
+    panel.arr.a5.style.stroke: "#16a34a"
+  }
+}
+```
 
 **Pop**: the answer is the root, but removing the root would tear a hole
 in the middle. Instead, overwrite the root with the *last* element, shrink
@@ -913,6 +1710,122 @@ All three operations start the same way — hash, mod, walk the bucket:
   node; a list bucket makes it gentler, but the other pairs must survive
   untouched.)
 
+Watch `put("dot", 7)` landing on a shared bucket — scan every entry first (no match), then append:
+
+```d2
+direction: right
+
+code: "" {
+  grid-columns: 1
+  grid-gap: 0
+  l0: 'put("dot", 7)' {
+    shape: oval
+    height: 36
+    style.stroke: "#d97706"
+    style.stroke-width: 3
+    style.font: mono
+  }
+  l1: "idx = hash(k) % len(buckets)" {
+    height: 27
+    style.stroke: "#9ca3af"
+    style.font: mono
+  }
+  l2: "for node in buckets[idx]:" {
+    height: 27
+    style.stroke: "#9ca3af"
+    style.font: mono
+  }
+  l3: "  if node.key == k: update" {
+    height: 27
+    style.stroke: "#9ca3af"
+    style.font: mono
+  }
+  l4: "no match: append (k, v)" {
+    height: 27
+    style.stroke: "#9ca3af"
+    style.font: mono
+  }
+}
+
+buckets: {
+  shape: sql_table
+  style.font-size: 14
+  "0": "∅"
+  "1": "∅"
+  "2": "•"
+  "3": "∅"
+  "4": "∅"
+  "5": "∅"
+}
+
+chain: "" {
+  grid-rows: 1
+  grid-gap: 28
+  style.stroke: transparent
+  style.fill: transparent
+
+  e1: '("ada", 1)' { shape: oval; width: 108; height: 58 }
+  e2: '("bob", 4)' { shape: oval; width: 108; height: 58 }
+  e3: "" {
+    shape: oval
+    width: 108
+    height: 58
+    style.stroke-dash: 4
+    style.stroke: "#9ca3af"
+  }
+  nil: "∅" { shape: text; width: 30; height: 58 }
+
+  e1 -> e2
+  e2 -> e3
+  e3 -> nil
+}
+
+buckets -> chain: { style.opacity: 0 }
+buckets."2" -> chain.e1
+
+steps: {
+  'hash("dot") = 0x9c…4a — mod 6 → bucket 2': {
+    (buckets."2" -> chain.e1)[0].style.stroke: "#d97706"
+    (buckets."2" -> chain.e1)[0].style.stroke-width: 3
+    code.l1.style.stroke: "#d97706"
+    code.l1.style.stroke-width: 2
+    code.l1.style.bold: true
+  }
+  '"ada" ≠ "dot" — keep walking': {
+    chain.e1.style.stroke: "#d97706"
+    chain.e1.style.stroke-width: 3
+    code.l1.style.stroke: "#9ca3af"
+    code.l1.style.stroke-width: 1
+    code.l1.style.bold: false
+    code.l3.style.stroke: "#d97706"
+    code.l3.style.stroke-width: 2
+    code.l3.style.bold: true
+  }
+  '"bob" ≠ "dot" — keep walking': {
+    chain.e1.style.stroke: "#16a34a"
+    chain.e1.style.stroke-width: 2
+    chain.e2.style.stroke: "#d97706"
+    chain.e2.style.stroke-width: 3
+  }
+  'new entry chained at bucket 2 — len 3, load factor ↑': {
+    chain.e2.style.stroke: "#16a34a"
+    chain.e2.style.stroke-width: 2
+    chain.e3.label: '("dot", 7)'
+    chain.e3.style.stroke: "#16a34a"
+    chain.e3.style.stroke-width: 3
+    chain.e3.style.stroke-dash: 0
+    code.l0.style.stroke: "#16a34a"
+    code.l0.style.stroke-width: 2
+    code.l3.style.stroke: "#9ca3af"
+    code.l3.style.stroke-width: 1
+    code.l3.style.bold: false
+    code.l4.style.stroke: "#d97706"
+    code.l4.style.stroke-width: 2
+    code.l4.style.bold: true
+  }
+}
+```
+
 ## Load factor: your amortized argument returns
 
 Chains only stay short if there are enough buckets. The **load factor** —
@@ -1106,6 +2019,140 @@ while the queue isn't empty:
             enqueue v
 ```
 
+Watch the ripple — amber is the ring just discovered, green is finished:
+
+```d2
+direction: right
+
+panel: "" {
+  style.stroke: transparent
+  style.fill: transparent
+  grid-columns: 1
+  grid-gap: 12
+
+  code: "" {
+    grid-columns: 1
+    grid-gap: 0
+    l1: "q = [start]; mark start" {
+      height: 30
+      style.stroke: "#9ca3af"
+      style.font: mono
+    }
+    l2: "while q not empty:" {
+      height: 30
+      style.stroke: "#9ca3af"
+      style.font: mono
+    }
+    l3: "v = q.pop_front()" {
+      height: 30
+      style.stroke: "#9ca3af"
+      style.font: mono
+    }
+    l4: "for w in adj[v]:" {
+      height: 30
+      style.stroke: "#9ca3af"
+      style.font: mono
+    }
+    l5: "if unseen: mark, push w" {
+      height: 30
+      style.stroke: "#9ca3af"
+      style.font: mono
+    }
+  }
+
+  q: "q: ∅" {
+    shape: queue
+    height: 60
+  }
+}
+
+A: "A" { shape: circle; width: 56; height: 56 }
+B: "B" { shape: circle; width: 56; height: 56 }
+C: "C" { shape: circle; width: 56; height: 56 }
+D: "D" { shape: circle; width: 56; height: 56 }
+E: "E" { shape: circle; width: 56; height: 56 }
+F: "F" { shape: circle; width: 56; height: 56 }
+
+panel -- A: "" { style.opacity: 0 }
+
+A -- B
+A -- C
+B -- D
+C -- D
+C -- E
+D -- F
+E -- F
+
+steps: {
+  "start: mark A as seen the moment it is enqueued": {
+    A.style.stroke: "#d97706"
+    A.style.stroke-width: 3
+    panel.q.label: "q: A"
+    panel.code.l1.style.stroke: "#d97706"
+    panel.code.l1.style.stroke-width: 2
+    panel.code.l1.style.bold: true
+  }
+  "pop A — its unseen neighbors B, C enter at dist 1": {
+    A.style.stroke: "#16a34a"
+    A.style.stroke-width: 2
+    B.style.stroke: "#d97706"
+    B.style.stroke-width: 3
+    C.style.stroke: "#d97706"
+    C.style.stroke-width: 3
+    panel.q.label: "q: B C"
+    panel.code.l1.style.stroke: "#9ca3af"
+    panel.code.l1.style.stroke-width: 1
+    panel.code.l1.style.bold: false
+    panel.code.l3.style.stroke: "#d97706"
+    panel.code.l3.style.stroke-width: 2
+    panel.code.l3.style.bold: true
+  }
+  "pop B, then C — D and E marked and pushed, dist 2": {
+    B.style.stroke: "#16a34a"
+    B.style.stroke-width: 2
+    C.style.stroke: "#16a34a"
+    C.style.stroke-width: 2
+    D.style.stroke: "#d97706"
+    D.style.stroke-width: 3
+    E.style.stroke: "#d97706"
+    E.style.stroke-width: 3
+    panel.q.label: "q: D E"
+    panel.code.l3.style.stroke: "#9ca3af"
+    panel.code.l3.style.stroke-width: 1
+    panel.code.l3.style.bold: false
+    panel.code.l5.style.stroke: "#d97706"
+    panel.code.l5.style.stroke-width: 2
+    panel.code.l5.style.bold: true
+  }
+  "pop D, E — F pushed once; E sees F already marked": {
+    D.style.stroke: "#16a34a"
+    D.style.stroke-width: 2
+    E.style.stroke: "#16a34a"
+    E.style.stroke-width: 2
+    F.style.stroke: "#d97706"
+    F.style.stroke-width: 3
+    panel.q.label: "q: F"
+    panel.code.l5.style.stroke: "#9ca3af"
+    panel.code.l5.style.stroke-width: 1
+    panel.code.l5.style.bold: false
+    panel.code.l4.style.stroke: "#d97706"
+    panel.code.l4.style.stroke-width: 2
+    panel.code.l4.style.bold: true
+  }
+  "q empty — each dist is the fewest hops possible": {
+    F.style.stroke: "#16a34a"
+    F.style.stroke-width: 2
+    panel.q.label: "q: ∅"
+    panel.code.l4.style.stroke: "#9ca3af"
+    panel.code.l4.style.stroke-width: 1
+    panel.code.l4.style.bold: false
+    panel.code.l2.style.stroke: "#d97706"
+    panel.code.l2.style.stroke-width: 2
+    panel.code.l2.style.bold: true
+  }
+}
+```
+
 Two details carry the whole proof:
 
 - **Mark on enqueue, not on dequeue.** A vertex enters the queue the
@@ -1249,6 +2296,176 @@ while ready isn't empty:
     for each successor v of u:
         indegree[v] -= 1
         if indegree[v] == 0: add v to ready
+```
+
+Watch a full run on the build graph above — amber means ready (indegree 0), and proto is the only vertex that starts that way:
+
+```d2
+direction: right
+
+f: "" {
+  grid-columns: 1
+  grid-gap: 10
+  style.stroke: transparent
+  style.fill: transparent
+
+  panel: "" {
+    grid-rows: 1
+    grid-gap: 16
+    code: "" {
+      grid-columns: 1
+      grid-gap: 0
+    l1: " q = nodes with indeg 0" { height: 22 }
+    l2: " while q not empty:" { height: 22 }
+    l3: "   v = q.pop(); order += v" { height: 22 }
+    l4: "   for w in out[v]: indeg[w]-=1" { height: 22 }
+    l5: "     if indeg[w]==0: q.push(w)" { height: 22 }
+    l1.style.stroke: "#9ca3af"
+    l1.style.font: mono
+    l1.style.font-size: 13
+    l1.label.near: center-left
+    l2.style.stroke: "#9ca3af"
+    l2.style.font: mono
+    l2.style.font-size: 13
+    l2.label.near: center-left
+    l3.style.stroke: "#9ca3af"
+    l3.style.font: mono
+    l3.style.font-size: 13
+    l3.label.near: center-left
+    l4.style.stroke: "#9ca3af"
+    l4.style.font: mono
+    l4.style.font-size: 13
+    l4.label.near: center-left
+    l5.style.stroke: "#9ca3af"
+    l5.style.font: mono
+    l5.style.font-size: 13
+    l5.label.near: center-left
+    }
+    rq: "ready: [ proto ]" {
+      shape: queue
+      width: 240
+      height: 60
+    }
+  }
+
+  g: "" {
+    direction: right
+    proto: "proto (0)" { shape: package; width: 100; height: 52 }
+    db: "db (1)" { shape: package; width: 100; height: 52 }
+    api: "api (2)" { shape: package; width: 100; height: 52 }
+    web: "web (1)" { shape: package; width: 100; height: 52 }
+    cli: "cli (1)" { shape: package; width: 100; height: 52 }
+
+    proto -> db
+    proto -> api
+    db -> api
+    api -> web
+    api -> cli
+
+    proto.style.stroke: "#d97706"
+    proto.style.stroke-width: 3
+  }
+}
+
+f.panel.code.l1.style.stroke: "#d97706"
+f.panel.code.l1.style.stroke-width: 2
+f.panel.code.l1.style.bold: true
+
+steps: {
+  "order: [proto] — db is freed, api still waits": {
+    f.panel.code.l1.style.stroke: "#9ca3af"
+    f.panel.code.l1.style.stroke-width: 1
+    f.panel.code.l1.style.bold: false
+    f.panel.code.l3.style.stroke: "#d97706"
+    f.panel.code.l3.style.stroke-width: 2
+    f.panel.code.l3.style.bold: true
+    f.panel.rq.label: "ready: [ db ]"
+    f.g.proto.label: "proto ✓1"
+    f.g.proto.style.stroke: "#9ca3af"
+    f.g.proto.style.stroke-width: 2
+    f.g.proto.style.stroke-dash: 4
+    f.g.proto.style.font-color: "#9ca3af"
+    f.g.(proto -> db)[0].style.stroke-dash: 4
+    f.g.(proto -> db)[0].style.stroke: "#9ca3af"
+    f.g.(proto -> api)[0].style.stroke-dash: 4
+    f.g.(proto -> api)[0].style.stroke: "#9ca3af"
+    f.g.db.label: "db (0)"
+    f.g.db.style.stroke: "#d97706"
+    f.g.db.style.stroke-width: 3
+    f.g.api.label: "api (1)"
+  }
+  "order: [proto db] — api finally hits 0": {
+    f.panel.code.l3.style.stroke: "#9ca3af"
+    f.panel.code.l3.style.stroke-width: 1
+    f.panel.code.l3.style.bold: false
+    f.panel.code.l4.style.stroke: "#d97706"
+    f.panel.code.l4.style.stroke-width: 2
+    f.panel.code.l4.style.bold: true
+    f.panel.rq.label: "ready: [ api ]"
+    f.g.db.label: "db ✓2"
+    f.g.db.style.stroke: "#9ca3af"
+    f.g.db.style.stroke-width: 2
+    f.g.db.style.stroke-dash: 4
+    f.g.db.style.font-color: "#9ca3af"
+    f.g.(db -> api)[0].style.stroke-dash: 4
+    f.g.(db -> api)[0].style.stroke: "#9ca3af"
+    f.g.api.label: "api (0)"
+    f.g.api.style.stroke: "#d97706"
+    f.g.api.style.stroke-width: 3
+  }
+  "order: [proto db api] — web and cli BOTH ready": {
+    f.panel.code.l4.style.stroke: "#9ca3af"
+    f.panel.code.l4.style.stroke-width: 1
+    f.panel.code.l4.style.bold: false
+    f.panel.code.l5.style.stroke: "#d97706"
+    f.panel.code.l5.style.stroke-width: 2
+    f.panel.code.l5.style.bold: true
+    f.panel.rq.label: "ready: [ web, cli ]"
+    f.g.api.label: "api ✓3"
+    f.g.api.style.stroke: "#9ca3af"
+    f.g.api.style.stroke-width: 2
+    f.g.api.style.stroke-dash: 4
+    f.g.api.style.font-color: "#9ca3af"
+    f.g.(api -> web)[0].style.stroke-dash: 4
+    f.g.(api -> web)[0].style.stroke: "#9ca3af"
+    f.g.(api -> cli)[0].style.stroke-dash: 4
+    f.g.(api -> cli)[0].style.stroke: "#9ca3af"
+    f.g.web.label: "web (0)"
+    f.g.web.style.stroke: "#d97706"
+    f.g.web.style.stroke-width: 3
+    f.g.cli.label: "cli (0)"
+    f.g.cli.style.stroke: "#d97706"
+    f.g.cli.style.stroke-width: 3
+  }
+  "order: [proto db api web] — either was valid": {
+    f.panel.code.l5.style.stroke: "#9ca3af"
+    f.panel.code.l5.style.stroke-width: 1
+    f.panel.code.l5.style.bold: false
+    f.panel.code.l3.style.stroke: "#d97706"
+    f.panel.code.l3.style.stroke-width: 2
+    f.panel.code.l3.style.bold: true
+    f.panel.rq.label: "ready: [ cli ]"
+    f.g.web.label: "web ✓4"
+    f.g.web.style.stroke: "#9ca3af"
+    f.g.web.style.stroke-width: 2
+    f.g.web.style.stroke-dash: 4
+    f.g.web.style.font-color: "#9ca3af"
+  }
+  "order: [proto db api web cli] — queue empty, done": {
+    f.panel.code.l3.style.stroke: "#9ca3af"
+    f.panel.code.l3.style.stroke-width: 1
+    f.panel.code.l3.style.bold: false
+    f.panel.code.l2.style.stroke: "#d97706"
+    f.panel.code.l2.style.stroke-width: 2
+    f.panel.code.l2.style.bold: true
+    f.panel.rq.label: "ready: [ ]"
+    f.g.cli.label: "cli ✓5"
+    f.g.cli.style.stroke: "#9ca3af"
+    f.g.cli.style.stroke-width: 2
+    f.g.cli.style.stroke-dash: 4
+    f.g.cli.style.font-color: "#9ca3af"
+  }
+}
 ```
 
 Every vertex is processed once, every edge relaxed once: O(V + E).
