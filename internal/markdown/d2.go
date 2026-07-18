@@ -3,7 +3,10 @@ package markdown
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"regexp"
@@ -19,6 +22,7 @@ import (
 	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
 	"oss.terrastruct.com/d2/d2lib"
 	"oss.terrastruct.com/d2/d2renderers/d2svg"
+	"oss.terrastruct.com/d2/d2target"
 	"oss.terrastruct.com/d2/d2themes/d2themescatalog"
 	d2log "oss.terrastruct.com/d2/lib/log"
 	"oss.terrastruct.com/d2/lib/textmeasure"
@@ -39,6 +43,11 @@ const d2InfoString = "d2"
 
 // diagramPad is the SVG padding (px) around a diagram's bounding box.
 const diagramPad = 8
+
+// maxStepFrames caps how many frames a stepped diagram may have. The stepper
+// is pure CSS — assets/input.css carries one nth-of-type(:checked) rule per
+// frame index — so this constant and the rule count there must match.
+const maxStepFrames = 12
 
 // d2Logger discards d2's internal slog output; without a logger attached to
 // the context, d2 dumps debug traces to stderr and spams ingest logs.
@@ -131,36 +140,98 @@ func renderD2Block(w util.BufWriter, _ []byte, node ast.Node, entering bool) (as
 		return ast.WalkContinue, nil
 	}
 	block := node.(*d2Block)
-	light, dark, err := compileD2(block.source)
+	frames, err := compileD2(block.source)
 	if err != nil {
 		// Abort the whole render so ingest surfaces the bad diagram (with
 		// d2's own "line:col: message") rather than serving a page with a
 		// silently missing figure.
 		return ast.WalkStop, &DiagramError{Err: err}
 	}
-	_, _ = w.WriteString(`<div class="d2-diagram"><div class="d2-light">`)
-	_, _ = w.Write(light)
-	_, _ = w.WriteString(`</div><div class="d2-dark">`)
-	_, _ = w.Write(dark)
-	_, _ = w.WriteString(`</div></div>`)
+	if len(frames) == 1 {
+		writeDiagram(w, frames[0])
+		return ast.WalkContinue, nil
+	}
+	writeStepper(w, block.source, frames)
 	return ast.WalkContinue, nil
 }
 
-// compileD2 lays the diagram out once and renders it in a light and a dark
-// theme. Layout (the expensive step) is theme-independent, so the graph is
-// compiled once and only the colorizing Render runs per theme.
-func compileD2(src []byte) (light, dark []byte, err error) {
+// writeDiagram emits the light/dark SVG pair for one board. CSS in
+// assets/input.css shows whichever half matches the active theme.
+func writeDiagram(w util.BufWriter, f d2Frame) {
+	_, _ = w.WriteString(`<div class="d2-diagram"><div class="d2-light">`)
+	_, _ = w.Write(f.light)
+	_, _ = w.WriteString(`</div><div class="d2-dark">`)
+	_, _ = w.Write(f.dark)
+	_, _ = w.WriteString(`</div></div>`)
+}
+
+// writeStepper emits a click-through viewer for a multi-frame (D2 `steps:`)
+// diagram: one hidden radio input per frame plus Back/Next <label>s, so the
+// stepping is pure CSS (see .d2-steps in assets/input.css) — no client JS,
+// consistent with the rest of the render pipeline. The radio group name is
+// derived from the diagram source so output is deterministic across ingests.
+func writeStepper(w util.BufWriter, source []byte, frames []d2Frame) {
+	sum := sha256.Sum256(source)
+	id := "d2s-" + hex.EncodeToString(sum[:5])
+
+	_, _ = w.WriteString(`<div class="d2-steps">`)
+	for i := range frames {
+		checked := ""
+		if i == 0 {
+			checked = ` checked`
+		}
+		fmt.Fprintf(w, `<input type="radio" name="%s" id="%s-%d"%s>`, id, id, i, checked)
+	}
+	_, _ = w.WriteString(`<div class="d2-steps-frames">`)
+	for i, f := range frames {
+		_, _ = w.WriteString(`<div class="d2-steps-frame">`)
+		writeDiagram(w, f)
+		_, _ = w.WriteString(`<div class="d2-steps-nav">`)
+		if i > 0 {
+			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">&#8249; Back</label>`, id, i-1)
+		} else {
+			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">&#8249; Back</span>`)
+		}
+		fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, len(frames))
+		if f.name != "" {
+			fmt.Fprintf(w, ` &middot; <span class="d2-steps-name">%s</span>`, html.EscapeString(f.name))
+		}
+		_, _ = w.WriteString(`</span>`)
+		if i < len(frames)-1 {
+			fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">Next &#8250;</label>`, id, i+1)
+		} else {
+			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">Next &#8250;</span>`)
+		}
+		_, _ = w.WriteString(`</div></div>`)
+	}
+	_, _ = w.WriteString(`</div></div>`)
+}
+
+// d2Frame is one rendered board of a diagram: the same picture in the light
+// and dark theme, plus the board's name (the step key, used as a caption).
+type d2Frame struct {
+	name  string
+	light []byte
+	dark  []byte
+}
+
+// compileD2 compiles the diagram and renders every board in a light and a
+// dark theme. Layout (the expensive step) is theme-independent and happens
+// once in Compile; only the colorizing Render runs per theme. A plain diagram
+// yields one frame; a D2 `steps:` composition yields one frame per step (plus
+// the root board as the starting frame, when it has content of its own).
+func compileD2(src []byte) ([]d2Frame, error) {
 	ctx := d2log.With(context.Background(), d2Logger)
 
 	ruler, err := textmeasure.NewRuler()
 	if err != nil {
-		return nil, nil, fmt.Errorf("text ruler: %w", err)
+		return nil, fmt.Errorf("text ruler: %w", err)
 	}
 	layoutResolver := func(string) (d2graph.LayoutGraph, error) {
 		return d2dagrelayout.DefaultLayout, nil
 	}
 
-	lightOpts := &d2svg.RenderOpts{
+	baseOpts := &d2svg.RenderOpts{
 		Pad:         go2.Pointer(int64(diagramPad)),
 		ThemeID:     go2.Pointer(d2themescatalog.NeutralDefault.ID),
 		NoXMLTag:    go2.Pointer(true), // inline in an HTML page, not a standalone file
@@ -169,22 +240,63 @@ func compileD2(src []byte) (light, dark []byte, err error) {
 	diagram, _, err := d2lib.Compile(ctx, string(src), &d2lib.CompileOptions{
 		LayoutResolver: layoutResolver,
 		Ruler:          ruler,
-	}, lightOpts)
+	}, baseOpts)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	if len(diagram.Layers) > 0 || len(diagram.Scenarios) > 0 {
+		return nil, fmt.Errorf("layers/scenarios are not supported in lessons; use steps")
 	}
 
-	if light, err = d2svg.Render(diagram, lightOpts); err != nil {
-		return nil, nil, err
+	var boards []*d2target.Diagram
+	if !diagram.IsFolderOnly {
+		// The root board's own content is the starting frame; its name stays
+		// empty so the stepper shows no caption for it.
+		boards = append(boards, diagram)
+	}
+	for _, s := range diagram.Steps {
+		if len(s.Steps) > 0 || len(s.Layers) > 0 || len(s.Scenarios) > 0 {
+			return nil, fmt.Errorf("step %q: nested boards inside a step are not supported", s.Name)
+		}
+		boards = append(boards, s)
+	}
+	if len(boards) == 0 {
+		return nil, fmt.Errorf("diagram has no content")
+	}
+	if len(boards) > maxStepFrames {
+		return nil, fmt.Errorf("diagram has %d frames; the stepper supports at most %d", len(boards), maxStepFrames)
 	}
 
-	darkOpts := *lightOpts
-	darkOpts.ThemeID = go2.Pointer(d2themescatalog.DarkMauve.ID)
-	darkOpts.Salt = go2.Pointer("dark") // distinct CSS class prefix from the light SVG
-	if dark, err = d2svg.Render(diagram, &darkOpts); err != nil {
-		return nil, nil, err
+	frames := make([]d2Frame, 0, len(boards))
+	for i, b := range boards {
+		lightOpts := *baseOpts
+		darkOpts := *baseOpts
+		darkOpts.ThemeID = go2.Pointer(d2themescatalog.DarkMauve.ID)
+		if len(boards) == 1 {
+			// Preserve the pre-steps output byte for byte: light unsalted,
+			// dark salted so the two SVGs' CSS class prefixes differ.
+			darkOpts.Salt = go2.Pointer("dark")
+		} else {
+			// Per-frame salts: near-identical step boards could otherwise
+			// hash to the same CSS class prefix with different styles.
+			lightOpts.Salt = go2.Pointer(fmt.Sprintf("s%d", i))
+			darkOpts.Salt = go2.Pointer(fmt.Sprintf("s%ddark", i))
+		}
+		light, err := d2svg.Render(b, &lightOpts)
+		if err != nil {
+			return nil, err
+		}
+		dark, err := d2svg.Render(b, &darkOpts)
+		if err != nil {
+			return nil, err
+		}
+		name := b.Name
+		if i == 0 && !diagram.IsFolderOnly {
+			name = ""
+		}
+		frames = append(frames, d2Frame{name: name, light: sizeSVG(light), dark: sizeSVG(dark)})
 	}
-	return sizeSVG(light), sizeSVG(dark), nil
+	return frames, nil
 }
 
 // d2RootViewBox matches the root <svg>'s viewBox (always "0 0 W H"; the inner

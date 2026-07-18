@@ -55,6 +55,98 @@ can't grow in place (something else may live right after them in memory).
 You must allocate a *bigger* block, copy everything across, and abandon the
 old one.
 
+Click through the moment the block runs out of room — amber is the incoming value, dashed grey is freed memory:
+
+```d2
+direction: down
+
+old: "cap 4" {
+  grid-rows: 1
+  grid-gap: 0
+  c0: "5" { width: 64; height: 64 }
+  c1: "8" { width: 64; height: 64 }
+  c2: "3" { width: 64; height: 64 }
+  c3: "" { width: 64; height: 64; style.stroke-dash: 4 }
+}
+
+new: "cap 8" {
+  grid-rows: 1
+  grid-gap: 0
+  style.opacity: 0
+  c0: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c1: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c2: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c3: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c4: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c5: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c6: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+  c7: "" { width: 64; height: 64; style.stroke-dash: 4; style.opacity: 0 }
+}
+
+old -> new: { style.opacity: 0 }
+
+steps: {
+  "append(9): 9 takes the spare slot — len 4, cap 4": {
+    old.c3.label: "9"
+    old.c3.style.stroke: "#d97706"
+    old.c3.style.stroke-width: 3
+    old.c3.style.stroke-dash: 0
+  }
+  "append(2): no room — len 4 == cap 4": {
+    old.style.stroke: "#dc2626"
+    old.style.stroke-width: 3
+    old.c3.style.stroke-width: 2
+  }
+  "grow: allocate a new array with cap 8": {
+    new.style.opacity: 1
+    new.c0.style.opacity: 1
+    new.c1.style.opacity: 1
+    new.c2.style.opacity: 1
+    new.c3.style.opacity: 1
+    new.c4.style.opacity: 1
+    new.c5.style.opacity: 1
+    new.c6.style.opacity: 1
+    new.c7.style.opacity: 1
+  }
+  "copy all 4 elements into the new array": {
+    new.c0.label: "5"
+    new.c1.label: "8"
+    new.c2.label: "3"
+    new.c3.label: "9"
+    new.c0.style.stroke: "#16a34a"
+    new.c1.style.stroke: "#16a34a"
+    new.c2.style.stroke: "#16a34a"
+    new.c3.style.stroke: "#16a34a"
+    new.c0.style.stroke-dash: 0
+    new.c1.style.stroke-dash: 0
+    new.c2.style.stroke-dash: 0
+    new.c3.style.stroke-dash: 0
+    old.style.stroke: "#9ca3af"
+    old.style.stroke-dash: 4
+    old.style.stroke-width: 2
+    old.style.font-color: "#9ca3af"
+    old.c0.style.stroke: "#9ca3af"
+    old.c1.style.stroke: "#9ca3af"
+    old.c2.style.stroke: "#9ca3af"
+    old.c3.style.stroke: "#9ca3af"
+    old.c0.style.stroke-dash: 4
+    old.c1.style.stroke-dash: 4
+    old.c2.style.stroke-dash: 4
+    old.c3.style.stroke-dash: 4
+    old.c0.style.font-color: "#9ca3af"
+    old.c1.style.font-color: "#9ca3af"
+    old.c2.style.font-color: "#9ca3af"
+    old.c3.style.font-color: "#9ca3af"
+  }
+  "append(2) lands in slot 4 — len 5, cap 8": {
+    new.c4.label: "2"
+    new.c4.style.stroke: "#d97706"
+    new.c4.style.stroke-width: 3
+    new.c4.style.stroke-dash: 0
+  }
+}
+```
+
 ## Why doubling, and not +1
 
 How much bigger? This choice is the whole ballgame. Grow by one slot each
@@ -206,6 +298,67 @@ sorted prefix | next
 [ 3  5  7  9 ]            3 ≤ 5, drop 5 in the hole
 ```
 
+Click through a full run on `[3 7 5 1]` — amber is the element being placed, green the sorted prefix:
+
+```d2
+direction: right
+
+arr: "" {
+  grid-rows: 1
+  grid-gap: 0
+  c0: "3" { width: 64; height: 64 }
+  c1: "7" { width: 64; height: 64 }
+  c2: "5" { width: 64; height: 64 }
+  c3: "1" { width: 64; height: 64 }
+}
+
+steps: {
+  "key = 7: 3 ≤ 7, already in place": {
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.style.stroke: "#d97706"
+    arr.c1.style.stroke-width: 3
+  }
+  "key = 5: 7 > 5, so 7 shifts right": {
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.label: "→"
+    arr.c1.style.stroke: "#dc2626"
+    arr.c1.style.stroke-width: 3
+    arr.c2.label: "7"
+    arr.c2.style.stroke: "#d97706"
+    arr.c2.style.stroke-width: 3
+  }
+  "5 drops into the gap: [3 5 7] sorted": {
+    arr.c1.label: "5"
+    arr.c1.style.stroke: "#16a34a"
+    arr.c1.style.stroke-width: 2
+    arr.c2.style.stroke: "#16a34a"
+    arr.c2.style.stroke-width: 2
+  }
+  "key = 1: smaller than all three, all shift": {
+    arr.c1.label: "→"
+    arr.c2.label: "→"
+    arr.c3.label: "→"
+    arr.c1.style.stroke: "#dc2626"
+    arr.c2.style.stroke: "#dc2626"
+    arr.c3.style.stroke: "#dc2626"
+    arr.c3.style.stroke-width: 3
+  }
+  "1 lands at the front: [1 3 5 7], done": {
+    arr.c0.label: "1"
+    arr.c1.label: "3"
+    arr.c2.label: "5"
+    arr.c3.label: "7"
+    arr.c0.style.stroke: "#16a34a"
+    arr.c1.style.stroke: "#16a34a"
+    arr.c2.style.stroke: "#16a34a"
+    arr.c3.style.stroke: "#16a34a"
+    arr.c1.style.stroke-width: 2
+    arr.c2.style.stroke-width: 2
+    arr.c3.style.stroke-width: 2
+  }
+}
+```
+
 Thinking in invariants is the transferable skill here: every structure in
 this course (heap property, load factor, BFS frontier) is defined by an
 invariant its operations promise to preserve.
@@ -301,6 +454,107 @@ take 2 (4>2)  → out [1 2]
 take 3 (4>3)  → out [1 2 3]
 take 4 (4<8)  → out [1 2 3 4]
 take 8, then drain a's leftovers → [1 2 3 4 8 9]
+```
+
+Click through the merge of `[1 4 9]` and `[2 3 8]` — amber marks the pair under comparison, dashed grey the consumed cells:
+
+```d2
+direction: down
+
+m: "" {
+  grid-rows: 2
+  grid-gap: 24
+
+  lft: "left" {
+    grid-rows: 1
+    grid-gap: 0
+    c0: "1" { width: 64; height: 64 }
+    c1: "4" { width: 64; height: 64 }
+    c2: "9" { width: 64; height: 64 }
+  }
+
+  rgt: "right" {
+    grid-rows: 1
+    grid-gap: 0
+    c0: "2" { width: 64; height: 64 }
+    c1: "3" { width: 64; height: 64 }
+    c2: "8" { width: 64; height: 64 }
+  }
+
+  out: "out" {
+    grid-rows: 1
+    grid-gap: 0
+    c0: "" { width: 64; height: 64 }
+    c1: "" { width: 64; height: 64 }
+    c2: "" { width: 64; height: 64 }
+    c3: "" { width: 64; height: 64 }
+    c4: "" { width: 64; height: 64 }
+    c5: "" { width: 64; height: 64 }
+  }
+}
+
+steps: {
+  "compare 1 vs 2 → 1 wins, fills out[0]": {
+    m.lft.c0.style.stroke: "#d97706"
+    m.lft.c0.style.stroke-width: 3
+    m.lft.c0.style.stroke-dash: 4
+    m.lft.c0.style.font-color: "#9ca3af"
+    m.rgt.c0.style.stroke: "#d97706"
+    m.rgt.c0.style.stroke-width: 3
+    m.out.c0.label: "1"
+    m.out.c0.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 2 → 2 wins, fills out[1]": {
+    m.lft.c0.style.stroke: "#9ca3af"
+    m.lft.c0.style.stroke-width: 2
+    m.lft.c1.style.stroke: "#d97706"
+    m.lft.c1.style.stroke-width: 3
+    m.rgt.c0.style.stroke-dash: 4
+    m.rgt.c0.style.font-color: "#9ca3af"
+    m.out.c1.label: "2"
+    m.out.c1.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 3 → 3 wins, fills out[2]": {
+    m.rgt.c0.style.stroke: "#9ca3af"
+    m.rgt.c0.style.stroke-width: 2
+    m.rgt.c1.style.stroke: "#d97706"
+    m.rgt.c1.style.stroke-width: 3
+    m.rgt.c1.style.stroke-dash: 4
+    m.rgt.c1.style.font-color: "#9ca3af"
+    m.out.c2.label: "3"
+    m.out.c2.style.stroke: "#16a34a"
+  }
+  "compare 4 vs 8 → now 4 wins, fills out[3]": {
+    m.rgt.c1.style.stroke: "#9ca3af"
+    m.rgt.c1.style.stroke-width: 2
+    m.lft.c1.style.stroke-dash: 4
+    m.lft.c1.style.font-color: "#9ca3af"
+    m.rgt.c2.style.stroke: "#d97706"
+    m.rgt.c2.style.stroke-width: 3
+    m.out.c3.label: "4"
+    m.out.c3.style.stroke: "#16a34a"
+  }
+  "compare 9 vs 8 → 8 wins; right is empty": {
+    m.lft.c1.style.stroke: "#9ca3af"
+    m.lft.c1.style.stroke-width: 2
+    m.lft.c2.style.stroke: "#d97706"
+    m.lft.c2.style.stroke-width: 3
+    m.rgt.c2.style.stroke-dash: 4
+    m.rgt.c2.style.font-color: "#9ca3af"
+    m.out.c4.label: "8"
+    m.out.c4.style.stroke: "#16a34a"
+  }
+  "no compare left: 9 drains in — ≤ n compares": {
+    m.lft.c2.style.stroke: "#9ca3af"
+    m.lft.c2.style.stroke-width: 2
+    m.lft.c2.style.stroke-dash: 4
+    m.lft.c2.style.font-color: "#9ca3af"
+    m.rgt.c2.style.stroke: "#9ca3af"
+    m.rgt.c2.style.stroke-width: 2
+    m.out.c5.label: "9"
+    m.out.c5.style.stroke: "#16a34a"
+  }
+}
 ```
 
 The only subtlety is the end: one side runs dry, and the other side's
@@ -475,6 +729,58 @@ pivot = a[hi] = 4;  i = boundary of the "< pivot" zone
      ^ pivot placed: [<4] 4 [≥4]
 ```
 
+Click through Lomuto's sweep on `[3 8 2 5 1 4]` — violet is the pivot, green the growing ≤-pivot zone:
+
+```d2
+direction: right
+
+arr: "" {
+  grid-rows: 1
+  grid-gap: 0
+  c0: "3" { width: 64; height: 64 }
+  c1: "8" { width: 64; height: 64 }
+  c2: "2" { width: 64; height: 64 }
+  c3: "5" { width: 64; height: 64 }
+  c4: "1" { width: 64; height: 64 }
+  c5: "4" { width: 64; height: 64 }
+}
+
+steps: {
+  "pivot 4 — walk j left→right; i marks the ≤-edge": {
+    arr.c5.style.stroke: "#7c3aed"
+    arr.c5.style.stroke-width: 3
+  }
+  "j=0: 3 ≤ 4 — joins the ≤-side, i=1": {
+    arr.c0.style.stroke: "#16a34a"
+  }
+  "j=1: 8 > 4 — stays put, no swap": {
+    arr.c5.style.stroke: "#7c3aed"
+  }
+  "j=2: 2 ≤ 4 — swap 8↔2, i=2": {
+    arr.c1.label: "2"
+    arr.c1.style.stroke: "#16a34a"
+    arr.c2.label: "8"
+  }
+  "j=3: 5 > 4 — no swap": {
+    arr.c5.style.stroke: "#7c3aed"
+  }
+  "j=4: 1 ≤ 4 — swap 1↔8, i=3": {
+    arr.c2.label: "1"
+    arr.c2.style.stroke: "#16a34a"
+    arr.c4.label: "8"
+  }
+  "pivot → slot i=3: left ≤ 4, right > 4 — 4 is HOME": {
+    arr.c3.label: "4"
+    arr.c3.style.stroke: "#16a34a"
+    arr.c3.style.stroke-width: 3
+    arr.c3.style.font-color: "#7c3aed"
+    arr.c5.label: "5"
+    arr.c5.style.stroke: "#dc2626"
+    arr.c5.style.stroke-width: 2
+  }
+}
+```
+
 Then recurse on `[2]` and `[9 7]`. Each partition pass is O(n), and if the
 pivot lands near the middle each time, you halve the problem log n times:
 O(n log n), like merge sort, but with no extra array and a tight,
@@ -644,6 +950,58 @@ then repair it locally until it holds again.
 tree complete). It may now be smaller than its parent — **sift up**: while
 it's smaller than its parent, swap with the parent. The path to the root
 has log n nodes, so at most log n swaps.
+
+Click through `push(1)` on a min-heap — the new value swaps upward until its parent is smaller:
+
+```d2
+steps: {
+  "push(1) — new value goes in the next free slot": {
+    n0: "2" { width: 64; height: 64 }
+    n1: "4" { width: 64; height: 64 }
+    n2: "3" { width: 64; height: 64 }
+    n3: "8" { width: 64; height: 64 }
+    n4: "7" { width: 64; height: 64 }
+    n5: "9" { width: 64; height: 64 }
+    n6: "" { width: 64; height: 64; style.stroke-dash: 4 }
+    n0 -> n1
+    n0 -> n2
+    n1 -> n3
+    n1 -> n4
+    n2 -> n5
+    n2 -> n6
+  }
+  "1 sits below its parent 3 — heap rule broken?": {
+    n6.label: "1"
+    n6.style.stroke-dash: 0
+    n6.style.stroke: "#d97706"
+    n6.style.stroke-width: 3
+  }
+  "1 < 3 → swap with parent; 3 settles below": {
+    n2.label: "1"
+    n2.style.stroke: "#d97706"
+    n2.style.stroke-width: 3
+    n6.label: "3"
+    n6.style.stroke: "#16a34a"
+    n6.style.stroke-width: 2
+  }
+  "1 < 2 → swap again; 1 reaches the root": {
+    n0.label: "1"
+    n0.style.stroke: "#d97706"
+    n0.style.stroke-width: 3
+    n2.label: "2"
+    n2.style.stroke: "#16a34a"
+    n2.style.stroke-width: 2
+  }
+  "root is the minimum — O(log n) swaps, one per level": {
+    n0.style.stroke: "#16a34a"
+    n0.style.stroke-width: 2
+    n1.style.stroke: "#16a34a"
+    n3.style.stroke: "#16a34a"
+    n4.style.stroke: "#16a34a"
+    n5.style.stroke: "#16a34a"
+  }
+}
+```
 
 **Pop**: the answer is the root, but removing the root would tear a hole
 in the middle. Instead, overwrite the root with the *last* element, shrink
@@ -913,6 +1271,70 @@ All three operations start the same way — hash, mod, walk the bucket:
   node; a list bucket makes it gentler, but the other pairs must survive
   untouched.)
 
+Click through `put("dot", 7)` landing on a shared bucket — scan every entry first (no match), then append:
+
+```d2
+direction: right
+
+key: 'put("dot", 7)' {
+  shape: oval
+  style.stroke: "#d97706"
+  style.stroke-width: 3
+}
+
+buckets: {
+  shape: sql_table
+  "0": "∅"
+  "1": "∅"
+  "2": "•"
+  "3": "∅"
+  "4": "∅"
+  "5": "∅"
+}
+
+e1: '("ada", 1)' { width: 92; height: 64 }
+e2: '("bob", 4)' { width: 92; height: 64 }
+e3: "" {
+  width: 92
+  height: 64
+  style.stroke-dash: 4
+  style.stroke: "#9ca3af"
+}
+nil: "∅" { shape: text }
+
+buckets."2" -> e1
+e1 -> e2
+e2 -> e3
+e3 -> nil
+
+steps: {
+  'hash("dot") = 0x9c…4a — mod 6 → bucket 2': {
+    (buckets."2" -> e1)[0].style.stroke: "#d97706"
+    (buckets."2" -> e1)[0].style.stroke-width: 3
+  }
+  '"ada" ≠ "dot" — keep walking': {
+    e1.style.stroke: "#d97706"
+    e1.style.stroke-width: 3
+  }
+  '"bob" ≠ "dot" — keep walking': {
+    e1.style.stroke: "#16a34a"
+    e1.style.stroke-width: 2
+    e2.style.stroke: "#d97706"
+    e2.style.stroke-width: 3
+  }
+  'new entry chained at bucket 2 — len 3, load factor ↑': {
+    e2.style.stroke: "#16a34a"
+    e2.style.stroke-width: 2
+    e3.label: '("dot", 7)'
+    e3.style.stroke: "#16a34a"
+    e3.style.stroke-width: 3
+    e3.style.stroke-dash: 0
+    key.style.stroke: "#16a34a"
+    key.style.stroke-width: 2
+  }
+}
+```
+
 ## Load factor: your amortized argument returns
 
 Chains only stay short if there are enough buckets. The **load factor** —
@@ -1106,6 +1528,64 @@ while the queue isn't empty:
             enqueue v
 ```
 
+Click through the ripple — amber is the ring just discovered, green is finished:
+
+```d2
+direction: right
+
+A: "A" { width: 64; height: 64 }
+B: "B" { width: 64; height: 64 }
+C: "C" { width: 64; height: 64 }
+D: "D" { width: 64; height: 64 }
+E: "E" { width: 64; height: 64 }
+F: "F" { width: 64; height: 64 }
+
+A -- B
+A -- C
+B -- D
+C -- D
+C -- E
+D -- F
+E -- F
+
+steps: {
+  "BFS from A — queue: [A], dist(A)=0": {
+    A.style.stroke: "#d97706"
+    A.style.stroke-width: 3
+  }
+  "pop A, discover B and C — dist 1, queue: [B, C]": {
+    A.style.stroke: "#16a34a"
+    A.style.stroke-width: 2
+    B.style.stroke: "#d97706"
+    B.style.stroke-width: 3
+    C.style.stroke: "#d97706"
+    C.style.stroke-width: 3
+  }
+  "pop B then C — D and E at dist 2, queue: [D, E]": {
+    B.style.stroke: "#16a34a"
+    B.style.stroke-width: 2
+    C.style.stroke: "#16a34a"
+    C.style.stroke-width: 2
+    D.style.stroke: "#d97706"
+    D.style.stroke-width: 3
+    E.style.stroke: "#d97706"
+    E.style.stroke-width: 3
+  }
+  "pop D, E — F at dist 3, queue: [F]": {
+    D.style.stroke: "#16a34a"
+    D.style.stroke-width: 2
+    E.style.stroke: "#16a34a"
+    E.style.stroke-width: 2
+    F.style.stroke: "#d97706"
+    F.style.stroke-width: 3
+  }
+  "queue empty — every dist is the SHORTEST hop count": {
+    F.style.stroke: "#16a34a"
+    F.style.stroke-width: 2
+  }
+}
+```
+
 Two details carry the whole proof:
 
 - **Mark on enqueue, not on dequeue.** A vertex enters the queue the
@@ -1249,6 +1729,88 @@ while ready isn't empty:
     for each successor v of u:
         indegree[v] -= 1
         if indegree[v] == 0: add v to ready
+```
+
+Click through a full run on the build graph above — amber means ready (indegree 0), and proto is the only vertex that starts that way:
+
+```d2
+direction: right
+
+proto: "proto (0)" { width: 112; height: 64 }
+db: "db (1)" { width: 112; height: 64 }
+api: "api (2)" { width: 112; height: 64 }
+web: "web (1)" { width: 112; height: 64 }
+cli: "cli (1)" { width: 112; height: 64 }
+
+proto -> db
+proto -> api
+db -> api
+api -> web
+api -> cli
+
+proto.style.stroke: "#d97706"
+proto.style.stroke-width: 3
+
+steps: {
+  "order: [proto] — db is freed, api still waits": {
+    proto.label: "proto ✓1"
+    proto.style.stroke: "#9ca3af"
+    proto.style.stroke-width: 2
+    proto.style.stroke-dash: 4
+    proto.style.font-color: "#9ca3af"
+    (proto -> db)[0].style.stroke-dash: 4
+    (proto -> db)[0].style.stroke: "#9ca3af"
+    (proto -> api)[0].style.stroke-dash: 4
+    (proto -> api)[0].style.stroke: "#9ca3af"
+    db.label: "db (0)"
+    db.style.stroke: "#d97706"
+    db.style.stroke-width: 3
+    api.label: "api (1)"
+  }
+  "order: [proto db] — api finally hits 0": {
+    db.label: "db ✓2"
+    db.style.stroke: "#9ca3af"
+    db.style.stroke-width: 2
+    db.style.stroke-dash: 4
+    db.style.font-color: "#9ca3af"
+    (db -> api)[0].style.stroke-dash: 4
+    (db -> api)[0].style.stroke: "#9ca3af"
+    api.label: "api (0)"
+    api.style.stroke: "#d97706"
+    api.style.stroke-width: 3
+  }
+  "order: [proto db api] — web and cli BOTH ready": {
+    api.label: "api ✓3"
+    api.style.stroke: "#9ca3af"
+    api.style.stroke-width: 2
+    api.style.stroke-dash: 4
+    api.style.font-color: "#9ca3af"
+    (api -> web)[0].style.stroke-dash: 4
+    (api -> web)[0].style.stroke: "#9ca3af"
+    (api -> cli)[0].style.stroke-dash: 4
+    (api -> cli)[0].style.stroke: "#9ca3af"
+    web.label: "web (0)"
+    web.style.stroke: "#d97706"
+    web.style.stroke-width: 3
+    cli.label: "cli (0)"
+    cli.style.stroke: "#d97706"
+    cli.style.stroke-width: 3
+  }
+  "order: [proto db api web] — either was valid": {
+    web.label: "web ✓4"
+    web.style.stroke: "#9ca3af"
+    web.style.stroke-width: 2
+    web.style.stroke-dash: 4
+    web.style.font-color: "#9ca3af"
+  }
+  "order: [proto db api web cli] — edges forward": {
+    cli.label: "cli ✓5"
+    cli.style.stroke: "#9ca3af"
+    cli.style.stroke-width: 2
+    cli.style.stroke-dash: 4
+    cli.style.font-color: "#9ca3af"
+  }
+}
 ```
 
 Every vertex is processed once, every edge relaxed once: O(V + E).

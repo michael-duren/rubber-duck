@@ -116,6 +116,40 @@ Conventions used in `build-a-hashmap-c.md` (reuse them for consistency):
 | a freed / gone node  | `style.stroke-dash: 4; style.font-color: "#9ca3af"` (grey)  |
 | an "after" pointer   | edge `style.stroke-dash: 4` (dashed), red if it's a rewrite |
 
+## Stepped (click-through) diagrams
+
+A ```d2 block using D2's native `steps:` composition renders as a
+**click-through stepper**: one SVG frame per board, with CSS-only Back/Next
+buttons (hidden radio inputs — no JS; see `.d2-steps` in `assets/input.css`).
+Use it whenever the point is *how an algorithm proceeds* (a partition sweep, a
+sift-up, BFS rings) rather than a static structure.
+
+```d2
+direction: right
+arr: "…starting state…"
+steps: {
+  "compare 5 and 3": { arr.style.stroke: "#dc2626" }
+  "swap":            { ... }
+}
+```
+
+- The **root board** (content above `steps:`) is frame 1 — the starting
+  state. Each step **inherits cumulatively** from the previous frame and
+  states only the delta.
+- The **step key becomes the frame's caption** (shown next to the "2 / 5"
+  counter) — write keys as short human phrases: `"compare 5 and 3"`, not `s2`.
+- **Keep the node/edge structure identical across steps; change only styles
+  and labels.** Same structure → same layout → frames don't jump around when
+  the reader clicks through. Adding/removing nodes mid-sequence relayouts
+  the whole frame and everything shifts.
+- Max **12 frames** (`maxStepFrames` in `internal/markdown/d2.go`); ingest
+  errors above that. 4–8 is the sweet spot.
+- Every frame obeys the same sizing caps as a static diagram; `preview.sh`
+  writes numbered PNG pairs (`light-1.png` …) — **read every frame** in at
+  least one theme, and frame 1 in both.
+- `layers:` / `scenarios:` are rejected at ingest; only `steps:` is
+  supported in lessons.
+
 ## D2 idioms you'll actually use
 
 - **Struct / array / link-cell:** `sql_table`.

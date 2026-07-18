@@ -202,6 +202,92 @@
 	display: block;
 }
 
+/* ---- stepped diagrams (D2 `steps:`) --------------------------------- */
+/* A multi-frame diagram renders as hidden radio inputs followed by one
+   .d2-steps-frame per frame; the Back/Next <label>s check the neighboring
+   radio, and the :checked rules below show exactly one frame. Pure CSS —
+   lesson HTML carries no JS. The frame cap here must match maxStepFrames
+   in internal/markdown/d2.go. */
+.d2-steps > input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+	width: 0;
+	height: 0;
+}
+.d2-steps-frame {
+	display: none;
+}
+/* prettier-ignore */
+.d2-steps > input:nth-of-type(1):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(1),
+.d2-steps > input:nth-of-type(2):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(2),
+.d2-steps > input:nth-of-type(3):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(3),
+.d2-steps > input:nth-of-type(4):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(4),
+.d2-steps > input:nth-of-type(5):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(5),
+.d2-steps > input:nth-of-type(6):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(6),
+.d2-steps > input:nth-of-type(7):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(7),
+.d2-steps > input:nth-of-type(8):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(8),
+.d2-steps > input:nth-of-type(9):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(9),
+.d2-steps > input:nth-of-type(10):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(10),
+.d2-steps > input:nth-of-type(11):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(11),
+.d2-steps > input:nth-of-type(12):checked ~ .d2-steps-frames > .d2-steps-frame:nth-child(12) {
+	display: block;
+}
+/* Nav sits tight under the figure; the .d2-diagram inside a frame keeps
+   its own top margin but hands the bottom one to the nav row. */
+.d2-steps-frame > .d2-diagram {
+	margin-bottom: 0.25rem;
+}
+.d2-steps-nav {
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+}
+.d2-steps-btn {
+	cursor: pointer;
+	user-select: none;
+	padding: 0.125rem 0.625rem;
+	border: 1px solid var(--color-emerald-600);
+	color: var(--color-emerald-700);
+}
+.d2-steps-btn:hover {
+	background: var(--color-emerald-600);
+	color: #ffffff;
+}
+.dark .d2-steps-btn {
+	border-color: var(--color-emerald-500);
+	color: var(--color-emerald-400);
+}
+.dark .d2-steps-btn:hover {
+	background: var(--color-emerald-500);
+	color: #000000;
+}
+/* First frame's Back / last frame's Next: rendered as an inert span so the
+   row doesn't jump, dimmed to read as disabled. */
+.d2-steps-btn-off,
+.d2-steps-btn-off:hover,
+.dark .d2-steps-btn-off,
+.dark .d2-steps-btn-off:hover {
+	cursor: default;
+	opacity: 0.35;
+	background: transparent;
+	border-color: var(--color-gray-500);
+	color: var(--color-gray-500);
+}
+.d2-steps-count {
+	color: var(--color-gray-500);
+}
+.d2-steps-name {
+	color: var(--color-gray-600);
+}
+.dark .d2-steps-name {
+	color: var(--color-gray-400);
+}
+
 /* Idle terminal cursor (the ▊ in the search prompt). */
 @keyframes tui-blink {
 	50% {
