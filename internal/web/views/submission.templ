@@ -85,7 +85,10 @@ templ Profile(user *domain.User, scores []domain.CourseScore, stats domain.UserS
 				<h1 class="text-3xl font-bold">{ user.Username }</h1>
 				@profileDuck()
 			</div>
-			<a href="/settings" class="text-sm text-slate-500 hover:underline dark:text-slate-400">Change password</a>
+			<div class="flex items-center gap-4">
+				<a href="/proposals?mine=1" class="text-sm text-slate-500 hover:underline dark:text-slate-400">My proposals</a>
+				<a href="/settings" class="text-sm text-slate-500 hover:underline dark:text-slate-400">Change password</a>
+			</div>
 		</div>
 		<div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
 			@statTile(fmt.Sprint(totalEarned(scores)), "points earned")

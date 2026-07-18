@@ -54,8 +54,11 @@ var commands = []cmdHelp{
 		usage:   "duck pull <course>/<language> [--base URL]",
 		long: "Scaffolds a course variant into ./<course>-<language>/, one\n" +
 			"subdirectory per challenge holding the starter code and its test\n" +
-			"file (plus a go.mod for Go). A .duck-course.json is written at the\n" +
-			"root so `duck test` and `duck submit` work from anywhere in the\n" +
+			"file (plus a go.mod for Go). Directories are prefixed with their\n" +
+			"lesson number (\"03-merge\"; \"05a-min-heap\"/\"05b-heapsort\" when a\n" +
+			"lesson has several; \"final-…\" for the final challenge) so a\n" +
+			"listing sorts in course order. A .duck-course.json is written at\n" +
+			"the root so `duck test` and `duck submit` work from anywhere in the\n" +
 			"tree. Challenges that already exist locally are skipped, so pulling\n" +
 			"again never clobbers work in progress.",
 		flags: []flagHelp{baseFlag},
@@ -73,7 +76,8 @@ var commands = []cmdHelp{
 		long: "Runs a challenge's tests on your machine using the native\n" +
 			"toolchain (go, python3, or cc) — no Docker, no network. Run it from\n" +
 			"anywhere inside a pulled course tree. With no slug it runs every\n" +
-			"challenge; with a slug it runs just that one. Each run is bounded by\n" +
+			"challenge; with a slug (or its directory name — \"merge\" and\n" +
+			"\"03-merge\" both work) it runs just that one. Each run is bounded by\n" +
 			"a 30s timeout and reports PASS, FAIL, or TIMEOUT with the test\n" +
 			"output.",
 		examples: []example{
@@ -88,10 +92,12 @@ var commands = []cmdHelp{
 		usage:   "duck submit <challenge-slug> [--remote]",
 		long: "Local-first grading: runs the challenge's tests on your machine,\n" +
 			"submits the code together with the claimed pass/fail verdict, and\n" +
-			"prints the result immediately. The server re-grades in the\n" +
-			"background as an audit nobody waits on. Requires a saved token (see\n" +
-			"`duck auth login`). If the language's toolchain isn't installed, submit\n" +
-			"automatically falls back to synchronous server grading.",
+			"prints the result immediately. The challenge can be named by slug\n" +
+			"or by its pulled directory (\"merge\" and \"03-merge\" both work). The\n" +
+			"server re-grades in the background as an audit nobody waits on.\n" +
+			"Requires a saved token (see `duck auth login`). If the language's\n" +
+			"toolchain isn't installed, submit automatically falls back to\n" +
+			"synchronous server grading.",
 		flags: []flagHelp{
 			{"--remote", "skip the local run; grade on the server and wait for the result"},
 		},
@@ -101,12 +107,51 @@ var commands = []cmdHelp{
 		},
 	},
 	{
+		name:    "propose",
+		title:   "duck propose",
+		summary: "Submit a course markdown file as a proposal for review",
+		usage:   "duck propose [file] [--title T] [--summary S] [--base URL]",
+		long: "Lints the file locally, then submits it as a proposal — course\n" +
+			"changes are reviewed by the community and publish once they collect\n" +
+			"enough approvals (or one admin approval). The course and language\n" +
+			"come from the document's frontmatter, so this works for edits to\n" +
+			"existing courses and for brand-new ones alike. Re-running propose on\n" +
+			"the same file updates your open proposal (which resets any approvals\n" +
+			"it had). With no file argument it uses the single sidecar-tracked\n" +
+			"file in the current directory (see `duck educator pull`). Requires a\n" +
+			"saved token (see `duck auth login`).",
+		flags: []flagHelp{
+			baseFlag,
+			{"--title T", "proposal title (default: \"Update <course>/<language>\")"},
+			{"--summary S", "what changed and why — shown to reviewers"},
+		},
+		examples: []example{
+			{"duck propose", "propose the pulled file in this directory"},
+			{"duck propose intro-to-go-go.md --summary \"fix typos\"", "propose a specific file"},
+		},
+	},
+	{
+		name:    "proposals",
+		title:   "duck proposals",
+		summary: "List your proposals and their review status",
+		usage:   "duck proposals [status <id>] [--base URL]",
+		long: "Lists your proposals — id, status, approvals so far, and whether\n" +
+			"one needs a rebase because the course changed underneath it.\n" +
+			"`duck proposals status <id>` shows a single proposal. Reviewing and\n" +
+			"approving happen on the website's /proposals pages.",
+		flags: []flagHelp{baseFlag},
+		examples: []example{
+			{"duck proposals", "list your proposals"},
+			{"duck proposals status 12", "show proposal #12"},
+		},
+	},
+	{
 		name:    "auth",
 		title:   "duck auth",
 		summary: "Manage authentication: log in and check token status",
 		usage:   "duck auth <login|status> [args]",
 		long: "Authentication for the commands that write to the server (`duck\n" +
-			"submit`, all of `duck educator`). `login` mints a token and saves it\n" +
+			"submit`, `duck propose`). `login` mints a token and saves it\n" +
 			"to ~/.config/duck/token; `status` shows which token duck would send\n" +
 			"— DUCK_TOKEN beats the token file when both exist — and whether the\n" +
 			"server accepts it. When a submit says \"unauthorized\", start with\n" +
@@ -157,21 +202,19 @@ var commands = []cmdHelp{
 	{
 		name:    "educator",
 		title:   "duck educator",
-		summary: "Author a course: pull, lint, and push its markdown (alias: ed)",
-		usage:   "duck educator <pull|push|lint> [args]",
-		long: "Author-side workflow for course content. A course variant is a\n" +
-			"single markdown document; these commands round-trip it with the\n" +
-			"server. `pull` fetches the markdown plus a .meta.json sidecar that\n" +
-			"records its version; you edit locally; `lint` validates it without\n" +
-			"the server; `push` sends it back, using the recorded version for\n" +
-			"optimistic concurrency so you can't silently overwrite someone\n" +
-			"else's changes. `pull` and `push` need a saved token (see\n" +
-			"`duck auth login`); `lint` runs entirely offline.\n" +
+		summary: "Author a course: pull and lint its markdown (alias: ed)",
+		usage:   "duck educator <pull|lint> [args]",
+		long: "Author-side helpers for course content. A course variant is a\n" +
+			"single markdown document. `pull` fetches the markdown plus a\n" +
+			".meta.json sidecar recording where it came from; you edit locally;\n" +
+			"`lint` validates it without the server. To get your changes\n" +
+			"published, submit them for review with `duck propose` (the old\n" +
+			"`educator push`, which published directly, is retired).\n" +
 			"`ed` is an accepted alias for `educator`.",
 		examples: []example{
 			{"duck educator pull intro-to-go/go", "fetch the Go variant's markdown to edit"},
 			{"duck ed lint", "validate the pulled file in the current directory"},
-			{"duck ed push", "push your edits back to the server"},
+			{"duck propose", "submit your edits for review"},
 		},
 		subs: []cmdHelp{
 			{
@@ -205,22 +248,6 @@ var commands = []cmdHelp{
 				examples: []example{
 					{"duck educator lint", "lint the pulled file in this directory"},
 					{"duck educator lint intro-to-go-go.md", "lint a specific file"},
-				},
-			},
-			{
-				name:    "push",
-				title:   "duck educator push",
-				summary: "Lint, then upload a course markdown file back to the server",
-				usage:   "duck educator push [file]",
-				long: "Lints the file locally, then PUTs it back using the sidecar's\n" +
-					"recorded version for optimistic concurrency. If someone changed\n" +
-					"the variant since you pulled, the push is rejected and duck tells\n" +
-					"you how to reconcile. On success the sidecar's version is bumped\n" +
-					"to match. With no file argument it pushes the single\n" +
-					"sidecar-tracked file in the current directory.",
-				examples: []example{
-					{"duck educator push", "push the pulled file in this directory"},
-					{"duck educator push intro-to-go-go.md", "push a specific file"},
 				},
 			},
 		},

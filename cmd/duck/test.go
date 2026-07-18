@@ -88,9 +88,13 @@ func testCmd(args []string) error {
 		return err
 	}
 
-	var slugs []string
+	var dirs []string
 	if len(args) == 1 {
-		slugs = []string{args[0]}
+		dir, _, err := resolveChallenge(root, args[0])
+		if err != nil {
+			return err
+		}
+		dirs = []string{dir}
 	} else {
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -98,22 +102,17 @@ func testCmd(args []string) error {
 		}
 		for _, e := range entries {
 			if e.IsDir() {
-				slugs = append(slugs, e.Name())
+				dirs = append(dirs, e.Name())
 			}
 		}
 	}
-	if len(slugs) == 0 {
+	if len(dirs) == 0 {
 		return fmt.Errorf("no challenges found under %s", root)
 	}
 
 	failed := false
-	for _, slug := range slugs {
-		dir := filepath.Join(root, slug)
-		if _, err := os.Stat(dir); err != nil {
-			return fmt.Errorf("no such challenge dir %s", dir)
-		}
-
-		res, err := runChallenge(dir, meta.Language)
+	for _, name := range dirs {
+		res, err := runChallenge(filepath.Join(root, name), meta.Language)
 		if err != nil {
 			return err
 		}
@@ -126,7 +125,7 @@ func testCmd(args []string) error {
 			status = "FAIL"
 			failed = true
 		}
-		fmt.Printf("=== %s: %s ===\n%s\n", slug, status, res.output)
+		fmt.Printf("=== %s: %s ===\n%s\n", name, status, res.output)
 	}
 	if failed {
 		return fmt.Errorf("one or more challenges failed")

@@ -3,6 +3,7 @@ package ingest
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -153,6 +154,16 @@ func (p *docWalker) initChallenge(h *ast.Heading, prefix string, line int) {
 	if p.challenge.Slug == "" {
 		p.probs = append(p.probs, Problem{line, "challenge is missing an {#slug} attribute"})
 	}
+	// A slug shaped like a pull ordering prefix would strip back to the
+	// wrong slug on the learner's machine. The final challenge is exempt
+	// from the "final-" shape only: its directory gets another "final-"
+	// prepended, which still strips back correctly, and capstones are
+	// naturally named that way (final-duckos, final-editor, …).
+	if slug := p.challenge.Slug; OrderingPrefixLen(slug) > 0 &&
+		(p.challenge != &p.res.Final || !strings.HasPrefix(slug, "final-")) {
+		p.probs = append(p.probs, Problem{line, fmt.Sprintf(
+			"challenge slug %q is shaped like a `duck pull` ordering prefix (\"final-\", or two-plus digits and a dash) and would not map back to its directory — rename it", slug)})
+	}
 	if p.challenge.Points <= 0 {
 		p.probs = append(p.probs, Problem{line, "challenge needs a positive points=N attribute"})
 	}
@@ -198,6 +209,14 @@ func (p *docWalker) flushSection(stop int) {
 	p.contentDst = nil
 }
 
+// slugRe constrains the frontmatter identity fields. course and language
+// become filesystem names (courses/<course>-<language>.md, written by
+// scripts/export-courses.sh in a workflow with push rights) and URL path
+// segments, so anything outside lowercase kebab-case — path separators
+// especially — must be rejected here at the document contract, not
+// re-checked by every consumer.
+var slugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
 func checkFrontmatter(fm Frontmatter) []Problem {
 	var probs []Problem
 	need := []struct{ v, name string }{
@@ -206,6 +225,12 @@ func checkFrontmatter(fm Frontmatter) []Problem {
 	for _, f := range need {
 		if strings.TrimSpace(f.v) == "" {
 			probs = append(probs, Problem{1, "frontmatter is missing required field " + strconv.Quote(f.name)})
+		}
+	}
+	for _, f := range []struct{ v, name string }{{fm.Course, "course"}, {fm.Language, "language"}} {
+		if strings.TrimSpace(f.v) != "" && !slugRe.MatchString(f.v) {
+			probs = append(probs, Problem{1, fmt.Sprintf(
+				"frontmatter field %q must be lowercase letters, numbers, and hyphens (got %q)", f.name, f.v)})
 		}
 	}
 	return probs

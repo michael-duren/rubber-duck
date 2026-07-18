@@ -57,6 +57,39 @@ func TestUsers(t *testing.T) {
 	if _, _, err := s.UserByUsername(ctx, "nobody"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("missing user err = %v, want ErrNotFound", err)
 	}
+
+	// Roles: everyone starts as a regular user; promote flips it everywhere
+	// a user is loaded (login lookup shown here; sessions/tokens share the row).
+	if u.Role != domain.RoleUser || u.IsAdmin() {
+		t.Errorf("new user role = %q, want %q", u.Role, domain.RoleUser)
+	}
+	if err := s.PromoteUser(ctx, "alice", domain.RoleAdmin); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	got, _, err = s.UserByUsername(ctx, "alice")
+	if err != nil || !got.IsAdmin() {
+		t.Errorf("promoted user = %+v, %v; want admin", got, err)
+	}
+	if err := s.PromoteUser(ctx, "nobody", domain.RoleAdmin); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("promote missing user err = %v, want ErrNotFound", err)
+	}
+
+	// The promoted role must reach the request-time loaders too — they are
+	// what actually gates admin review powers.
+	_, sessHash := auth.NewSessionToken()
+	if err := s.CreateSession(ctx, sessHash, u.ID, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if got, err := s.UserBySession(ctx, sessHash); err != nil || !got.IsAdmin() {
+		t.Errorf("UserBySession after promote = %+v, %v; want admin", got, err)
+	}
+	token, tokHash := auth.NewUserToken()
+	if _, err := s.CreateUserToken(ctx, u.ID, "cli", tokHash); err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	if got, err := s.UserByToken(ctx, auth.HashToken(token)); err != nil || !got.IsAdmin() {
+		t.Errorf("UserByToken after promote = %+v, %v; want admin", got, err)
+	}
 }
 
 func TestSessions(t *testing.T) {
@@ -100,25 +133,6 @@ func TestSessions(t *testing.T) {
 	}
 	if _, err := s.UserBySession(ctx, hash); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("deleted session err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestAPIKeys(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-
-	key, hash := auth.NewAPIKey()
-	if _, err := s.CreateAPIKey(ctx, "test", hash); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	ok, err := s.APIKeyValid(ctx, auth.HashToken(key))
-	if err != nil || !ok {
-		t.Errorf("valid = %v, %v; want true", ok, err)
-	}
-	ok, err = s.APIKeyValid(ctx, auth.HashToken("gc_wrong"))
-	if err != nil || ok {
-		t.Errorf("invalid key = %v, %v; want false", ok, err)
 	}
 }
 

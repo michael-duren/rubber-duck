@@ -6,14 +6,23 @@ Working autonomously on issues? Read AGENTS.md for the loop protocol.
 
 ## Architecture (one paragraph)
 
-Markdown is the source of truth for courses: agents PUT one markdown doc
-per course×language to `/api/v1` (bearer key), `internal/ingest` parses it
-(frontmatter + heading conventions, line-numbered validation) into Postgres
-via `internal/store`. `internal/web` renders templ pages; challenge
-submissions are graded by `internal/grader` implementations — `dockergrader`
-locally (docker run, tar over stdin), `cloudrungrader` in prod (Cloud Run
-Jobs + GCS signed URLs, result file's first line = test exit code). Core
-logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
+The database is the source of truth for courses; `courses/*.md` is a mirror
+synced FROM prod by `.github/workflows/course-sync.yml` (public
+`/api/v1/export` → auto-merging PR). Course changes go through the human
+proposal workflow: any user proposes a full course markdown doc (web editor
+or `duck propose`), the community reviews on `/proposals`, and it publishes
+at `GC_APPROVAL_THRESHOLD` approvals (default 3) or one admin approval
+(admins may self-approve; admin reject closes). `internal/ingest` parses
+documents (frontmatter + heading conventions, line-numbered validation)
+into Postgres via `internal/store`; `store.PublishProposal` wraps the same
+`upsertVariantTx` every publish uses, with the proposal's `base_version` as
+the optimistic-concurrency check ("needs rebase" on conflict).
+`internal/web` renders templ pages (proposal diffs via `internal/diff`,
+hand-rolled patience diff); challenge submissions are graded by
+`internal/grader` implementations — `dockergrader` locally (docker run, tar
+over stdin), `cloudrungrader` in prod (Cloud Run Jobs + GCS signed URLs,
+result file's first line = test exit code). Core logic
+(`domain`/`ingest`/`store`/`grader`/`diff`) never imports HTTP or templ.
 
 ## Commands
 
@@ -24,16 +33,19 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `make test-integration` — store tests against compose Postgres
 - `make runner-images` — build gc-runner-go / gc-runner-python / gc-runner-c
   (needed for dockergrader e2e tests, which skip if images are missing)
-- `make seed` — publish seed/intro-to-go.md plus every course in `courses/`
-  through the local agent API (always a throwaway local key + localhost;
-  see `make publish` for publishing to a real/remote server)
-- `make publish` — loop `duckserver seed` over `courses/*.md` (the
-  canonical, PR-reviewed course content); `GC_API_KEY=... [GC_URL=...]
-  make publish`
+- `make seed` — import seed/intro-to-go.md plus every course in `courses/`
+  straight into the local compose DB (no server, no credentials);
+  idempotent — unchanged docs are skipped, versions don't bump
+- `make import-courses-prod` — BREAK-GLASS: import `courses/*.md` into the
+  prod DB via cloud-sql-proxy, bypassing review (bootstrap/disaster only)
+- `make export-courses [DUCK_URL=...]` — regenerate the `courses/` mirror
+  from a server's `/api/v1/export`
 - `make deploy PROJECT=getcracked-touch-grass` — build, push (tag = git
   SHA), tofu apply. Prod: https://duckgc.com
-- `go run ./cmd/duckserver apikey create --name <n> [--db <url>]` — mint
-  agent API keys (prod DB via `bin/cloud-sql-proxy <conn-name> --port 5433`)
+- `go run ./cmd/duckserver user promote --username <u> [--role admin|user]
+  [--db <url>]` — mint admins (prod DB via `bin/cloud-sql-proxy
+  <conn-name> --port 5433`). `GC_APPROVAL_THRESHOLD` env sets the publish
+  threshold on serve
 - `make psql` / `make psql-prod PROJECT=<id>` — interactive SQL shell
   against local compose Postgres / prod Cloud SQL (auto-starts and tears
   down the proxy; prod needs `gcloud auth login`)
@@ -62,8 +74,15 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
   update in place (submissions survive), removed slugs are archived (not
   deleted — history kept), returning slugs revive their row. Slugs are the
   identity contract; keep them stable. Submissions carry variant_version
-  for the "completed before update" UI notice. Explicit DELETE of a
-  course/variant still cascades submissions.
+  for the "completed before update" UI notice. store.DeleteCourse/
+  DeleteVariant still cascade submissions but have no HTTP surface anymore
+  — deletion is psql-only by design.
+- Proposals: one open proposal per user per variant (partial unique index);
+  a content update bumps `revision` (invalidating approvals, which record
+  the revision they reviewed) and re-captures `base_version` — that's also
+  the rebase mechanism. Approval counting excludes the proposer and
+  non-current revisions. The store's AddReview decides nothing about
+  publishing; the web handler owns the threshold.
 - Internal names still say `getcracked`/`gc-*` after the brand rename —
   intentional; see issues/ops/04-deep-rename.md before "fixing" any.
 - GCP: app SA needs project-level run.viewer to poll RunJob LROs (job-
@@ -87,10 +106,15 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 
 ## Key files
 
-- `internal/ingest/parse.go` — the agent markdown contract (README
-  documents it for external agents)
+- `internal/ingest/parse.go` — the course markdown contract (README
+  documents it for authors)
+- `internal/store/proposals.go` — proposal lifecycle: reviews, revisions,
+  PublishProposal (the only publish path besides `duckserver seed`)
+- `internal/web/proposal_handlers.go` — review UI + the threshold/admin
+  publish decision
 - `internal/grader/grader.go` — the Grader seam; pool.go drains submissions
 - `internal/store/migrations/` — embedded, run on serve start
 - `infra/` — OpenTofu (use `tofu`, not terraform); `make infra-validate`
-- `courses/` — canonical course markdown, one file per course×language;
-  `make publish` loops it through the agent API
+- `courses/` — mirror of published course markdown, one file per
+  course×language, synced by course-sync.yml; edit via proposals, not PRs
+  (except break-glass imports)

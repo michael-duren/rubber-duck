@@ -108,16 +108,20 @@ func TestEducatorPull(t *testing.T) {
 		}
 	})
 
-	t.Run("unauthorized", func(t *testing.T) {
+	t.Run("works without a token (public read)", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		t.Setenv("DUCK_TOKEN", "")
+		t.Setenv("HOME", t.TempDir()) // no ~/.config/duck/token either
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "unauthorized", "message": "nope"}})
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("Authorization = %q, want none without a token", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"markdown": validCourseMD, "version": 2})
 		}))
 		defer srv.Close()
 
-		err := educatorPullCmd([]string{"nope/go", "--base", srv.URL})
-		if err == nil || !strings.Contains(err.Error(), "unauthorized") {
-			t.Fatalf("educatorPullCmd err = %v, want unauthorized error", err)
+		if err := educatorPullCmd([]string{"intro-to-concurrency/go", "--base", srv.URL}); err != nil {
+			t.Fatalf("tokenless pull: %v", err)
 		}
 	})
 
@@ -207,7 +211,7 @@ func TestEducatorPull(t *testing.T) {
 }
 
 // pushFixture writes a markdown file and its sidecar directly (bypassing
-// pull) so push subtests can start from a known version without a network
+// pull) so propose subtests can start from a known state without a network
 // round trip.
 func pushFixture(t *testing.T, dir string, meta educatorMeta, markdown string) string {
 	t.Helper()
@@ -219,248 +223,6 @@ func pushFixture(t *testing.T, dir string, meta educatorMeta, markdown string) s
 		t.Fatal(err)
 	}
 	return mdPath
-}
-
-func TestEducatorPush(t *testing.T) {
-	t.Setenv("DUCK_TOKEN", "gc_u_testtoken")
-
-	t.Run("success updates sidecar version", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-
-		var gotBody map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPut || r.URL.Path != "/api/v1/courses/intro-to-concurrency/variants/go" {
-				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-			}
-			if got := r.Header.Get("Authorization"); got != "Bearer gc_u_testtoken" {
-				t.Errorf("Authorization = %q", got)
-			}
-			_ = json.NewDecoder(r.Body).Decode(&gotBody)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"course": "intro-to-concurrency", "language": "go",
-				"version": 4, "lessons": 1, "challenges": 2, "total_points": 30,
-			})
-		}))
-		defer srv.Close()
-
-		pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		if err := educatorPushCmd(nil); err != nil {
-			t.Fatalf("educatorPushCmd: %v", err)
-		}
-		if ev, _ := gotBody["expected_version"].(float64); int(ev) != 3 {
-			t.Errorf("server received expected_version = %v, want 3", gotBody["expected_version"])
-		}
-
-		meta, err := readEducatorMeta(filepath.Join(dir, "intro-to-concurrency-go.md"))
-		if err != nil {
-			t.Fatalf("readEducatorMeta: %v", err)
-		}
-		if meta.Version != 4 {
-			t.Errorf("sidecar version = %d, want 4 (updated from response)", meta.Version)
-		}
-	})
-
-	t.Run("version conflict does not update sidecar", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
-				"code": "version_conflict", "message": "stale",
-			}})
-		}))
-		defer srv.Close()
-
-		mdPath := pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "duck educator pull") {
-			t.Fatalf("educatorPushCmd err = %v, want a re-pull message", err)
-		}
-
-		meta, err := readEducatorMeta(mdPath)
-		if err != nil {
-			t.Fatalf("readEducatorMeta: %v", err)
-		}
-		if meta.Version != 3 {
-			t.Errorf("sidecar version = %d, want unchanged 3 after conflict", meta.Version)
-		}
-	})
-
-	t.Run("server-side invalid markdown prints details", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
-				"code": "invalid_course_markdown", "message": "1 problems found",
-				"details": []map[string]any{{"line": 12, "message": "missing starter code"}},
-			}})
-		}))
-		defer srv.Close()
-
-		// The server round trip only happens if the local lint passes, so
-		// this exercises the 422 path specifically: use markdown that
-		// passes lintSource's local check but which the server (in this
-		// fake) rejects anyway.
-		pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "1 problem") {
-			t.Fatalf("educatorPushCmd err = %v, want a problem-count error", err)
-		}
-	})
-
-	t.Run("locally-invalid markdown never hits the network", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-
-		called := false
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
-		}))
-		defer srv.Close()
-
-		pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "bad", Language: "go", Version: 1}, "not a course document")
-
-		if err := educatorPushCmd(nil); err == nil {
-			t.Fatal("want error for locally-invalid markdown")
-		}
-		if called {
-			t.Error("server should not have been called when local lint fails")
-		}
-	})
-
-	t.Run("no sidecar in directory errors clearly", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		if err := educatorPushCmd(nil); err == nil || !strings.Contains(err.Error(), "duck educator pull") {
-			t.Fatalf("educatorPushCmd err = %v, want a pull-first message", err)
-		}
-	})
-
-	t.Run("explicit file argument works from another directory", func(t *testing.T) {
-		fixtureDir := t.TempDir()
-		t.Chdir(t.TempDir()) // cwd deliberately holds neither file nor sidecar
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"course": "intro-to-concurrency", "language": "go",
-				"version": 4, "lessons": 1, "challenges": 2, "total_points": 30,
-			})
-		}))
-		defer srv.Close()
-
-		mdPath := pushFixture(t, fixtureDir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		if err := educatorPushCmd([]string{mdPath}); err != nil {
-			t.Fatalf("educatorPushCmd(explicit path): %v", err)
-		}
-		meta, err := readEducatorMeta(mdPath)
-		if err != nil {
-			t.Fatalf("readEducatorMeta: %v", err)
-		}
-		if meta.Version != 4 {
-			t.Errorf("sidecar next to the explicit path has version %d, want 4", meta.Version)
-		}
-	})
-
-	t.Run("unauthorized", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "unauthorized", "message": "nope"}})
-		}))
-		defer srv.Close()
-
-		pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "unauthorized") {
-			t.Fatalf("educatorPushCmd err = %v, want unauthorized error", err)
-		}
-	})
-
-	t.Run("corrupt sidecar json errors", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		mdPath := filepath.Join(dir, "a-go.md")
-		if err := os.WriteFile(mdPath, []byte(validCourseMD), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(mdPath+educatorMetaSuffix, []byte("{not json"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "parse") {
-			t.Fatalf("educatorPushCmd err = %v, want a sidecar parse error", err)
-		}
-	})
-
-	t.Run("sidecar missing fields errors actionably", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		mdPath := filepath.Join(dir, "a-go.md")
-		if err := os.WriteFile(mdPath, []byte(validCourseMD), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(mdPath+educatorMetaSuffix, []byte("{}"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "re-run `duck educator pull`") {
-			t.Fatalf("educatorPushCmd err = %v, want a corrupt-sidecar message", err)
-		}
-	})
-
-	t.Run("unparseable success response says the push succeeded", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte("not json at all"))
-		}))
-		defer srv.Close()
-
-		mdPath := pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "push succeeded on the server") {
-			t.Fatalf("educatorPushCmd err = %v, want a push-succeeded-but message", err)
-		}
-		// The sidecar is knowingly stale here; the message (asserted above)
-		// is what points the user at pull to resync.
-		meta, err := readEducatorMeta(mdPath)
-		if err != nil {
-			t.Fatalf("readEducatorMeta: %v", err)
-		}
-		if meta.Version != 3 {
-			t.Errorf("sidecar version = %d, want unchanged 3", meta.Version)
-		}
-	})
-
-	t.Run("non-version_conflict 409 surfaces the server message", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
-				"code": "slug_mismatch", "message": "URL names a/go but frontmatter says b/go",
-			}})
-		}))
-		defer srv.Close()
-
-		pushFixture(t, dir, educatorMeta{BaseURL: srv.URL, Course: "intro-to-concurrency", Language: "go", Version: 3}, validCourseMD)
-
-		err := educatorPushCmd(nil)
-		if err == nil || !strings.Contains(err.Error(), "frontmatter says") {
-			t.Fatalf("educatorPushCmd err = %v, want the server's slug_mismatch message", err)
-		}
-	})
 }
 
 func TestEducatorLint(t *testing.T) {
