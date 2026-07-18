@@ -33,40 +33,54 @@ templ SubmissionPage(user *domain.User, sub domain.Submission, back string) {
 }
 
 // SubmissionResult is the polled partial: status, score, and test output.
+// The duck's pose tracks the status (see submissionDuck) — each poll swap
+// re-renders it, so it dozes in the queue, flies during the run, and reacts
+// to the verdict.
 templ SubmissionResult(sub domain.Submission) {
-	switch sub.Status {
-		case "pending":
-			<p class="animate-pulse font-mono text-sm text-slate-500 dark:text-slate-400">⏳ queued, waiting for a grader…</p>
-		case "running":
-			<p class="animate-pulse font-mono text-sm text-sky-600 dark:text-sky-400">⚙ running your tests…</p>
-		case "passed":
-			<p data-final class="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
-				✓ passed — +{ fmt.Sprint(sub.Score) } pts
-				if s := sub.TestSummary(); s != "" {
-					<span class="text-sm font-normal text-emerald-700 dark:text-emerald-500">({ s })</span>
-				}
-			</p>
-		case "failed":
-			<p data-final class="font-mono text-lg font-bold text-red-600 dark:text-red-400">
-				✗ tests failed
-				if s := sub.TestSummary(); s != "" {
-					<span class="text-sm font-normal text-red-700 dark:text-red-500">({ s })</span>
-				}
-				if sub.Score > 0 {
-					<span class="text-sm font-normal text-amber-700 dark:text-amber-500">— +{ fmt.Sprint(sub.Score) } pts partial credit</span>
-				}
-			</p>
-		default:
-			<p data-final class="font-mono text-lg font-bold text-amber-600 dark:text-amber-400">! grading error</p>
-	}
-	switch sub.AuditState() {
-		case domain.AuditPending:
-			<p class="mt-2 font-mono text-xs text-slate-400 dark:text-slate-500">reported by your local test run · server audit pending</p>
-		case domain.AuditVerified:
-			<p class="mt-2 font-mono text-xs text-emerald-700 dark:text-emerald-500">✓ verified by a server run</p>
-		case domain.AuditMismatch:
-			<p class="mt-2 font-mono text-xs text-amber-700 dark:text-amber-500">⚠ the server run got “{ sub.AuditStatus }” — your local result stands, but your environment may differ</p>
-	}
+	<div class="flex items-center gap-4">
+		@submissionDuck(sub.Status)
+		<div class="min-w-0">
+			switch sub.Status {
+				case "pending":
+					<p class="animate-pulse font-mono text-sm text-slate-500 dark:text-slate-400">⏳ queued, waiting for a grader…</p>
+					<p class="mt-1 font-mono text-xs text-slate-400 dark:text-slate-500">{ "// the duck naps until a grader picks it up" }</p>
+				case "running":
+					<p class="animate-pulse font-mono text-sm text-sky-600 dark:text-sky-400">⚙ running your tests…</p>
+				case "passed":
+					<p data-final class="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
+						✓ passed — +{ fmt.Sprint(sub.Score) } pts
+						if s := sub.TestSummary(); s != "" {
+							<span class="text-sm font-normal text-emerald-700 dark:text-emerald-500">({ s })</span>
+						}
+					</p>
+				case "failed":
+					<p data-final class="font-mono text-lg font-bold text-red-600 dark:text-red-400">
+						✗ tests failed
+						if s := sub.TestSummary(); s != "" {
+							<span class="text-sm font-normal text-red-700 dark:text-red-500">({ s })</span>
+						}
+						if sub.Score > 0 {
+							<span class="text-sm font-normal text-amber-700 dark:text-amber-500">— +{ fmt.Sprint(sub.Score) } pts partial credit</span>
+						}
+					</p>
+					// The namesake ritual: a failing suite is the moment to
+					// rubber-duck, so the listening duck asks for the story.
+					<div class="mt-2">
+						@duckSays("Walk me through it, line by line. That's the whole trick.")
+					</div>
+				default:
+					<p data-final class="font-mono text-lg font-bold text-amber-600 dark:text-amber-400">! grading error</p>
+			}
+			switch sub.AuditState() {
+				case domain.AuditPending:
+					<p class="mt-2 font-mono text-xs text-slate-400 dark:text-slate-500">reported by your local test run · server audit pending</p>
+				case domain.AuditVerified:
+					<p class="mt-2 font-mono text-xs text-emerald-700 dark:text-emerald-500">✓ verified by a server run</p>
+				case domain.AuditMismatch:
+					<p class="mt-2 font-mono text-xs text-amber-700 dark:text-amber-500">⚠ the server run got “{ sub.AuditStatus }” — your local result stands, but your environment may differ</p>
+			}
+		</div>
+	</div>
 	if sub.Terminal() && sub.Output != "" {
 		<pre class="mt-4 max-h-96 overflow-auto border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">{ sub.Output }</pre>
 	}
@@ -131,10 +145,12 @@ templ profileDuck() {
 	<button
 		type="button"
 		@click="last = (last + 1 + Math.floor(Math.random() * (quips.length - 1))) % quips.length; msg = quips[last]; clearTimeout(timer); timer = setTimeout(() => msg = '', 6000)"
-		class="shrink-0 select-none text-3xl transition-transform hover:-translate-y-0.5 hover:scale-110 active:translate-y-0.5 active:scale-90"
+		class="shrink-0 select-none transition-transform hover:-translate-y-0.5 hover:scale-110 active:translate-y-0.5 active:scale-90"
 		title="quack?"
 		aria-label="Ask the duck"
-	>🦆</button>
+	>
+		@duckSprite("duck-teacher-listening", 48, "")
+	</button>
 	<span
 		x-show="msg"
 		x-text="msg"
