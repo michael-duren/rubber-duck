@@ -32,8 +32,12 @@ templ Layout(title string, user *domain.User) {
 				<nav x-data="{ open: false }" class="mx-auto max-w-6xl px-4 py-3">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-6">
-							<a href="/" class="font-mono text-lg font-bold tracking-tight">
-								<span class="text-emerald-600 dark:text-emerald-400">$</span> rubber-duck <span aria-hidden="true">🦆</span>
+							<a href="/" class="flex items-center gap-1.5 font-mono text-lg font-bold tracking-tight">
+								<span><span class="text-emerald-600 dark:text-emerald-400">$</span> rubber-duck</span>
+								// The brand duck: the one sprite served eagerly (it's above
+								// the fold on every page), from a dedicated 64px file. It
+								// wiggles on hover — see a:hover > .nav-duck in input.css.
+								<img src="/static/img/ducks/sm/duck-front-64.png" alt="" aria-hidden="true" width="22" height="22" draggable="false" class="nav-duck select-none"/>
 							</a>
 							<div class="hidden items-center gap-4 text-sm md:flex">
 								@navLinks()
