@@ -68,7 +68,10 @@ func TestToHTML_D2Steps(t *testing.T) {
 	for _, want := range []string{
 		`<form class="d2-steps" style="--d2n:3;--d2cyc:d2cycle-3">`,
 		`<div class="d2-steps-frame" style="--d2i:2">`,
-		`insert 4`,
+		// Captions lead each frame: counter + step name (the root board's
+		// frame gets the "Starting state" fallback).
+		`<p class="d2-steps-caption"><span class="d2-steps-count">1&#8202;/&#8202;3</span><span class="d2-steps-name">Starting state</span></p>`,
+		`<span class="d2-steps-count">2&#8202;/&#8202;3</span><span class="d2-steps-name">insert 4</span>`,
 		`Next &#8250;</label>`,
 		`&#8249; Back</label>`,
 		`&#8634;&#xFE0E; Replay</label>`,

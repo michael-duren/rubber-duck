@@ -28,14 +28,17 @@ LIGHT_BG="#f1f7f2"   # body bg in light theme (layout.templ)
 DARK_BG="#0b0f0d"    # body bg in dark theme
 
 # Render the theme SVGs via the real pipeline using a throwaway test. The
-# whole write→test→remove dance holds a lock so concurrent preview runs
-# (e.g. parallel agents) don't clobber each other's test file.
-test_go="$repo/internal/markdown/zz_preview_test.go"
-lock="${TMPDIR:-/tmp}/d2-preview-$(id -u).lock"
-exec 9>"$lock"
-flock 9
-cleanup() { rm -f "$test_go"; }
+# test file lives in a temp dir and is spliced into the package with go's
+# -overlay flag: nothing is ever written inside the repo, so `templ generate
+# --watch` (make dev) never sees it — a real file here used to restart-loop
+# the watcher and crash it when the file vanished — and concurrent preview
+# runs can't clobber each other (each has its own overlay).
+tmp="$(mktemp -d)"
+cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
+test_go="$tmp/zz_preview_test.go"
+printf '{"Replace":{"%s":"%s"}}' \
+	"$repo/internal/markdown/zz_preview_test.go" "$test_go" > "$tmp/overlay.json"
 
 cat > "$test_go" <<'GO'
 package markdown
@@ -77,7 +80,8 @@ GO
 # -count=1: the .d2 lives outside the module, so go's test cache can't see
 # its content change and would happily replay a stale PASS that wrote nothing.
 D2_PREVIEW_FILE="$(realpath "$d2file")" D2_PREVIEW_OUT="$outdir" \
-	go test "$repo/internal/markdown/" -run TestZZPreview -count=1 >/dev/null
+	go test -overlay "$tmp/overlay.json" "$repo/internal/markdown/" \
+	-run TestZZPreview -count=1 >/dev/null
 
 # Intrinsic size is on the root <svg> (sizeSVG put it there). Compute the
 # display width after applying BOTH caps, preserving aspect ratio. One PNG

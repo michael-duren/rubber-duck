@@ -189,6 +189,15 @@ func writeStepper(w util.BufWriter, source []byte, frames []d2Frame) {
 	_, _ = w.WriteString(`<div class="d2-steps-frames">`)
 	for i, f := range frames {
 		_, _ = fmt.Fprintf(w, `<div class="d2-steps-frame" style="--d2i:%d">`, i)
+		// The caption is the explanation of the step, so it leads the frame
+		// rather than hiding in the nav row. The root board has no step name;
+		// it is always the pre-algorithm picture, hence the fallback.
+		name := f.name
+		if name == "" {
+			name = "Starting state"
+		}
+		_, _ = fmt.Fprintf(w, `<p class="d2-steps-caption"><span class="d2-steps-count">%d&#8202;/&#8202;%d</span><span class="d2-steps-name">%s</span></p>`,
+			i+1, n, html.EscapeString(name))
 		writeDiagram(w, f)
 		_, _ = w.WriteString(`<div class="d2-steps-nav"><span class="d2-steps-ctl">`)
 		// Pause targets this frame's own radio: whichever frame is visible
@@ -199,11 +208,6 @@ func writeStepper(w util.BufWriter, source []byte, frames []d2Frame) {
 			_, _ = fmt.Fprintf(w, `<label class="d2-steps-btn" for="%s-%d">&#8249; Back</label>`, id, i-1)
 		} else {
 			_, _ = w.WriteString(`<span class="d2-steps-btn d2-steps-btn-off">&#8249; Back</span>`)
-		}
-		_, _ = w.WriteString(`</span>`)
-		_, _ = fmt.Fprintf(w, `<span class="d2-steps-count">%d&#8202;/&#8202;%d`, i+1, n)
-		if f.name != "" {
-			_, _ = fmt.Fprintf(w, ` &middot; <span class="d2-steps-name">%s</span>`, html.EscapeString(f.name))
 		}
 		_, _ = w.WriteString(`</span>`)
 		if i < n-1 {

@@ -73,7 +73,6 @@ code: "" {
   grid-columns: 1
   grid-gap: 0
   l1: "append(x):" {
-    width: 230
     height: 30
     style.stroke: "#d97706"
     style.stroke-width: 2
@@ -81,28 +80,24 @@ code: "" {
     style.bold: true
   }
   l2: "  if len == cap:" {
-    width: 230
     height: 30
     style.stroke: "#9ca3af"
     style.font: mono
     style.bold: false
   }
   l3: "    grow: new block, 2×cap" {
-    width: 230
     height: 30
     style.stroke: "#9ca3af"
     style.font: mono
     style.bold: false
   }
   l4: "    copy elements, free old" {
-    width: 230
     height: 30
     style.stroke: "#9ca3af"
     style.font: mono
     style.bold: false
   }
   l5: "  a[len] = x; len += 1" {
-    width: 230
     height: 30
     style.stroke: "#9ca3af"
     style.font: mono
@@ -547,32 +542,27 @@ direction: right
 code: "" {
   grid-columns: 1
   grid-gap: 0
-  l1: "for i in 1..n-1:" {
-    width: 270
+  l1: " for i in 1..n-1:" {
     height: 30
     label.near: center-left
     style: {stroke: "#9ca3af"; font: mono}
   }
-  l2: "  key = a[i]; j = i" {
-    width: 270
+  l2: "   key = a[i]; j = i" {
     height: 30
     label.near: center-left
     style: {stroke: "#9ca3af"; font: mono}
   }
-  l3: "  while j>0 and a[j-1]>key:" {
-    width: 270
+  l3: "   while j>0 and a[j-1]>key:" {
     height: 30
     label.near: center-left
     style: {stroke: "#9ca3af"; font: mono}
   }
-  l4: "    a[j] = a[j-1]; j -= 1" {
-    width: 270
+  l4: "     a[j] = a[j-1]; j -= 1" {
     height: 30
     label.near: center-left
     style: {stroke: "#9ca3af"; font: mono}
   }
-  l5: "  a[j] = key" {
-    width: 270
+  l5: "   a[j] = key" {
     height: 30
     label.near: center-left
     style: {stroke: "#9ca3af"; font: mono}
@@ -909,11 +899,11 @@ code: "" {
   # transparent wrapper: the root grid stretches this container to the arrays'
   # height, and a default fill would paint the leftover space as a phantom row
   style: { fill: transparent; stroke: transparent }
-  l1: "while i < len(a), j < len(b):" { width: 270; height: 32; style: { stroke: "#9ca3af"; font: mono } }
-  l2: "  if a[i] <= b[j]:" { width: 270; height: 32; style: { stroke: "#9ca3af"; font: mono } }
-  l3: "    take a[i]; i += 1" { width: 270; height: 32; style: { stroke: "#9ca3af"; font: mono } }
-  l4: "  else: take b[j]; j += 1" { width: 270; height: 32; style: { stroke: "#9ca3af"; font: mono } }
-  l5: "append the leftovers" { width: 270; height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l1: "while i < len(a), j < len(b):" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l2: "  if a[i] <= b[j]:" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l3: "    take a[i]; i += 1" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l4: "  else: take b[j]; j += 1" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
+  l5: "append the leftovers" { height: 32; style: { stroke: "#9ca3af"; font: mono } }
 }
 
 code.l1.style.stroke: "#d97706"
@@ -1325,11 +1315,11 @@ direction: right
 code: "" {
   grid-columns: 1
   grid-gap: 0
-  l1: "1 p = a[hi]; i = lo" { width: 320; height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
-  l2: "2 for j in lo..hi-1:" { width: 320; height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
-  l3: "3   if a[j] < p:" { width: 320; height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
-  l4: "4     swap(a[i], a[j]); i += 1" { width: 320; height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
-  l5: "5 swap(a[i], a[hi])" { width: 320; height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l1: " 1 p = a[hi]; i = lo" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l2: " 2 for j in lo..hi-1:" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l3: " 3   if a[j] < p:" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l4: " 4     swap(a[i], a[j]); i += 1" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
+  l5: " 5 swap(a[i], a[hi])" { height: 30; style.stroke: "#9ca3af"; style.font: mono; label.near: center-left }
 }
 
 viz: "" {
@@ -1722,7 +1712,6 @@ steps: {
         grid-columns: 1
         grid-gap: 0
         l1: "push(x): a.append(x)" {
-          width: 308
           height: 30
           style.stroke: "#d97706"
           style.stroke-width: 2
@@ -1730,19 +1719,16 @@ steps: {
           style.font: mono
         }
         l2: "i = len(a) - 1" {
-          width: 308
           height: 30
           style.stroke: "#9ca3af"
           style.font: mono
         }
         l3: "while i > 0 and a[i] < a[par]:" {
-          width: 308
           height: 30
           style.stroke: "#9ca3af"
           style.font: mono
         }
         l4: "  swap(a[i], a[par]); i = par" {
-          width: 308
           height: 30
           style.stroke: "#9ca3af"
           style.font: mono
@@ -2359,32 +2345,27 @@ code: "" {
   grid-gap: 0
   l0: 'put("dot", 7)' {
     shape: oval
-    width: 270
     height: 36
     style.stroke: "#d97706"
     style.stroke-width: 3
     style.font: mono
   }
   l1: "idx = hash(k) % len(buckets)" {
-    width: 270
     height: 27
     style.stroke: "#9ca3af"
     style.font: mono
   }
   l2: "for node in buckets[idx]:" {
-    width: 270
     height: 27
     style.stroke: "#9ca3af"
     style.font: mono
   }
   l3: "  if node.key == k: update" {
-    width: 270
     height: 27
     style.stroke: "#9ca3af"
     style.font: mono
   }
   l4: "no match: prepend (k, v)" {
-    width: 270
     height: 27
     style.stroke: "#9ca3af"
     style.font: mono
@@ -2876,31 +2857,26 @@ panel: "" {
     grid-columns: 1
     grid-gap: 0
     l1: "q = [start]; mark start" {
-      width: 210
       height: 30
       style.stroke: "#9ca3af"
       style.font: mono
     }
     l2: "while q not empty:" {
-      width: 210
       height: 30
       style.stroke: "#9ca3af"
       style.font: mono
     }
     l3: "v = q.pop_front()" {
-      width: 210
       height: 30
       style.stroke: "#9ca3af"
       style.font: mono
     }
     l4: "for w in adj[v]:" {
-      width: 210
       height: 30
       style.stroke: "#9ca3af"
       style.font: mono
     }
     l5: "if unseen: mark, push w" {
-      width: 210
       height: 30
       style.stroke: "#9ca3af"
       style.font: mono
@@ -2909,7 +2885,6 @@ panel: "" {
 
   q: "q: ∅" {
     shape: queue
-    width: 210
     height: 60
   }
 }
@@ -3195,11 +3170,11 @@ f: "" {
     code: "" {
       grid-columns: 1
       grid-gap: 0
-    l1: "q = nodes with indeg 0" { width: 260; height: 22 }
-    l2: "while q not empty:" { width: 260; height: 22 }
-    l3: "  v = q.pop(); order += v" { width: 260; height: 22 }
-    l4: "  for w in out[v]: indeg[w]-=1" { width: 260; height: 22 }
-    l5: "    if indeg[w]==0: q.push(w)" { width: 260; height: 22 }
+    l1: " q = nodes with indeg 0" { height: 22 }
+    l2: " while q not empty:" { height: 22 }
+    l3: "   v = q.pop(); order += v" { height: 22 }
+    l4: "   for w in out[v]: indeg[w]-=1" { height: 22 }
+    l5: "     if indeg[w]==0: q.push(w)" { height: 22 }
     l1.style.stroke: "#9ca3af"
     l1.style.font: mono
     l1.style.font-size: 13
