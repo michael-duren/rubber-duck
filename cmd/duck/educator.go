@@ -167,6 +167,25 @@ func lintParse(src []byte) (*ingest.Result, []lintProblem) {
 	return nil, probs
 }
 
+// lintParsePath is lintParse for learning-path documents (`path:`
+// frontmatter — see ingest.IsPathDocument), used by duck propose when the
+// file is a path rather than a course variant.
+func lintParsePath(src []byte) (*ingest.PathResult, []lintProblem) {
+	res, err := ingest.ParsePath(src)
+	if err == nil {
+		return res, nil
+	}
+	verr, ok := errors.AsType[*ingest.ValidationError](err)
+	if !ok {
+		return nil, []lintProblem{{Message: err.Error()}}
+	}
+	probs := make([]lintProblem, len(verr.Problems))
+	for i, p := range verr.Problems {
+		probs[i] = lintProblem{Line: p.Line, Message: p.Message}
+	}
+	return nil, probs
+}
+
 // printProblems prints line-numbered validation problems in one format,
 // used whether they came from a local `duck educator lint` run or from the
 // server's 422 response to `duck educator push` — the output looks

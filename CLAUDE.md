@@ -123,7 +123,8 @@ result file's first line = test exit code). Core logic
 - `courses/` — mirror of published course markdown, one file per
   course×language, synced by course-sync.yml; edit via proposals, not PRs
   (except break-glass imports)
-- `paths/` — canonical learning-path markdown (ordered course tracks shown
-  at /paths). Paths have no proposal flow: edit via repo PRs, import with
-  `make seed` locally / `make import-courses-prod` for prod (paths import
-  after courses — a path upsert rejects unknown course slugs)
+- `paths/` — mirror of published learning-path markdown (ordered course
+  tracks shown at /paths), synced from `/api/v1/export` like `courses/`.
+  Paths change through the same proposal workflow (kind='path' proposals;
+  path slug lives in proposals.course_slug with language ''); seed/import
+  order paths after courses — a path upsert rejects unknown course slugs

@@ -1,0 +1,61 @@
+package views
+
+import "github.com/michael-duren/rubber-duck/internal/domain"
+
+// NewPath is NewCourse's learning-path sibling: a small entry-point form
+// that seeds a starter path document in the editor. Nothing persists until
+// the proposal opened there is approved.
+templ NewPath(user *domain.User, slug, title, description, errMsg string) {
+	@Layout("New learning path", user) {
+		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+			<a href="/paths" class="hover:text-emerald-600 dark:hover:text-emerald-400">paths</a> / new
+		</nav>
+		<h1 class="mt-4 text-2xl font-bold">New learning path</h1>
+		<p class="mt-1 text-slate-600 dark:text-slate-400">
+			This just seeds a starter document in the editor — the path is created when your proposal is approved.
+		</p>
+		if errMsg != "" {
+			<p class="mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
+		}
+		<form method="post" action="/paths/new" class="mt-6 flex max-w-md flex-col gap-4">
+			@csrfField()
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Path slug
+				<input
+					type="text"
+					name="slug"
+					required
+					pattern="[a-z0-9]+(-[a-z0-9]+)*"
+					value={ slug }
+					placeholder="go-developer"
+					class="border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Title
+				<input
+					type="text"
+					name="title"
+					required
+					value={ title }
+					placeholder="Go Developer"
+					class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm font-medium">
+				Description
+				<input
+					type="text"
+					name="description"
+					value={ description }
+					placeholder="One-paragraph pitch for the track."
+					class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+				/>
+			</label>
+			<div class="flex items-center gap-3">
+				<button type="submit" class="bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500">Open in editor</button>
+				<a href="/paths" class="border border-slate-300 px-3 py-2 font-medium text-slate-600 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white">Cancel</a>
+			</div>
+		</form>
+	}
+}

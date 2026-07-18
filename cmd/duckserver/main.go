@@ -251,9 +251,9 @@ func seedCmd(args []string) error {
 	defer st.Close()
 
 	// A "path:" frontmatter key marks a learning-path document (paths/*.md);
-	// everything else is a course variant. Paths have no proposal flow —
-	// this direct import is their only publish path, so paths/ stays
-	// canonical in the repo (unlike the courses/ mirror).
+	// everything else is a course variant. Like courses, paths normally
+	// change through the proposal workflow — this direct import is the same
+	// bootstrap/break-glass side door.
 	if ingest.IsPathDocument(src) {
 		res, err := ingest.ParsePath(src)
 		if err != nil {

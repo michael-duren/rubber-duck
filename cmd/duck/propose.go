@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/michael-duren/rubber-duck/internal/ingest"
 )
 
 // proposalResponse is the API shape of one proposal, shared by
@@ -18,6 +20,7 @@ type proposalResponse struct {
 	ID          int64  `json:"id"`
 	Course      string `json:"course"`
 	Language    string `json:"language"`
+	Path        string `json:"path"` // set instead of course/language for learning-path proposals
 	Title       string `json:"title"`
 	BaseVersion int    `json:"base_version"`
 	Revision    int    `json:"revision"`
@@ -67,20 +70,36 @@ func proposeCmd(args []string) error {
 	}
 
 	// Cheap local pre-flight before spending a network round trip: same
-	// checks the server would run, same output shape either way.
-	res, probs := lintParse(src)
-	if len(probs) > 0 {
-		printProblems(mdPath, probs)
-		return fmt.Errorf("%d problem(s) found — fix before proposing", len(probs))
+	// checks the server would run, same output shape either way. A "path:"
+	// frontmatter key makes this a learning-path proposal; anything else is
+	// a course variant.
+	var course, language, pathSlug, target string
+	if ingest.IsPathDocument(src) {
+		res, probs := lintParsePath(src)
+		if len(probs) > 0 {
+			printProblems(mdPath, probs)
+			return fmt.Errorf("%d problem(s) found — fix before proposing", len(probs))
+		}
+		pathSlug = res.Path.Path
+		target = "path " + pathSlug
+	} else {
+		res, probs := lintParse(src)
+		if len(probs) > 0 {
+			printProblems(mdPath, probs)
+			return fmt.Errorf("%d problem(s) found — fix before proposing", len(probs))
+		}
+		course, language = res.Course.Course, res.Course.Language
+		target = course + "/" + language
 	}
-	course, language := res.Course.Course, res.Course.Language
 
 	// A sidecar is optional here, but when present it pins the server and
-	// remembers the open proposal this file previously created.
+	// remembers the open proposal this file previously created. Path
+	// documents have no pull flow and so no sidecar — the duplicate-recovery
+	// below still finds an existing open path proposal.
 	baseURL := strings.TrimRight(*base, "/")
 	var meta educatorMeta
 	haveMeta := false
-	if m, err := readEducatorMeta(mdPath); err == nil {
+	if m, err := readEducatorMeta(mdPath); err == nil && pathSlug == "" {
 		meta, haveMeta = m, true
 		if m.BaseURL != "" && !baseSet {
 			baseURL = strings.TrimRight(m.BaseURL, "/")
@@ -99,8 +118,12 @@ func proposeCmd(args []string) error {
 	}
 
 	reqBody := map[string]string{
-		"course": course, "language": language,
 		"title": *title, "summary": *summary, "markdown": string(src),
+	}
+	if pathSlug != "" {
+		reqBody["path"] = pathSlug
+	} else {
+		reqBody["course"], reqBody["language"] = course, language
 	}
 
 	// createProposal POSTs a fresh proposal, recovering from the server's
@@ -109,7 +132,7 @@ func proposeCmd(args []string) error {
 	createProposal := func() (proposalResponse, error) {
 		p, err := sendProposal(http.MethodPost, baseURL+"/api/v1/proposals", token, tokenSource, baseURL, mdPath, reqBody)
 		if _, isDup := errors.AsType[*duplicateProposalError](err); isDup {
-			id, findErr := findMyOpenProposal(baseURL, token, course, language)
+			id, findErr := findMyOpenProposal(baseURL, token, course, language, pathSlug)
 			if findErr != nil {
 				return proposalResponse{}, fmt.Errorf("%w (and finding the existing proposal failed: %v)", err, findErr)
 			}
@@ -140,17 +163,19 @@ func proposeCmd(args []string) error {
 
 	// Remember the proposal in the sidecar so the next `duck propose` on
 	// this file updates it directly. Best-effort: the proposal exists on
-	// the server either way.
-	meta.BaseURL, meta.Course, meta.Language, meta.ProposalID = baseURL, course, language, p.ID
-	if err := writeEducatorMeta(mdPath, meta); err != nil {
-		fmt.Fprintf(os.Stderr, "duck: warning: proposal #%d created, but writing the sidecar failed: %v\n", p.ID, err)
+	// the server either way. Path documents skip this — no sidecar flow.
+	if pathSlug == "" {
+		meta.BaseURL, meta.Course, meta.Language, meta.ProposalID = baseURL, course, language, p.ID
+		if err := writeEducatorMeta(mdPath, meta); err != nil {
+			fmt.Fprintf(os.Stderr, "duck: warning: proposal #%d created, but writing the sidecar failed: %v\n", p.ID, err)
+		}
 	}
 
 	verb := "proposed"
 	if p.Revision > 1 {
 		verb = fmt.Sprintf("updated (revision %d — earlier approvals reset)", p.Revision)
 	}
-	fmt.Printf("%s %s/%s as proposal #%d\nreview it at %s%s\n", verb, course, language, p.ID, baseURL, p.URL)
+	fmt.Printf("%s %s as proposal #%d\nreview it at %s%s\n", verb, target, p.ID, baseURL, p.URL)
 	return nil
 }
 
@@ -236,7 +261,8 @@ func sendProposal(method, url, token, tokenSource, baseURL, mdPath string, body 
 		return proposalResponse{}, &apiStatusError{status: resp.StatusCode,
 			msg: fmt.Sprintf("propose: server said %s: %s", resp.Status, respBody)}
 	case http.StatusUnprocessableEntity:
-		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Code == "invalid_course_markdown" {
+		if err := json.Unmarshal(respBody, &errResp); err == nil &&
+			(errResp.Error.Code == "invalid_course_markdown" || errResp.Error.Code == "invalid_path_markdown") {
 			printProblems(mdPath, errResp.Error.Details)
 			return proposalResponse{}, fmt.Errorf("%d problem(s) found — fix before proposing", len(errResp.Error.Details))
 		}
@@ -254,9 +280,10 @@ func sendProposal(method, url, token, tokenSource, baseURL, mdPath string, body 
 	return p, nil
 }
 
-// findMyOpenProposal locates the caller's open proposal for one course
-// variant via GET /api/v1/proposals (the "mine" list).
-func findMyOpenProposal(baseURL, token, course, language string) (int64, error) {
+// findMyOpenProposal locates the caller's open proposal for one target — a
+// course variant, or a learning path when pathSlug is non-empty — via
+// GET /api/v1/proposals (the "mine" list).
+func findMyOpenProposal(baseURL, token, course, language, pathSlug string) (int64, error) {
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/proposals?mine=1", nil)
 	if err != nil {
 		return 0, err
@@ -277,9 +304,18 @@ func findMyOpenProposal(baseURL, token, course, language string) (int64, error) 
 		return 0, err
 	}
 	for _, p := range payload.Proposals {
-		if p.Course == course && p.Language == language && p.Status == "open" {
+		if p.Status != "open" {
+			continue
+		}
+		if pathSlug != "" && p.Path == pathSlug {
 			return p.ID, nil
 		}
+		if pathSlug == "" && p.Course == course && p.Language == language {
+			return p.ID, nil
+		}
+	}
+	if pathSlug != "" {
+		return 0, fmt.Errorf("no open proposal found for path %s", pathSlug)
 	}
 	return 0, fmt.Errorf("no open proposal found for %s/%s", course, language)
 }

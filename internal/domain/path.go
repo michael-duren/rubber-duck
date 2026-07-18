@@ -53,3 +53,11 @@ type PathSummary struct {
 	CourseCount     int
 	UpdatedAt       time.Time
 }
+
+// PathExport is one live path's source document for /api/v1/export — the
+// learning-path row of the repo-mirror sync, mirroring VariantExport.
+type PathExport struct {
+	Slug     string
+	Version  int
+	SourceMD string
+}

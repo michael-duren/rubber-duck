@@ -14,12 +14,15 @@ templ Paths(user *domain.User, paths []domain.PathSummary) {
 				<h1 class="text-3xl font-bold tracking-tight">Learning Paths</h1>
 				<p class="mt-1 text-slate-600 dark:text-slate-400">Curated tracks through the catalog — courses in the order we'd teach them.</p>
 			</div>
-			<img src="/static/img/gophers/witch-learning.svg" alt="" aria-hidden="true" width="127" height="96" class="gopher-bob hidden h-24 w-auto shrink-0 sm:block"/>
+			<div class="flex items-end gap-4">
+				<a href="/paths/new" class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">+ New path</a>
+				<img src="/static/img/gophers/witch-learning.svg" alt="" aria-hidden="true" width="127" height="96" class="gopher-bob hidden h-24 w-auto shrink-0 sm:block"/>
+			</div>
 		</div>
 		if len(paths) == 0 {
 			<div class="mt-6 border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
 				<p class="font-mono text-sm text-amber-600 dark:text-amber-400">no paths yet</p>
-				<p class="mt-2 text-xs text-slate-500 dark:text-slate-500">Learning paths are published through the agent API, like courses.</p>
+				<p class="mt-2 text-xs text-slate-500 dark:text-slate-500">Learning paths are proposed and reviewed by the community, like courses — propose the first one.</p>
 			</div>
 		} else {
 			<div class="mt-6 grid gap-4 sm:grid-cols-2">
@@ -49,7 +52,12 @@ templ Path(user *domain.User, path domain.LearningPath, courses []domain.CourseS
 		</nav>
 		<div class="mt-4 grid gap-8 lg:grid-cols-[1fr_20rem]">
 			<div>
-				<h1 class="text-3xl font-bold">{ path.Title }</h1>
+				<div class="flex flex-wrap items-center gap-3">
+					<h1 class="text-3xl font-bold">{ path.Title }</h1>
+					// Same affordance as a course variant's Edit button: submitting
+					// the editor opens a proposal, it never writes directly.
+					<a href={ templ.SafeURL("/paths/" + path.Slug + "/edit") } class="border border-slate-300 px-2 py-1 font-mono text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:text-emerald-400">Edit</a>
+				</div>
 				<div class="prose prose-slate mt-4 dark:prose-invert">
 					@templ.Raw(path.DescriptionHTML)
 				</div>

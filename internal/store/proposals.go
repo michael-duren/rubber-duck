@@ -14,20 +14,37 @@ import (
 // proposalCols is the shared SELECT for loading proposals with their two
 // computed fields: Approvals (current-revision approve verdicts from users
 // other than the proposer — what the publish threshold compares against) and
-// LiveVersion (the variant's current version, 0 if it doesn't exist, so
-// callers can spot a stale proposal without a second query).
+// LiveVersion (the target's current version, 0 if it doesn't exist, so
+// callers can spot a stale proposal without a second query). The target is
+// a course variant or, for kind='path', a learning path whose slug lives in
+// course_slug.
 const proposalCols = `
-	SELECT p.id, p.proposer_id, u.username, p.course_slug, p.language,
+	SELECT p.id, p.proposer_id, u.username, p.kind, p.course_slug, p.language,
 	       p.title, p.summary_md, p.proposed_md, p.base_version, p.revision,
 	       p.status, p.published_version, p.created_at, p.updated_at, p.closed_at,
 	       (SELECT count(*) FROM proposal_reviews r
 	        WHERE r.proposal_id = p.id AND r.verdict = 'approve'
 	          AND r.revision = p.revision AND r.reviewer_id != p.proposer_id) AS approvals,
-	       COALESCE((SELECT cv.version FROM course_variants cv
-	                 JOIN courses c ON c.id = cv.course_id
-	                 WHERE c.slug = p.course_slug AND cv.language = p.language), 0) AS live_version
+	       COALESCE(CASE WHEN p.kind = 'path'
+	                THEN (SELECT lp.version FROM learning_paths lp WHERE lp.slug = p.course_slug)
+	                ELSE (SELECT cv.version FROM course_variants cv
+	                      JOIN courses c ON c.id = cv.course_id
+	                      WHERE c.slug = p.course_slug AND cv.language = p.language)
+	                END, 0) AS live_version
 	FROM proposals p
 	JOIN users u ON u.id = p.proposer_id`
+
+// liveTargetVersion is the reusable subexpression that captures the
+// proposal target's current version at insert/update time — the same CASE
+// proposalCols computes per-read, parameterized on kind/slug/language
+// ($1=kind, $2=slug, $3=language where the caller's statement says so).
+const liveTargetVersion = `
+	COALESCE(CASE WHEN %[1]s = 'path'
+	         THEN (SELECT lp.version FROM learning_paths lp WHERE lp.slug = %[2]s)
+	         ELSE (SELECT cv.version FROM course_variants cv
+	               JOIN courses c ON c.id = cv.course_id
+	               WHERE c.slug = %[2]s AND cv.language = %[3]s)
+	         END, 0)`
 
 // querier lets the proposal loaders run on the pool or inside a transaction.
 type querier interface {
@@ -36,7 +53,7 @@ type querier interface {
 
 func scanProposal(row pgx.Row) (domain.Proposal, error) {
 	var p domain.Proposal
-	err := row.Scan(&p.ID, &p.ProposerID, &p.ProposerUsername, &p.CourseSlug, &p.Language,
+	err := row.Scan(&p.ID, &p.ProposerID, &p.ProposerUsername, &p.Kind, &p.CourseSlug, &p.Language,
 		&p.Title, &p.SummaryMD, &p.ProposedMD, &p.BaseVersion, &p.Revision,
 		&p.Status, &p.PublishedVersion, &p.CreatedAt, &p.UpdatedAt, &p.ClosedAt,
 		&p.Approvals, &p.LiveVersion)
@@ -50,22 +67,22 @@ func proposalByID(ctx context.Context, q querier, id int64) (domain.Proposal, er
 	return scanProposal(q.QueryRow(ctx, proposalCols+` WHERE p.id = $1`, id))
 }
 
-// CreateProposal opens a proposal for one course variant. base_version is
-// captured from the live variant in the same statement as the insert (0 when
-// the variant doesn't exist — a new-course proposal), so it can't race a
-// concurrent publish. A user gets one open proposal per variant; a second
-// create returns ErrDuplicateProposal and the caller should route the user
-// to updating the existing one.
-func (s *Store) CreateProposal(ctx context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error) {
+// CreateProposal opens a proposal for one course variant (kind="course",
+// slug/language name the variant) or learning path (kind="path", slug is
+// the path slug, language must be ""). base_version is captured from the
+// live target in the same statement as the insert (0 when it doesn't exist
+// — a new-course/new-path proposal), so it can't race a concurrent publish.
+// A user gets one open proposal per target; a second create returns
+// ErrDuplicateProposal and the caller should route the user to updating
+// the existing one.
+func (s *Store) CreateProposal(ctx context.Context, proposerID int64, kind, slug, language, title, summary, markdown string) (domain.Proposal, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO proposals (proposer_id, course_slug, language, title, summary_md, proposed_md, base_version)
-		VALUES ($1, $2, $3, $4, $5, $6,
-			COALESCE((SELECT cv.version FROM course_variants cv
-			          JOIN courses c ON c.id = cv.course_id
-			          WHERE c.slug = $2 AND cv.language = $3), 0))
+		INSERT INTO proposals (proposer_id, kind, course_slug, language, title, summary_md, proposed_md, base_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, `+
+		fmt.Sprintf(liveTargetVersion, "$2", "$3", "$4")+`)
 		RETURNING id`,
-		proposerID, courseSlug, language, title, summary, markdown,
+		proposerID, kind, slug, language, title, summary, markdown,
 	).Scan(&id)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" &&
@@ -89,10 +106,8 @@ func (s *Store) UpdateProposalMarkdown(ctx context.Context, proposalID, proposer
 		UPDATE proposals SET
 			title = $3, summary_md = $4, proposed_md = $5,
 			revision = revision + 1,
-			base_version = COALESCE((SELECT cv.version FROM course_variants cv
-			                         JOIN courses c ON c.id = cv.course_id
-			                         WHERE c.slug = proposals.course_slug
-			                           AND cv.language = proposals.language), 0),
+			base_version = `+
+		fmt.Sprintf(liveTargetVersion, "proposals.kind", "proposals.course_slug", "proposals.language")+`,
 			updated_at = now()
 		WHERE id = $1 AND proposer_id = $2 AND status = 'open'`,
 		proposalID, proposerID, title, summary, markdown)
@@ -284,6 +299,29 @@ func (s *Store) AddReview(ctx context.Context, proposalID, reviewerID int64, ver
 // double-publish race surfaces as ErrProposalClosed, which callers can
 // treat as already-done.
 func (s *Store) PublishProposal(ctx context.Context, proposalID int64, expectedRevision int, course domain.Course, variant domain.Variant) (int, error) {
+	return s.publishProposal(ctx, proposalID, expectedRevision,
+		func(ctx context.Context, tx pgx.Tx, proposerID int64, baseVersion int) (int, error) {
+			return upsertVariantTx(ctx, tx, course, variant, &proposerID, &baseVersion)
+		})
+}
+
+// PublishPathProposal is PublishProposal for kind='path' proposals: same
+// locking, revision and base-version discipline, with the write going
+// through upsertPathTx. Paths have no editedBy attribution column — the
+// proposal row itself is the audit trail.
+func (s *Store) PublishPathProposal(ctx context.Context, proposalID int64, expectedRevision int, path domain.LearningPath) (int, error) {
+	return s.publishProposal(ctx, proposalID, expectedRevision,
+		func(ctx context.Context, tx pgx.Tx, _ int64, baseVersion int) (int, error) {
+			return upsertPathTx(ctx, tx, path, &baseVersion)
+		})
+}
+
+// publishProposal is the shared publish transaction: lock the open proposal,
+// check the caller parsed the revision that's still current, run the
+// kind-specific write with the proposal's base_version as the optimistic-
+// concurrency expectation, then mark the proposal published.
+func (s *Store) publishProposal(ctx context.Context, proposalID int64, expectedRevision int,
+	write func(ctx context.Context, tx pgx.Tx, proposerID int64, baseVersion int) (int, error)) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -310,7 +348,7 @@ func (s *Store) PublishProposal(ctx context.Context, proposalID int64, expectedR
 		return 0, domain.ErrStaleRevision
 	}
 
-	version, err := upsertVariantTx(ctx, tx, course, variant, &proposerID, &baseVersion)
+	version, err := write(ctx, tx, proposerID, baseVersion)
 	if err != nil {
 		return 0, err
 	}

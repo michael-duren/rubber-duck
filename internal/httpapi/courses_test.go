@@ -131,18 +131,25 @@ func (f *fakeStore) seedVariant(t *testing.T, doc string) {
 
 // --- ProposalStore fake ---
 
-func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error) {
+func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, kind, slug, language, title, summary, markdown string) (domain.Proposal, error) {
 	for _, p := range f.proposals {
-		if p.ProposerID == proposerID && p.CourseSlug == courseSlug && p.Language == language && p.Status == domain.ProposalOpen {
+		if p.ProposerID == proposerID && p.Kind == kind && p.CourseSlug == slug && p.Language == language && p.Status == domain.ProposalOpen {
 			return domain.Proposal{}, domain.ErrDuplicateProposal
+		}
+	}
+	live := f.versions[f.key(slug, language)]
+	if kind == domain.KindPath {
+		live = 0
+		if _, ok := f.paths[slug]; ok {
+			live = 1
 		}
 	}
 	f.nextProposalID++
 	p := domain.Proposal{
-		ID: f.nextProposalID, ProposerID: proposerID, CourseSlug: courseSlug,
+		ID: f.nextProposalID, ProposerID: proposerID, Kind: kind, CourseSlug: slug,
 		Language: language, Title: title, SummaryMD: summary, ProposedMD: markdown,
-		BaseVersion: f.versions[f.key(courseSlug, language)],
-		LiveVersion: f.versions[f.key(courseSlug, language)],
+		BaseVersion: live,
+		LiveVersion: live,
 		Revision:    1, Status: domain.ProposalOpen,
 	}
 	f.proposals[p.ID] = p

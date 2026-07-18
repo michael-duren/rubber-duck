@@ -11,19 +11,30 @@ const (
 	ProposalWithdrawn = "withdrawn"
 )
 
-// Proposal is one user's suggested version of a course variant: a complete
-// course markdown document (the same one-file contract ingest.Parse reads)
-// plus review-workflow state. BaseVersion is the live variant version the
-// document was authored against — 0 when the variant doesn't exist yet — and
-// is what publishing passes to UpsertVariant as expectedVersion, so a
-// proposal whose base the world has moved past publishes as a conflict
-// ("needs rebase") instead of silently overwriting newer content. Revision
-// bumps every time the proposer updates the content; reviews record the
-// revision they saw so stale approvals stop counting.
+// Proposal kinds: what the proposed document targets. A course proposal
+// carries a course-variant document keyed by (CourseSlug, Language); a path
+// proposal carries a learning-path document with the path slug in
+// CourseSlug and an empty Language.
+const (
+	KindCourse = "course"
+	KindPath   = "path"
+)
+
+// Proposal is one user's suggested version of a course variant or learning
+// path: a complete markdown document (the same one-file contracts
+// ingest.Parse / ingest.ParsePath read) plus review-workflow state.
+// BaseVersion is the live version the document was authored against — 0
+// when the target doesn't exist yet — and is what publishing passes as
+// expectedVersion, so a proposal whose base the world has moved past
+// publishes as a conflict ("needs rebase") instead of silently overwriting
+// newer content. Revision bumps every time the proposer updates the
+// content; reviews record the revision they saw so stale approvals stop
+// counting.
 type Proposal struct {
 	ID               int64
 	ProposerID       int64
 	ProposerUsername string
+	Kind             string
 	CourseSlug       string
 	Language         string
 	Title            string
@@ -46,9 +57,22 @@ type Proposal struct {
 	LiveVersion int
 }
 
-// Stale reports whether the live variant has moved past the version this
+// Stale reports whether the live target has moved past the version this
 // proposal was authored against.
 func (p Proposal) Stale() bool { return p.BaseVersion != p.LiveVersion }
+
+// IsPath reports whether this proposal targets a learning path rather than
+// a course variant.
+func (p Proposal) IsPath() bool { return p.Kind == KindPath }
+
+// Target is the human-readable name of what the proposal changes:
+// "slug/language" for a course variant, "path slug" for a learning path.
+func (p Proposal) Target() string {
+	if p.IsPath() {
+		return "path " + p.CourseSlug
+	}
+	return p.CourseSlug + "/" + p.Language
+}
 
 // Review verdicts.
 const (

@@ -106,10 +106,10 @@ a proposal is approved on the site.
 | `GET /api/v1/courses/{slug}/variants/{language}` | public | The stored markdown + its `version`: `{"markdown": "...", "version": 3}`. |
 | `GET /api/v1/courses/{slug}/variants/{language}/challenges` | public | Starter and test code for each challenge, used by `duck test` local runs. |
 | `GET /api/v1/tags` | public | All known tags. |
-| `GET /api/v1/export` | public | Every live variant's source: `{"variants": [{"course", "language", "version", "markdown"}]}` — what the courses/ mirror sync reads. |
+| `GET /api/v1/export` | public | Every live variant's and path's source: `{"variants": [{"course", "language", "version", "markdown"}], "paths": [{"path", "version", "markdown"}]}` — what the courses/ and paths/ mirror sync reads. |
 | `GET /api/v1/paths` | public | List learning paths with course counts. |
 | `GET /api/v1/paths/{slug}` | public | The stored path markdown plus the resolved course order (see "Learning paths" below). |
-| `POST /api/v1/proposals` | token | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?}` — course/language come from the frontmatter; sending them too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "base_version", "revision", "status", "url", ...}`. One open proposal per user per variant: `409 duplicate_proposal` otherwise. |
+| `POST /api/v1/proposals` | token | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?, "path"?}` — the target comes from the frontmatter (a `path:` document opens a learning-path proposal, anything else a course-variant one); sending course/language (or path) too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "kind", "base_version", "revision", "status", "url", ...}`. One open proposal per user per target: `409 duplicate_proposal` otherwise. |
 | `PUT /api/v1/proposals/{id}` | token | Replace your open proposal's content. Bumps `revision` (resetting approvals) and re-captures `base_version` from the live variant (how you rebase). `404` if not yours, `409 proposal_closed` if closed. |
 | `GET /api/v1/proposals?mine=1` | token | Your proposals, newest first. |
 | `GET /api/v1/proposals/{id}` | token | One proposal including its markdown. |
@@ -239,18 +239,22 @@ Any markdown — rendered on the path page under the description.
 Rules and behavior:
 
 - Every slug in `courses:` must already exist in the catalog; unknown slugs
-  reject the import — `make seed` and `make import-courses-prod` order
-  `paths/` after `courses/` for this reason.
-- Paths carry no learner data and no version counter: re-importing replaces
-  the course list wholesale, and last write wins. Progress shown on a path
-  page is derived live from the member courses' submissions.
+  reject the write with `unknown_course_slugs` — `make seed` and
+  `make import-courses-prod` order `paths/` after `courses/` for this
+  reason, and a path proposal referencing a missing course is rejected at
+  authoring time (and re-checked at publish).
+- Paths carry no learner data: re-publishing replaces the course list
+  wholesale. Progress shown on a path page is derived live from the member
+  courses' submissions. Paths do have a version counter, purely so path
+  proposals get the same base-version/"needs rebase" optimistic concurrency
+  as course proposals.
 - Deleting a course simply drops it from any paths that referenced it;
   deleting a path never touches its courses.
-- Unlike `courses/` (a synced mirror), `paths/*.md` is **canonical**: paths
-  have no proposal flow, so they're edited via ordinary repo PRs and
-  imported with `duckserver seed` (`make seed` locally,
-  `make import-courses-prod` for prod). Over HTTP they're read-only
-  (`GET /api/v1/paths`).
+- Paths change exactly like courses: propose in the browser (the Edit
+  button on a path page, or "+ New path" on /paths) or with
+  `duck propose paths/<slug>.md`, review on `/proposals`, publish on
+  approval. `paths/*.md` here is a synced mirror like `courses/*.md`
+  (see `/api/v1/export`); `duckserver seed` remains the bootstrap import.
 
 ## Course content workflow
 
@@ -272,7 +276,7 @@ spuriously):
 
 ```sh
 make seed                                    # local: seed fixture + courses/*.md + paths/*.md
-make import-courses-prod                     # BREAK-GLASS for courses/*.md; also how paths/*.md deploy
+make import-courses-prod                     # BREAK-GLASS: courses/*.md + paths/*.md into prod
 make export-courses DUCK_URL=http://localhost:8080   # regenerate the mirror locally
 ```
 

@@ -30,6 +30,7 @@ type fakeStore struct {
 	courses        []domain.CourseSummary               // returned by ListCourses (catalog tests)
 	paths       []domain.PathSummary     // returned by ListPaths
 	path        *domain.LearningPath     // set by tests that need PathBySlug to resolve
+	pathVersion int                      // the fake path's live version (0 = doesn't exist)
 	pathCourses []domain.CourseSummary   // PathBySlug's member-course summaries, in order
 	progress    []domain.VariantProgress // returned by UserVariantProgress
 
@@ -230,6 +231,18 @@ func (f *fakeStore) liveVersion(slug, lang string) int {
 	return f.variantVersion
 }
 
+// liveVersionFor is liveVersion routed by proposal kind: path proposals
+// read the fake's single path slot (pathVersion, 0 when absent).
+func (f *fakeStore) liveVersionFor(p domain.Proposal) int {
+	if p.IsPath() {
+		if f.path != nil && f.path.Slug == p.CourseSlug {
+			return f.pathVersion
+		}
+		return 0
+	}
+	return f.liveVersion(p.CourseSlug, p.Language)
+}
+
 // countApprovals recomputes current-revision non-proposer approvals, the
 // same aggregate the real store's proposal queries compute.
 func (f *fakeStore) countApprovals(p domain.Proposal) int {
@@ -244,13 +257,13 @@ func (f *fakeStore) countApprovals(p domain.Proposal) int {
 
 func (f *fakeStore) refreshProposal(p domain.Proposal) domain.Proposal {
 	p.Approvals = f.countApprovals(p)
-	p.LiveVersion = f.liveVersion(p.CourseSlug, p.Language)
+	p.LiveVersion = f.liveVersionFor(p)
 	return p
 }
 
-func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error) {
+func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, kind, slug, language, title, summary, markdown string) (domain.Proposal, error) {
 	for _, p := range f.proposals {
-		if p.ProposerID == proposerID && p.CourseSlug == courseSlug && p.Language == language && p.Status == domain.ProposalOpen {
+		if p.ProposerID == proposerID && p.Kind == kind && p.CourseSlug == slug && p.Language == language && p.Status == domain.ProposalOpen {
 			return domain.Proposal{}, domain.ErrDuplicateProposal
 		}
 	}
@@ -258,10 +271,11 @@ func (f *fakeStore) CreateProposal(_ context.Context, proposerID int64, courseSl
 	proposer, _ := f.userByID(proposerID)
 	p := domain.Proposal{
 		ID: f.nextProp, ProposerID: proposerID, ProposerUsername: proposer.Username,
-		CourseSlug: courseSlug, Language: language, Title: title, SummaryMD: summary,
-		ProposedMD: markdown, BaseVersion: f.liveVersion(courseSlug, language),
-		Revision: 1, Status: domain.ProposalOpen,
+		Kind: kind, CourseSlug: slug, Language: language, Title: title, SummaryMD: summary,
+		ProposedMD: markdown,
+		Revision:   1, Status: domain.ProposalOpen,
 	}
+	p.BaseVersion = f.liveVersionFor(p)
 	f.proposals[p.ID] = p
 	return f.refreshProposal(p), nil
 }
@@ -276,7 +290,7 @@ func (f *fakeStore) UpdateProposalMarkdown(_ context.Context, proposalID, propos
 	}
 	p.Title, p.SummaryMD, p.ProposedMD = title, summary, markdown
 	p.Revision++
-	p.BaseVersion = f.liveVersion(p.CourseSlug, p.Language)
+	p.BaseVersion = f.liveVersionFor(p)
 	f.proposals[proposalID] = p
 	return f.refreshProposal(p), nil
 }
@@ -371,6 +385,33 @@ func (f *fakeStore) PublishProposal(_ context.Context, proposalID int64, expecte
 	f.variantSource = variant.SourceMD
 	f.variantVersion++
 	version := f.variantVersion
+	p.Status = domain.ProposalPublished
+	p.PublishedVersion = &version
+	f.proposals[proposalID] = p
+	f.published = append(f.published, proposalID)
+	return version, nil
+}
+
+func (f *fakeStore) PublishPathProposal(_ context.Context, proposalID int64, expectedRevision int, path domain.LearningPath) (int, error) {
+	if f.publishErr != nil {
+		return 0, f.publishErr
+	}
+	p, ok := f.proposals[proposalID]
+	if !ok {
+		return 0, domain.ErrNotFound
+	}
+	if p.Status != domain.ProposalOpen {
+		return 0, domain.ErrProposalClosed
+	}
+	if p.Revision != expectedRevision {
+		return 0, domain.ErrStaleRevision
+	}
+	if p.BaseVersion != f.liveVersionFor(p) {
+		return 0, domain.ErrVersionConflict
+	}
+	f.path = &path
+	f.pathVersion++
+	version := f.pathVersion
 	p.Status = domain.ProposalPublished
 	p.PublishedVersion = &version
 	f.proposals[proposalID] = p

@@ -120,13 +120,12 @@ seed:
 		go run ./cmd/duckserver seed --db "$(DB_URL)" "$$f" || exit 1; \
 	done
 
-# BREAK-GLASS ONLY for courses: import courses/*.md straight into the prod
-# database, bypassing the proposal/review workflow (needs gcloud ADC + tofu
-# state). The normal way course content reaches prod is a proposal getting
-# approved on the site; this exists for bootstrap and disaster recovery.
-# paths/*.md is included because paths have no proposal flow — this IS how
-# path changes deploy (paths/ is canonical in the repo, unlike courses/).
-# Imports are idempotent (unchanged documents are skipped) and unattributed.
+# BREAK-GLASS ONLY: import courses/*.md and paths/*.md straight into the
+# prod database, bypassing the proposal/review workflow (needs gcloud ADC +
+# tofu state). The normal way content — courses AND paths — reaches prod is
+# a proposal getting approved on the site; this exists for bootstrap and
+# disaster recovery. Imports are idempotent (unchanged documents are
+# skipped) and unattributed.
 import-courses-prod: $(SQL_PROXY)
 	@set -e; \
 	conn=$$(tofu -chdir=infra output -raw sql_connection_name); \

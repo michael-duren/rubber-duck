@@ -68,11 +68,15 @@ templ ProposalDetail(user *domain.User, p domain.Proposal, reviews []domain.Prop
 			<div class="min-w-0">
 				<h1 class="text-2xl font-bold">{ p.Title }</h1>
 				<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-					<a href={ templ.SafeURL("/courses/" + p.CourseSlug + "/" + p.Language) } class="font-mono hover:text-emerald-600 dark:hover:text-emerald-400">{ p.CourseSlug }</a>
-					@langChip(p.Language)
+					<a href={ templ.SafeURL(proposalTargetURL(p)) } class="font-mono hover:text-emerald-600 dark:hover:text-emerald-400">{ p.CourseSlug }</a>
+					if p.IsPath() {
+						@pathKindChip()
+					} else {
+						@langChip(p.Language)
+					}
 					<span>proposed by { p.ProposerUsername }</span>
 					if p.BaseVersion == 0 {
-						<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new course</span>
+						<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new { proposalNoun(p) }</span>
 					}
 					@proposalStatusChip(p.Status)
 				</div>
@@ -98,14 +102,14 @@ templ ProposalDetail(user *domain.User, p domain.Proposal, reviews []domain.Prop
 		}
 		if p.Status == domain.ProposalOpen && p.Stale() {
 			<p class="mt-4 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-				The course has changed since this proposal was written (it targets version { strconv.Itoa(p.BaseVersion) }, the course is now at version { strconv.Itoa(p.LiveVersion) }).
+				The { proposalNoun(p) } has changed since this proposal was written (it targets version { strconv.Itoa(p.BaseVersion) }, the { proposalNoun(p) } is now at version { strconv.Itoa(p.LiveVersion) }).
 				It can't publish until the proposer updates it against the current content — the diff below compares against the <em>current</em> document.
 			</p>
 		}
 		if p.Status == domain.ProposalPublished && p.PublishedVersion != nil {
 			<p class="mt-4 border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300">
 				Published as version { strconv.Itoa(*p.PublishedVersion) } of
-				<a href={ templ.SafeURL("/courses/" + p.CourseSlug + "/" + p.Language) } class="underline">{ p.CourseSlug }/{ p.Language }</a>.
+				<a href={ templ.SafeURL(proposalTargetURL(p)) } class="underline">{ p.Target() }</a>.
 			</p>
 		}
 		<h2 class="mt-8 font-mono text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Changes vs. current document</h2>
@@ -180,4 +184,27 @@ templ ProposalDetail(user *domain.User, p domain.Proposal, reviews []domain.Prop
 			}
 		}
 	}
+}
+
+// proposalTargetURL is the live page a proposal's target renders at — the
+// variant page for course proposals, the path page for path proposals.
+func proposalTargetURL(p domain.Proposal) string {
+	if p.IsPath() {
+		return "/paths/" + p.CourseSlug
+	}
+	return "/courses/" + p.CourseSlug + "/" + p.Language
+}
+
+// proposalNoun is the target's noun for prose ("course" / "path").
+func proposalNoun(p domain.Proposal) string {
+	if p.IsPath() {
+		return "path"
+	}
+	return "course"
+}
+
+// pathKindChip marks a proposal as targeting a learning path, in the slot
+// where course proposals show their language chip.
+templ pathKindChip() {
+	<span class="border border-blue-400 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:border-blue-800 dark:text-blue-300">path</span>
 }

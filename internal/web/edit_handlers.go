@@ -172,7 +172,7 @@ func (h *handlers) editVariantPage(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 	slug, lang := r.PathValue("slug"), r.PathValue("lang")
 	mdText := r.FormValue("markdown")
-	title, summary := formTitleSummary(r, slug, lang)
+	title, summary := formTitleSummary(r, slug+"/"+lang)
 
 	form := variantEditorForm(slug, lang, mdText)
 	form.Title, form.Summary = r.FormValue("title"), summary
@@ -204,9 +204,9 @@ func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := currentUser(r) // non-nil: this route is behind h.requireUser
-	p, err := h.proposals.CreateProposal(r.Context(), user.ID, slug, lang, title, summary, mdText)
+	p, err := h.proposals.CreateProposal(r.Context(), user.ID, domain.KindCourse, slug, lang, title, summary, mdText)
 	if errors.Is(err, domain.ErrDuplicateProposal) {
-		if existing, ok := h.openProposalFor(r, user.ID, slug, lang); ok {
+		if existing, ok := h.openProposalFor(r, user.ID, domain.KindCourse, slug, lang); ok {
 			http.Redirect(w, r, fmt.Sprintf("/proposals/%d/edit?dup=1", existing.ID), http.StatusSeeOther)
 			return
 		}
@@ -222,9 +222,9 @@ func (h *handlers) proposeVariant(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
 }
 
-// openProposalFor finds the user's open proposal for a course variant —
-// the row the one-open-proposal unique index just pointed at.
-func (h *handlers) openProposalFor(r *http.Request, userID int64, slug, lang string) (domain.Proposal, bool) {
+// openProposalFor finds the user's open proposal for a target — the row
+// the one-open-proposal unique index just pointed at.
+func (h *handlers) openProposalFor(r *http.Request, userID int64, kind, slug, lang string) (domain.Proposal, bool) {
 	mine, err := h.proposals.ListProposalsByUser(r.Context(), userID)
 	if err != nil {
 		// Degrades to the generic duplicate-proposal message rather than a
@@ -233,7 +233,7 @@ func (h *handlers) openProposalFor(r *http.Request, userID int64, slug, lang str
 		return domain.Proposal{}, false
 	}
 	for _, p := range mine {
-		if p.CourseSlug == slug && p.Language == lang && p.Status == domain.ProposalOpen {
+		if p.Kind == kind && p.CourseSlug == slug && p.Language == lang && p.Status == domain.ProposalOpen {
 			return p, true
 		}
 	}
@@ -249,6 +249,152 @@ func variantEditorForm(slug, lang, markdown string) views.EditorForm {
 		Markdown: markdown,
 		Action:   fmt.Sprintf("/courses/%s/%s/edit", slug, lang),
 		Cancel:   fmt.Sprintf("/courses/%s/%s", slug, lang),
+	}
+}
+
+// --- learning-path proposals: the same editor flow, path-flavored ---
+
+// newPathPage renders the entry-point form for proposing a brand-new
+// learning path, mirroring newCoursePage: it only collects enough to seed
+// a frontmatter template in the editor — nothing persists until the
+// proposal is approved.
+func (h *handlers) newPathPage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	h.render(w, r, views.NewPath(currentUser(r), q.Get("slug"), q.Get("title"), q.Get("description"), ""))
+}
+
+// createPath validates the "New path" form and redirects into the path
+// editor seeded with a template (new=1), exactly like createCourse.
+func (h *handlers) createPath(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	title := strings.TrimSpace(r.FormValue("title"))
+	description := strings.TrimSpace(r.FormValue("description"))
+
+	var errMsg string
+	switch {
+	case slug == "" || title == "":
+		errMsg = "Slug and title are required."
+	case !slugPattern.MatchString(slug):
+		errMsg = "Slug must be lowercase letters, numbers, and hyphens only (e.g. go-developer)."
+	case slug == "new":
+		// Same literal-route shadowing as /courses/new: GET /paths/new is
+		// this form, so a path actually named "new" would be unreachable.
+		errMsg = "\"new\" is a reserved slug — pick a different one."
+	}
+	if errMsg != "" {
+		h.render(w, r, views.NewPath(currentUser(r), slug, title, description, errMsg))
+		return
+	}
+
+	q := url.Values{"new": {"1"}, "title": {title}, "description": {description}}
+	http.Redirect(w, r, fmt.Sprintf("/paths/%s/edit?%s", slug, q.Encode()), http.StatusSeeOther)
+}
+
+// newPathTemplate is the minimal valid learning-path document used to seed
+// the editor for a path that doesn't exist yet (see ingest.ParsePath for
+// the contract it satisfies).
+func newPathTemplate(slug, title, description string) string {
+	if title == "" {
+		title = slug
+	}
+	if description == "" {
+		description = "TODO: one-paragraph pitch."
+	}
+	return "---\n" +
+		"path: " + slug + "\n" +
+		"title: " + title + "\n" +
+		"description: " + description + "\n" +
+		"courses:\n" +
+		"  - todo-course-slug\n" +
+		"---\n\n" +
+		"## Why this order\n\n" +
+		"TODO: explain the track.\n"
+}
+
+// editPathPage is editVariantPage for learning paths: the stored path
+// document in an editable textarea, or a seeded template when new=1
+// arrived via createPath's redirect.
+func (h *handlers) editPathPage(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	path, _, err := h.courses.PathBySlug(r.Context(), slug)
+	src := path.SourceMD
+	if errors.Is(err, domain.ErrNotFound) {
+		if r.URL.Query().Get("new") == "1" {
+			q := r.URL.Query()
+			src = newPathTemplate(slug, q.Get("title"), q.Get("description"))
+		} else {
+			http.NotFound(w, r)
+			return
+		}
+	} else if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	h.render(w, r, views.EditVariant(currentUser(r), pathEditorForm(slug, src)))
+}
+
+// proposePath is proposeVariant for learning paths: lint the document,
+// keep it pointed at the path this page edits, then open a proposal.
+func (h *handlers) proposePath(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	mdText := r.FormValue("markdown")
+	title, summary := formTitleSummary(r, "path "+slug)
+
+	form := pathEditorForm(slug, mdText)
+	form.Title, form.Summary = r.FormValue("title"), summary
+
+	res, problems, err := parsePathForEditor(mdText)
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+	if problems != nil {
+		form.Problems = problems
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
+	if res.Path.Path != slug {
+		form.ErrMsg = fmt.Sprintf("This page edits path %s but the document's frontmatter says %s — fix the frontmatter or navigate to the matching path before proposing.",
+			slug, res.Path.Path)
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
+	if msg, err := pathRenderCheckMsg(res, mdText); err != nil {
+		h.serverError(w, r, err)
+		return
+	} else if msg != "" {
+		form.ErrMsg = msg
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
+
+	user := currentUser(r) // non-nil: this route is behind h.requireUser
+	p, err := h.proposals.CreateProposal(r.Context(), user.ID, domain.KindPath, slug, "", title, summary, mdText)
+	if errors.Is(err, domain.ErrDuplicateProposal) {
+		if existing, ok := h.openProposalFor(r, user.ID, domain.KindPath, slug, ""); ok {
+			http.Redirect(w, r, fmt.Sprintf("/proposals/%d/edit?dup=1", existing.ID), http.StatusSeeOther)
+			return
+		}
+		form.ErrMsg = "You already have an open proposal for this path."
+		h.render(w, r, views.EditVariant(currentUser(r), form))
+		return
+	}
+	if err != nil {
+		h.serverError(w, r, err)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/proposals/%d", p.ID), http.StatusSeeOther)
+}
+
+// pathEditorForm is the views.EditorForm for proposing from a path page.
+func pathEditorForm(slug, markdown string) views.EditorForm {
+	return views.EditorForm{
+		Slug:     slug,
+		IsPath:   true,
+		Markdown: markdown,
+		Action:   fmt.Sprintf("/paths/%s/edit", slug),
+		Cancel:   fmt.Sprintf("/paths/%s", slug),
 	}
 }
 

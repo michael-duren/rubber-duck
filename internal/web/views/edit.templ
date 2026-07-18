@@ -23,12 +23,22 @@ type EditProblem struct {
 // the user submitted, so a rejected submit never discards their edits.
 type EditorForm struct {
 	Slug, Lang     string
+	IsPath         bool // a learning-path document: Slug is the path slug, Lang is empty
 	Markdown       string
 	Title, Summary string
 	Action, Cancel string
 	Notice         string // informational banner (e.g. duplicate-proposal redirect)
 	ErrMsg         string
 	Problems       []EditProblem
+}
+
+// editorTitle is the page/heading label: "slug (lang)" for a course
+// variant, "path slug" for a learning path.
+func editorTitle(f EditorForm) string {
+	if f.IsPath {
+		return "path " + f.Slug
+	}
+	return f.Slug + " (" + f.Lang + ")"
 }
 
 // EditVariant is the raw-markdown editor. Submitting opens (or updates) a
@@ -50,13 +60,20 @@ type EditorForm struct {
 // its own scrollbar — matching the preview pane — so editing a long course
 // doc scrolls the panes, not the page.
 templ EditVariant(user *domain.User, f EditorForm) {
-	@Layout("Edit "+f.Slug+" ("+f.Lang+")", user) {
-		<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
-			<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
-			<a href={ templ.SafeURL("/courses/" + f.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ f.Slug }</a> /
-			<a href={ templ.SafeURL("/courses/" + f.Slug + "/" + f.Lang) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ f.Lang }</a> / edit
-		</nav>
-		<h1 class="mt-4 text-2xl font-bold">Edit { f.Slug } ({ f.Lang })</h1>
+	@Layout("Edit "+editorTitle(f), user) {
+		if f.IsPath {
+			<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+				<a href="/paths" class="hover:text-emerald-600 dark:hover:text-emerald-400">paths</a> /
+				<a href={ templ.SafeURL("/paths/" + f.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ f.Slug }</a> / edit
+			</nav>
+		} else {
+			<nav class="font-mono text-xs text-slate-500 dark:text-slate-400">
+				<a href="/courses" class="hover:text-emerald-600 dark:hover:text-emerald-400">courses</a> /
+				<a href={ templ.SafeURL("/courses/" + f.Slug) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ f.Slug }</a> /
+				<a href={ templ.SafeURL("/courses/" + f.Slug + "/" + f.Lang) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ f.Lang }</a> / edit
+			</nav>
+		}
+		<h1 class="mt-4 text-2xl font-bold">Edit { editorTitle(f) }</h1>
 		<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
 			Changes are submitted as a proposal for the community to review — they go live once approved.
 		</p>
@@ -85,7 +102,11 @@ templ EditVariant(user *domain.User, f EditorForm) {
 						type="text"
 						name="title"
 						value={ f.Title }
-						placeholder={ "Update " + f.Slug + "/" + f.Lang }
+						if f.IsPath {
+							placeholder={ "Update path " + f.Slug }
+						} else {
+							placeholder={ "Update " + f.Slug + "/" + f.Lang }
+						}
 						class="border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
 					/>
 				</label>

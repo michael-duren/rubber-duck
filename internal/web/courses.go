@@ -23,8 +23,8 @@ type CourseReader interface {
 	// pre-filled textarea and the "current" side of a proposal's diff.
 	VariantSource(ctx context.Context, courseSlug, language string) (string, int, error)
 	// Learning paths: curated, ordered tracks of courses (see
-	// domain.LearningPath). Read-only here like everything else — paths
-	// are published via `duckserver seed`, not the browser.
+	// domain.LearningPath). Reads only, like the course methods — path
+	// edits open proposals (see edit_handlers.go proposePath).
 	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
 	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
 }

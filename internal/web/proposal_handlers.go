@@ -16,7 +16,9 @@ import (
 
 // ProposalStore is the slice of the store the proposal pages need.
 type ProposalStore interface {
-	CreateProposal(ctx context.Context, proposerID int64, courseSlug, language, title, summary, markdown string) (domain.Proposal, error)
+	// CreateProposal opens a proposal for a course variant (kind "course")
+	// or a learning path (kind "path", slug = path slug, language "").
+	CreateProposal(ctx context.Context, proposerID int64, kind, slug, language, title, summary, markdown string) (domain.Proposal, error)
 	UpdateProposalMarkdown(ctx context.Context, proposalID, proposerID int64, title, summary, markdown string) (domain.Proposal, error)
 	ProposalByID(ctx context.Context, id int64) (domain.Proposal, error)
 	ListProposals(ctx context.Context, status string) ([]domain.Proposal, error)
@@ -29,6 +31,7 @@ type ProposalStore interface {
 	// the current revision is ErrStaleRevision.
 	AddReview(ctx context.Context, proposalID, reviewerID int64, verdict, comment string, seenRevision int) (domain.ReviewOutcome, error)
 	PublishProposal(ctx context.Context, proposalID int64, expectedRevision int, course domain.Course, variant domain.Variant) (int, error)
+	PublishPathProposal(ctx context.Context, proposalID int64, expectedRevision int, path domain.LearningPath) (int, error)
 	WithdrawProposal(ctx context.Context, proposalID, proposerID int64) error
 }
 
@@ -107,11 +110,20 @@ func (h *handlers) renderProposal(w http.ResponseWriter, r *http.Request, p doma
 		return
 	}
 
-	// Diff against the live source; a variant that doesn't exist yet (a
-	// new-course proposal) diffs against nothing, i.e. shows as all-insert.
-	live, _, err := h.courses.VariantSource(r.Context(), p.CourseSlug, p.Language)
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
-		h.serverError(w, r, err)
+	// Diff against the live source; a target that doesn't exist yet (a
+	// new-course or new-path proposal) diffs against nothing, i.e. shows as
+	// all-insert.
+	var live string
+	var err2 error
+	if p.IsPath() {
+		var lp domain.LearningPath
+		lp, _, err2 = h.courses.PathBySlug(r.Context(), p.CourseSlug)
+		live = lp.SourceMD
+	} else {
+		live, _, err2 = h.courses.VariantSource(r.Context(), p.CourseSlug, p.Language)
+	}
+	if err2 != nil && !errors.Is(err2, domain.ErrNotFound) {
+		h.serverError(w, r, err2)
 		return
 	}
 	hunks := diff.Hunks(diff.Lines(live, p.ProposedMD), diffContext)
@@ -182,27 +194,59 @@ func (h *handlers) createReview(w http.ResponseWriter, r *http.Request) {
 // document was linted and render-checked when the proposal was
 // created/updated, so a failure here means the ingest contract (or the d2
 // compiler) tightened since — rare, but surfaced honestly rather than
-// 500ing.
+// 500ing. Path proposals also re-run the unknown-course-slug check inside
+// the publish transaction: a member course deleted since authoring
+// surfaces as a validation message, not a 500.
 func (h *handlers) publishProposal(w http.ResponseWriter, r *http.Request, p domain.Proposal) {
 	src := []byte(p.ProposedMD)
-	res, err := ingest.Parse(src)
-	if err != nil {
-		h.renderProposal(w, r, p,
-			"This proposal reached approval but its document no longer validates — the author needs to update it. "+err.Error())
-		return
+	var err error
+	if p.IsPath() {
+		var res *ingest.PathResult
+		res, err = ingest.ParsePath(src)
+		if err != nil {
+			h.renderProposal(w, r, p,
+				"This proposal reached approval but its document no longer validates — the author needs to update it. "+err.Error())
+			return
+		}
+		var path domain.LearningPath
+		path, err = ingest.PathToDomain(res, src)
+		if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
+			h.renderProposal(w, r, p,
+				"This proposal reached approval but a diagram in it no longer compiles — the author needs to update it. "+err.Error())
+			return
+		}
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		_, err = h.proposals.PublishPathProposal(r.Context(), p.ID, p.Revision, path)
+		if unknown, ok := errors.AsType[*domain.UnknownCoursesError](err); ok {
+			h.renderProposal(w, r, p,
+				"This proposal reached approval but references courses that no longer exist — the author needs to update it. "+unknown.Error())
+			return
+		}
+	} else {
+		var res *ingest.Result
+		res, err = ingest.Parse(src)
+		if err != nil {
+			h.renderProposal(w, r, p,
+				"This proposal reached approval but its document no longer validates — the author needs to update it. "+err.Error())
+			return
+		}
+		var course domain.Course
+		var variant domain.Variant
+		course, variant, err = ingest.ToDomain(res, src)
+		if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
+			h.renderProposal(w, r, p,
+				"This proposal reached approval but a diagram in it no longer compiles — the author needs to update it. "+err.Error())
+			return
+		}
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		_, err = h.proposals.PublishProposal(r.Context(), p.ID, p.Revision, course, variant)
 	}
-	course, variant, err := ingest.ToDomain(res, src)
-	if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
-		h.renderProposal(w, r, p,
-			"This proposal reached approval but a diagram in it no longer compiles — the author needs to update it. "+err.Error())
-		return
-	}
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-
-	_, err = h.proposals.PublishProposal(r.Context(), p.ID, p.Revision, course, variant)
 	switch {
 	case errors.Is(err, domain.ErrVersionConflict):
 		// The live variant moved past the proposal's base since it was
@@ -278,32 +322,59 @@ func (h *handlers) updateProposal(w http.ResponseWriter, r *http.Request) {
 	form := proposalEditorForm(p, mdText, "", nil)
 	form.Title, form.Summary = title, summary
 
-	res, problems, err := parseForEditor(mdText)
-	if err != nil {
-		h.serverError(w, r, err)
-		return
-	}
-	if problems != nil {
-		form.Problems = problems
-		h.render(w, r, views.EditVariant(user, form))
-		return
-	}
-	if res.Course.Course != p.CourseSlug || res.Course.Language != p.Language {
-		form.ErrMsg = fmt.Sprintf("This proposal is for %s/%s but the document's frontmatter says %s/%s — a proposal can't change which course variant it targets.",
-			p.CourseSlug, p.Language, res.Course.Course, res.Course.Language)
-		h.render(w, r, views.EditVariant(user, form))
-		return
-	}
-	if msg, err := renderCheckMsg(res, mdText); err != nil {
-		h.serverError(w, r, err)
-		return
-	} else if msg != "" {
-		form.ErrMsg = msg
-		h.render(w, r, views.EditVariant(user, form))
-		return
+	if p.IsPath() {
+		res, problems, err := parsePathForEditor(mdText)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		if problems != nil {
+			form.Problems = problems
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
+		if res.Path.Path != p.CourseSlug {
+			form.ErrMsg = fmt.Sprintf("This proposal is for path %s but the document's frontmatter says %s — a proposal can't change which path it targets.",
+				p.CourseSlug, res.Path.Path)
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
+		if msg, err := pathRenderCheckMsg(res, mdText); err != nil {
+			h.serverError(w, r, err)
+			return
+		} else if msg != "" {
+			form.ErrMsg = msg
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
+	} else {
+		res, problems, err := parseForEditor(mdText)
+		if err != nil {
+			h.serverError(w, r, err)
+			return
+		}
+		if problems != nil {
+			form.Problems = problems
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
+		if res.Course.Course != p.CourseSlug || res.Course.Language != p.Language {
+			form.ErrMsg = fmt.Sprintf("This proposal is for %s/%s but the document's frontmatter says %s/%s — a proposal can't change which course variant it targets.",
+				p.CourseSlug, p.Language, res.Course.Course, res.Course.Language)
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
+		if msg, err := renderCheckMsg(res, mdText); err != nil {
+			h.serverError(w, r, err)
+			return
+		} else if msg != "" {
+			form.ErrMsg = msg
+			h.render(w, r, views.EditVariant(user, form))
+			return
+		}
 	}
 
-	_, err = h.proposals.UpdateProposalMarkdown(r.Context(), p.ID, user.ID, title, summary, mdText)
+	_, err := h.proposals.UpdateProposalMarkdown(r.Context(), p.ID, user.ID, title, summary, mdText)
 	switch {
 	case errors.Is(err, domain.ErrProposalClosed):
 		form.ErrMsg = "This proposal was closed while you were editing — your changes were not saved."
@@ -343,11 +414,13 @@ func (h *handlers) withdrawProposal(w http.ResponseWriter, r *http.Request) {
 }
 
 // proposalEditorForm is the views.EditorForm for editing an existing
-// proposal (vs. proposing from a course page, see proposeVariant).
+// proposal (vs. proposing from a course or path page, see proposeVariant /
+// proposePath).
 func proposalEditorForm(p domain.Proposal, markdown, notice string, problems []views.EditProblem) views.EditorForm {
 	return views.EditorForm{
 		Slug:     p.CourseSlug,
 		Lang:     p.Language,
+		IsPath:   p.IsPath(),
 		Markdown: markdown,
 		Title:    p.Title,
 		Summary:  p.SummaryMD,
@@ -361,11 +434,12 @@ func proposalEditorForm(p domain.Proposal, markdown, notice string, problems []v
 // formTitleSummary reads the title/summary editor fields for a NEW
 // proposal, defaulting an empty title the same way the JSON API does.
 // Updates default differently — an empty title keeps the proposal's
-// current one (see updateProposal).
-func formTitleSummary(r *http.Request, slug, lang string) (title, summary string) {
+// current one (see updateProposal). target is the display name ("slug/lang"
+// or "path slug").
+func formTitleSummary(r *http.Request, target string) (title, summary string) {
 	title = r.FormValue("title")
 	if title == "" {
-		title = fmt.Sprintf("Update %s/%s", slug, lang)
+		title = "Update " + target
 	}
 	return title, r.FormValue("summary")
 }
@@ -398,6 +472,31 @@ func parseForEditor(mdText string) (*ingest.Result, []views.EditProblem, error) 
 // d2's line:col).
 func renderCheckMsg(res *ingest.Result, mdText string) (string, error) {
 	_, _, err := ingest.ToDomain(res, []byte(mdText))
+	if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
+		return err.Error(), nil
+	}
+	return "", err
+}
+
+// parsePathForEditor and pathRenderCheckMsg are the learning-path siblings
+// of parseForEditor / renderCheckMsg, for path proposals.
+func parsePathForEditor(mdText string) (*ingest.PathResult, []views.EditProblem, error) {
+	res, err := ingest.ParsePath([]byte(mdText))
+	if pErr, ok := errors.AsType[*ingest.ValidationError](err); ok {
+		problems := make([]views.EditProblem, len(pErr.Problems))
+		for i, p := range pErr.Problems {
+			problems[i] = views.EditProblem{Line: p.Line, Message: p.Message}
+		}
+		return nil, problems, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return res, nil, nil
+}
+
+func pathRenderCheckMsg(res *ingest.PathResult, mdText string) (string, error) {
+	_, err := ingest.PathToDomain(res, []byte(mdText))
 	if _, isDiagram := errors.AsType[*markdown.DiagramError](err); isDiagram {
 		return err.Error(), nil
 	}

@@ -79,10 +79,14 @@ templ Proposals(user *domain.User, proposals []domain.Proposal, status string, m
 							<a href={ templ.SafeURL("/proposals/" + strconv.FormatInt(p.ID, 10)) } class="truncate font-medium hover:text-emerald-600 dark:hover:text-emerald-400">{ p.Title }</a>
 							<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
 								<span class="font-mono">{ p.CourseSlug }</span>
-								@langChip(p.Language)
+								if p.IsPath() {
+									@pathKindChip()
+								} else {
+									@langChip(p.Language)
+								}
 								<span>by { p.ProposerUsername }</span>
 								if p.BaseVersion == 0 {
-									<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new course</span>
+									<span class="border border-violet-400 px-1.5 py-0.5 font-mono text-xs text-violet-700 dark:border-violet-800 dark:text-violet-300">new { proposalNoun(p) }</span>
 								}
 							</div>
 						</div>

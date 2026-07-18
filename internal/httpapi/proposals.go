@@ -15,11 +15,14 @@ import (
 )
 
 // proposalJSON is the API shape of a proposal. The document itself is only
-// included on single-proposal GETs, not lists.
+// included on single-proposal GETs, not lists. Exactly one target is set:
+// course+language for kind "course", path for kind "path".
 type proposalJSON struct {
 	ID          int64  `json:"id"`
-	Course      string `json:"course"`
-	Language    string `json:"language"`
+	Kind        string `json:"kind"`
+	Course      string `json:"course,omitempty"`
+	Language    string `json:"language,omitempty"`
+	Path        string `json:"path,omitempty"`
 	Title       string `json:"title"`
 	Summary     string `json:"summary,omitempty"`
 	Markdown    string `json:"markdown,omitempty"`
@@ -34,8 +37,7 @@ type proposalJSON struct {
 func toProposalJSON(p domain.Proposal, includeMarkdown bool) proposalJSON {
 	j := proposalJSON{
 		ID:          p.ID,
-		Course:      p.CourseSlug,
-		Language:    p.Language,
+		Kind:        p.Kind,
 		Title:       p.Title,
 		Summary:     p.SummaryMD,
 		BaseVersion: p.BaseVersion,
@@ -45,6 +47,11 @@ func toProposalJSON(p domain.Proposal, includeMarkdown bool) proposalJSON {
 		Stale:       p.Status == domain.ProposalOpen && p.Stale(),
 		URL:         fmt.Sprintf("/proposals/%d", p.ID),
 	}
+	if p.IsPath() {
+		j.Path = p.CourseSlug
+	} else {
+		j.Course, j.Language = p.CourseSlug, p.Language
+	}
 	if includeMarkdown {
 		j.Markdown = p.ProposedMD
 	}
@@ -52,15 +59,18 @@ func toProposalJSON(p domain.Proposal, includeMarkdown bool) proposalJSON {
 }
 
 // decodeProposalBody reads and validates the shared create/update request
-// body. course/language always come from the document's frontmatter — the
-// contract everywhere in this codebase — but a caller that thinks it knows
-// them may send them, and a mismatch is rejected rather than silently
-// resolved in the frontmatter's favor. Returns ok=false with the response
-// already written on any failure.
-func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (course, language, title, summary, markdown string, ok bool) {
+// body. The target always comes from the document's frontmatter — the
+// contract everywhere in this codebase: a "path:" key makes it a
+// learning-path proposal, anything else a course-variant one. A caller that
+// thinks it knows the target may send course/language (or path), and a
+// mismatch is rejected rather than silently resolved in the frontmatter's
+// favor. Returns ok=false with the response already written on any failure.
+// For kind=path, slug is the path slug and language is "".
+func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (kind, slug, language, title, summary, markdown string, ok bool) {
 	var body struct {
 		Course   string `json:"course"`
 		Language string `json:"language"`
+		Path     string `json:"path"`
 		Title    string `json:"title"`
 		Summary  string `json:"summary"`
 		Markdown string `json:"markdown"`
@@ -81,16 +91,57 @@ func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (c
 		writeError(w, http.StatusBadRequest, "bad_request", `missing or empty "markdown" field`, nil)
 		return
 	}
+	src := []byte(body.Markdown)
 
-	res, parsed := h.parseCourseDoc(w, r, []byte(body.Markdown))
+	if ingest.IsPathDocument(src) {
+		res, parsed := h.parsePathDoc(w, r, src)
+		if !parsed {
+			return
+		}
+		slug = res.Path.Path
+		if body.Course != "" || body.Language != "" {
+			writeError(w, http.StatusConflict, "slug_mismatch",
+				fmt.Sprintf("request names course %s/%s but the document is a learning path (%s)",
+					body.Course, body.Language, slug), nil)
+			return
+		}
+		if body.Path != "" && body.Path != slug {
+			writeError(w, http.StatusConflict, "slug_mismatch",
+				fmt.Sprintf("request names path %s but frontmatter says %s", body.Path, slug), nil)
+			return
+		}
+		// Same render-check-now discipline as courses: a ```d2 fence in the
+		// overview that doesn't compile must fail here, not after approvals.
+		if _, err := ingest.PathToDomain(res, src); err != nil {
+			if _, isDiagram := errors.AsType[*md.DiagramError](err); isDiagram {
+				writeError(w, http.StatusUnprocessableEntity, "invalid_path_markdown", err.Error(), nil)
+				return
+			}
+			h.serverError(w, r, err)
+			return
+		}
+		title = body.Title
+		if title == "" {
+			title = "Update path " + slug
+		}
+		return domain.KindPath, slug, "", title, body.Summary, body.Markdown, true
+	}
+
+	res, parsed := h.parseCourseDoc(w, r, src)
 	if !parsed {
 		return
 	}
-	course, language = res.Course.Course, res.Course.Language
-	if (body.Course != "" && body.Course != course) || (body.Language != "" && body.Language != language) {
+	slug, language = res.Course.Course, res.Course.Language
+	if body.Path != "" {
+		writeError(w, http.StatusConflict, "slug_mismatch",
+			fmt.Sprintf("request names path %s but the document is a course variant (%s/%s)",
+				body.Path, slug, language), nil)
+		return
+	}
+	if (body.Course != "" && body.Course != slug) || (body.Language != "" && body.Language != language) {
 		writeError(w, http.StatusConflict, "slug_mismatch",
 			fmt.Sprintf("request names %s/%s but frontmatter says %s/%s",
-				body.Course, body.Language, course, language), nil)
+				body.Course, body.Language, slug, language), nil)
 		return
 	}
 
@@ -99,7 +150,7 @@ func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (c
 	// problem (the wrapped error names the lesson/challenge and d2's
 	// line:col), and it must be rejected here — not after the proposal has
 	// collected approvals and publishing chokes on it.
-	if _, _, err := ingest.ToDomain(res, []byte(body.Markdown)); err != nil {
+	if _, _, err := ingest.ToDomain(res, src); err != nil {
 		if _, isDiagram := errors.AsType[*md.DiagramError](err); isDiagram {
 			writeError(w, http.StatusUnprocessableEntity, "invalid_course_markdown", err.Error(), nil)
 			return
@@ -110,22 +161,42 @@ func (h *handlers) decodeProposalBody(w http.ResponseWriter, r *http.Request) (c
 
 	title = body.Title
 	if title == "" {
-		title = fmt.Sprintf("Update %s/%s", course, language)
+		title = fmt.Sprintf("Update %s/%s", slug, language)
 	}
-	return course, language, title, body.Summary, body.Markdown, true
+	return domain.KindCourse, slug, language, title, body.Summary, body.Markdown, true
+}
+
+// parsePathDoc is parseCourseDoc's learning-path sibling, running
+// ingest.ParsePath with the same 422-with-line-details error contract.
+func (h *handlers) parsePathDoc(w http.ResponseWriter, r *http.Request, src []byte) (*ingest.PathResult, bool) {
+	res, err := ingest.ParsePath(src)
+	if verr, ok := errors.AsType[*ingest.ValidationError](err); ok {
+		details := make([]Detail, len(verr.Problems))
+		for i, p := range verr.Problems {
+			details[i] = Detail{Line: p.Line, Message: p.Message}
+		}
+		writeError(w, http.StatusUnprocessableEntity, "invalid_path_markdown",
+			fmt.Sprintf("%d problems found", len(details)), details)
+		return nil, false
+	}
+	if err != nil {
+		h.serverError(w, r, err)
+		return nil, false
+	}
+	return res, true
 }
 
 func (h *handlers) createProposal(w http.ResponseWriter, r *http.Request) {
-	course, language, title, summary, markdown, ok := h.decodeProposalBody(w, r)
+	kind, slug, language, title, summary, markdown, ok := h.decodeProposalBody(w, r)
 	if !ok {
 		return
 	}
 	user := currentUser(r) // non-nil behind requireUser
 
-	p, err := h.proposals.CreateProposal(r.Context(), user.ID, course, language, title, summary, markdown)
+	p, err := h.proposals.CreateProposal(r.Context(), user.ID, kind, slug, language, title, summary, markdown)
 	if errors.Is(err, domain.ErrDuplicateProposal) {
 		writeError(w, http.StatusConflict, "duplicate_proposal",
-			"you already have an open proposal for this course variant — update it instead (PUT /api/v1/proposals/{id})", nil)
+			"you already have an open proposal for this target — update it instead (PUT /api/v1/proposals/{id})", nil)
 		return
 	}
 	if err != nil {
@@ -154,21 +225,23 @@ func (h *handlers) updateProposal(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, err)
 		return
 	}
-	course, language, title, summary, markdown, ok := h.decodeProposalBody(w, r)
+	kind, slug, language, title, summary, markdown, ok := h.decodeProposalBody(w, r)
 	if !ok {
 		return
 	}
 	user := currentUser(r)
 
-	// A proposal can't change which course variant it targets (the web
-	// editor enforces the same rule): its diff, reviews, and re-captured
-	// base_version are all anchored to the variant it was opened for, so a
-	// retargeted document would publish somewhere the reviewers never
-	// looked.
-	if existing.CourseSlug != course || existing.Language != language {
+	// A proposal can't change what it targets (the web editor enforces the
+	// same rule): its diff, reviews, and re-captured base_version are all
+	// anchored to the target it was opened for, so a retargeted document
+	// would publish somewhere the reviewers never looked. Kind is part of
+	// the target: swapping a course document into a path proposal (or vice
+	// versa) is the same retargeting mistake.
+	if existing.Kind != kind || existing.CourseSlug != slug || existing.Language != language {
+		newTarget := domain.Proposal{Kind: kind, CourseSlug: slug, Language: language}
 		writeError(w, http.StatusConflict, "variant_mismatch",
-			fmt.Sprintf("this proposal is for %s/%s but the document's frontmatter says %s/%s — a proposal can't change which course variant it targets; propose the new document separately",
-				existing.CourseSlug, existing.Language, course, language), nil)
+			fmt.Sprintf("this proposal is for %s but the document's frontmatter says %s — a proposal can't change what it targets; propose the new document separately",
+				existing.Target(), newTarget.Target()), nil)
 		return
 	}
 

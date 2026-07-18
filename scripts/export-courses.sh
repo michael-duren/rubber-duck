@@ -67,4 +67,36 @@ for f in "$courses_dir"/*.md; do
     fi
 done
 
-echo "export-courses: mirrored $count variant(s) from $base"
+# Learning paths mirror the same way into paths/ — one <slug>.md per path.
+# Path changes go through the same proposal workflow as courses, so the DB
+# is their source of truth too. Zero paths is a legitimate state (unlike
+# zero variants), but deleting the whole directory over it is more likely
+# schema drift than a real mass-removal — leave the mirror alone in that
+# case and say so.
+paths_dir="$repo_root/paths"
+mkdir -p "$paths_dir"
+path_count="$(jq '.paths | length' <<<"$export_json")"
+if [ "$path_count" -eq 0 ]; then
+    echo "export-courses: server reports zero paths — leaving paths/ untouched"
+else
+    expected_paths="$(mktemp)"
+    trap 'rm -f "$expected" "$expected_paths"' EXIT
+    for i in $(seq 0 $((path_count - 1))); do
+        slug="$(jq -er ".paths[$i].path" <<<"$export_json")"
+        if ! [[ "$slug" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "export-courses: refusing unsafe path name '$slug' from $base" >&2
+            exit 1
+        fi
+        jq -ej ".paths[$i].markdown" <<<"$export_json" >"$paths_dir/$slug.md"
+        echo "$slug.md" >>"$expected_paths"
+    done
+    for f in "$paths_dir"/*.md; do
+        name="$(basename "$f")"
+        if ! grep -qxF "$name" "$expected_paths"; then
+            echo "export-courses: removing paths/$name (no longer on the server)"
+            rm "$f"
+        fi
+    done
+fi
+
+echo "export-courses: mirrored $count variant(s) and $path_count path(s) from $base"

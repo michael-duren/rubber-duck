@@ -36,7 +36,7 @@ func TestCreateProposal(t *testing.T) {
 	course, variant := loadSeedCourse(t)
 
 	// Against a variant that doesn't exist yet: base_version 0.
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "New course", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "New course", "", variant.SourceMD)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -48,13 +48,13 @@ func TestCreateProposal(t *testing.T) {
 	}
 
 	// Second open proposal for the same variant by the same user: rejected.
-	if _, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "again", "", variant.SourceMD); !errors.Is(err, domain.ErrDuplicateProposal) {
+	if _, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "again", "", variant.SourceMD); !errors.Is(err, domain.ErrDuplicateProposal) {
 		t.Errorf("duplicate create err = %v, want ErrDuplicateProposal", err)
 	}
 
 	// The open-proposal limit is per user: another user proposing against
 	// the same variant is fine.
-	if _, err := s.CreateProposal(ctx, rev1.ID, course.Slug, variant.Language, "their take", "", variant.SourceMD); err != nil {
+	if _, err := s.CreateProposal(ctx, rev1.ID, domain.KindCourse, course.Slug, variant.Language, "their take", "", variant.SourceMD); err != nil {
 		t.Errorf("second user's proposal on same variant: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestCreateProposal(t *testing.T) {
 	if err := s.WithdrawProposal(ctx, p.ID, proposer.ID); err != nil {
 		t.Fatalf("withdraw: %v", err)
 	}
-	p2, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "Edit", "sum", variant.SourceMD+"\n<!-- edit -->")
+	p2, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "Edit", "sum", variant.SourceMD+"\n<!-- edit -->")
 	if err != nil {
 		t.Fatalf("create against live: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestProposalReviewsAndThresholdCounting(t *testing.T) {
 	proposer, rev1, rev2, admin := proposalUsers(t, s)
 	course, variant := loadSeedCourse(t)
 
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "t", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "t", "", variant.SourceMD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestAdminSelfApprove(t *testing.T) {
 	_, _, _, admin := proposalUsers(t, s)
 	course, variant := loadSeedCourse(t)
 
-	p, err := s.CreateProposal(ctx, admin.ID, course.Slug, variant.Language, "bootstrap", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, admin.ID, domain.KindCourse, course.Slug, variant.Language, "bootstrap", "", variant.SourceMD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestPublishProposal(t *testing.T) {
 	course, variant := loadSeedCourse(t)
 
 	// New-course publish: base_version 0, variant created at version 1.
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "new", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "new", "", variant.SourceMD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestPublishProposalStaleRevision(t *testing.T) {
 	proposer, _, _, _ := proposalUsers(t, s)
 	course, variant := loadSeedCourse(t)
 
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "t", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "t", "", variant.SourceMD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestPublishProposalStaleBase(t *testing.T) {
 	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "edit", "", variant.SourceMD+"\n<!-- proposed -->")
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "edit", "", variant.SourceMD+"\n<!-- proposed -->")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestProposalOwnershipAndLists(t *testing.T) {
 	proposer, rev1, _, _ := proposalUsers(t, s)
 	course, variant := loadSeedCourse(t)
 
-	p, err := s.CreateProposal(ctx, proposer.ID, course.Slug, variant.Language, "t", "", variant.SourceMD)
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "t", "", variant.SourceMD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,5 +353,99 @@ func TestProposalOwnershipAndLists(t *testing.T) {
 	}
 	if theirs, err := s.ListProposalsByUser(ctx, rev1.ID); err != nil || len(theirs) != 0 {
 		t.Errorf("rev1 list = %+v, %v; want empty", theirs, err)
+	}
+}
+
+// pathFixture builds a minimal domain.LearningPath the way ingest would,
+// referencing the given course slugs.
+func pathFixture(slug, marker string, courseSlugs ...string) domain.LearningPath {
+	return domain.LearningPath{
+		Slug: slug, Title: "Test Track",
+		DescriptionMD: "d " + marker, DescriptionHTML: "<p>d</p>",
+		SourceMD:    "---\npath: " + slug + "\n---\n" + marker + "\n",
+		CourseSlugs: courseSlugs,
+	}
+}
+
+func TestPathProposalLifecycle(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	proposer, _, _, admin := proposalUsers(t, s)
+	course, variant := loadSeedCourse(t)
+	if _, err := s.UpsertVariant(ctx, course, variant, nil, nil); err != nil {
+		t.Fatalf("seed course: %v", err)
+	}
+
+	path := pathFixture("test-track", "v1", course.Slug)
+
+	// New-path proposal: base_version 0, kind round-trips.
+	p, err := s.CreateProposal(ctx, proposer.ID, domain.KindPath, path.Slug, "", "Add track", "", path.SourceMD)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if p.Kind != domain.KindPath || !p.IsPath() || p.BaseVersion != 0 || p.LiveVersion != 0 {
+		t.Errorf("path proposal = kind %q base %d live %d, want path/0/0", p.Kind, p.BaseVersion, p.LiveVersion)
+	}
+
+	// A course proposal by the same user doesn't collide with the path one.
+	if _, err := s.CreateProposal(ctx, proposer.ID, domain.KindCourse, course.Slug, variant.Language, "c", "", variant.SourceMD); err != nil {
+		t.Errorf("course proposal alongside path proposal: %v", err)
+	}
+	// But a second open path proposal for the same path does.
+	if _, err := s.CreateProposal(ctx, proposer.ID, domain.KindPath, path.Slug, "", "again", "", path.SourceMD); !errors.Is(err, domain.ErrDuplicateProposal) {
+		t.Errorf("duplicate path proposal err = %v, want ErrDuplicateProposal", err)
+	}
+
+	// Publishing referencing an unknown course fails with UnknownCoursesError
+	// and leaves the proposal open.
+	bad := pathFixture(path.Slug, "v1", "no-such-course")
+	if _, err := s.PublishPathProposal(ctx, p.ID, p.Revision, bad); err == nil {
+		t.Fatal("publish with unknown course slug succeeded")
+	} else if _, ok := errors.AsType[*domain.UnknownCoursesError](err); !ok {
+		t.Fatalf("publish unknown-course err = %v, want UnknownCoursesError", err)
+	}
+
+	version, err := s.PublishPathProposal(ctx, p.ID, p.Revision, path)
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if version != 1 {
+		t.Errorf("published version = %d, want 1", version)
+	}
+	got, _, err := s.PathBySlug(ctx, path.Slug)
+	if err != nil || got.SourceMD != path.SourceMD {
+		t.Fatalf("path after publish = %+v, %v", got, err)
+	}
+	if p, err = s.ProposalByID(ctx, p.ID); err != nil || p.Status != domain.ProposalPublished || p.PublishedVersion == nil || *p.PublishedVersion != 1 {
+		t.Fatalf("proposal after publish = %+v, %v", p, err)
+	}
+
+	// A second proposal captures the live path version; a concurrent direct
+	// upsert (seed) moves the path on, so publishing conflicts until the
+	// proposer updates (which re-captures the base).
+	p2, err := s.CreateProposal(ctx, admin.ID, domain.KindPath, path.Slug, "", "tweak", "", pathFixture(path.Slug, "v2", course.Slug).SourceMD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.BaseVersion != 1 || p2.LiveVersion != 1 {
+		t.Errorf("second proposal base=%d live=%d, want 1/1", p2.BaseVersion, p2.LiveVersion)
+	}
+	if _, err := s.UpsertPath(ctx, pathFixture(path.Slug, "seeded", course.Slug)); err != nil {
+		t.Fatalf("direct upsert: %v", err)
+	}
+	if p2, err = s.ProposalByID(ctx, p2.ID); err != nil || !p2.Stale() {
+		t.Fatalf("proposal after path moved on: stale=%v err=%v, want stale", p2.Stale(), err)
+	}
+	if _, err := s.PublishPathProposal(ctx, p2.ID, p2.Revision, pathFixture(path.Slug, "v2", course.Slug)); !errors.Is(err, domain.ErrVersionConflict) {
+		t.Fatalf("stale publish err = %v, want ErrVersionConflict", err)
+	}
+	if p2, err = s.UpdateProposalMarkdown(ctx, p2.ID, admin.ID, "tweak", "", pathFixture(path.Slug, "v3", course.Slug).SourceMD); err != nil {
+		t.Fatalf("rebase update: %v", err)
+	}
+	if p2.BaseVersion != 2 || p2.Stale() {
+		t.Errorf("after rebase base=%d stale=%v, want 2/false", p2.BaseVersion, p2.Stale())
+	}
+	if version, err = s.PublishPathProposal(ctx, p2.ID, p2.Revision, pathFixture(path.Slug, "v3", course.Slug)); err != nil || version != 3 {
+		t.Fatalf("publish after rebase = %d, %v; want version 3", version, err)
 	}
 }

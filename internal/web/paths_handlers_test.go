@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -142,5 +143,108 @@ func TestCompletedCourses(t *testing.T) {
 	if got := completedCourses([]domain.CourseSummary{{Slug: "z"}},
 		map[string]domain.VariantProgress{"z": {}}); got != 0 {
 		t.Errorf("empty variant counted as complete")
+	}
+}
+
+// --- path proposal flow (the editor behind /paths/{slug}/edit) ---
+
+const webPathDoc = `---
+path: go-developer
+title: Go Developer
+description: From zero to production Go.
+courses:
+  - intro-to-concurrency
+---
+
+Start with the basics.
+`
+
+func TestEditPathPage(t *testing.T) {
+	t.Run("prefills the stored document", func(t *testing.T) {
+		mux, fs := testMux(t)
+		pathFixture(fs)
+		fs.path.SourceMD = webPathDoc
+		fs.pathVersion = 1
+		alice := loginAs(t, mux, "alice")
+
+		rec := get(mux, "/paths/go-developer/edit", alice)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("edit page = %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "path: go-developer") {
+			t.Error("editor did not prefill the stored path document")
+		}
+	})
+
+	t.Run("missing path 404s without new=1, seeds a template with it", func(t *testing.T) {
+		mux, _ := testMux(t)
+		alice := loginAs(t, mux, "alice")
+		if rec := get(mux, "/paths/nope/edit", alice); rec.Code != http.StatusNotFound {
+			t.Errorf("missing path edit = %d, want 404", rec.Code)
+		}
+		rec := get(mux, "/paths/nope/edit?new=1&title=Nope", alice)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "path: nope") {
+			t.Errorf("new=1 edit = %d, want seeded template", rec.Code)
+		}
+	})
+}
+
+func TestProposePathAndAdminPublish(t *testing.T) {
+	mux, fs := testMux(t)
+	alice := loginAs(t, mux, "alice")
+
+	rec := postForm(mux, "/paths/go-developer/edit",
+		url.Values{"markdown": {webPathDoc}, "summary": {"new track"}}, alice)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("propose path = %d: %s", rec.Code, rec.Body)
+	}
+	if len(fs.proposals) != 1 {
+		t.Fatalf("proposals = %d, want 1", len(fs.proposals))
+	}
+	p := fs.proposals[1]
+	if p.Kind != domain.KindPath || p.CourseSlug != "go-developer" || p.Language != "" {
+		t.Fatalf("proposal = %+v, want kind=path go-developer", p)
+	}
+	if p.Title != "Update path go-developer" {
+		t.Errorf("default title = %q", p.Title)
+	}
+
+	// The detail page renders (diff against nothing — a new path).
+	if rec := get(mux, "/proposals/1", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "new path") {
+		t.Errorf("detail page = %d, want 200 with the new-path badge", rec.Code)
+	}
+
+	// One admin approval publishes through the real parse + path publish.
+	admin := loginAs(t, mux, "root")
+	fs.promote("root", domain.RoleAdmin)
+	rec = postForm(mux, "/proposals/1/reviews", url.Values{"verdict": {"approve"}, "revision": {"1"}}, admin)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("admin approve = %d: %s", rec.Code, rec.Body)
+	}
+	if fs.proposals[1].Status != domain.ProposalPublished {
+		t.Fatalf("status = %q, want published", fs.proposals[1].Status)
+	}
+	if fs.path == nil || fs.path.Slug != "go-developer" || fs.path.SourceMD != webPathDoc {
+		t.Errorf("published path = %+v, want the proposed document", fs.path)
+	}
+}
+
+func TestProposePathValidation(t *testing.T) {
+	mux, fs := testMux(t)
+	alice := loginAs(t, mux, "alice")
+
+	// Invalid document: editor re-renders with problems, nothing opened.
+	rec := postForm(mux, "/paths/go-developer/edit",
+		url.Values{"markdown": {"---\npath: go-developer\n---\nno title\n"}}, alice)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "problem") {
+		t.Errorf("invalid doc = %d, want 200 re-render with problems", rec.Code)
+	}
+	// Frontmatter naming a different path: rejected.
+	rec = postForm(mux, "/paths/other/edit", url.Values{"markdown": {webPathDoc}}, alice)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "frontmatter says") {
+		t.Errorf("slug mismatch = %d, want 200 re-render with mismatch error", rec.Code)
+	}
+	if len(fs.proposals) != 0 {
+		t.Errorf("proposals after failed submits = %d, want 0", len(fs.proposals))
 	}
 }

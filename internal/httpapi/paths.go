@@ -7,10 +7,11 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/domain"
 )
 
-// Learning paths are read-only over HTTP: they have no proposal flow, so
-// writes happen only through `duckserver seed` (paths/ in the repo is the
-// canonical source, unlike the courses/ mirror). Paths carry no learner
-// data and no version counter — see store.UpsertPath.
+// Learning-path reads. Writes go through the proposal workflow (a "path:"
+// frontmatter document POSTed to /api/v1/proposals — see proposals.go) or
+// `duckserver seed` for bootstrap imports; paths/ in the repo is a synced
+// mirror like courses/. Paths carry no learner data; their version counter
+// exists for proposal optimistic concurrency — see store.upsertPathTx.
 
 func (h *handlers) listPaths(w http.ResponseWriter, r *http.Request) {
 	paths, err := h.store.ListPaths(r.Context())
