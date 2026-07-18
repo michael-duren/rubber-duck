@@ -27,6 +27,14 @@ type CourseStore interface {
 	DeleteCourse(ctx context.Context, slug string) error
 	DeleteVariant(ctx context.Context, slug, language string) error
 	ListTags(ctx context.Context) ([]string, error)
+
+	// Learning paths: ordered tracks of courses, published as markdown like
+	// course variants but without versioning (no learner data hangs off a
+	// path, so last write wins — see store.UpsertPath).
+	UpsertPath(ctx context.Context, path domain.LearningPath) (created bool, err error)
+	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
+	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
+	DeletePath(ctx context.Context, slug string) error
 }
 
 type handlers struct {
@@ -47,6 +55,10 @@ func Register(mux *http.ServeMux, logger *slog.Logger, keys KeyStore, store Cour
 	api.HandleFunc("DELETE /api/v1/courses/{slug}", h.deleteCourse)
 	api.HandleFunc("GET /api/v1/courses", h.listCourses)
 	api.HandleFunc("GET /api/v1/tags", h.listTags)
+	api.HandleFunc("PUT /api/v1/paths/{slug}", h.putPath)
+	api.HandleFunc("GET /api/v1/paths/{slug}", h.getPath)
+	api.HandleFunc("DELETE /api/v1/paths/{slug}", h.deletePath)
+	api.HandleFunc("GET /api/v1/paths", h.listPaths)
 
 	mux.Handle("/api/v1/", requireKey(logger, keys, api))
 

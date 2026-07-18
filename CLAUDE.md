@@ -17,8 +17,11 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 
 ## Commands
 
-- `make dev` — Postgres (compose) + live-reload server on :8080 (templ
-  proxy on :7331 injects auto-reload; browser opens there)
+- `make dev` — Postgres (compose) + live-reload server (templ proxy
+  injects auto-reload; browser opens there). Ports are per-worktree:
+  base 5432/8080/7331 shifted by a hash of the worktree dir name so
+  sibling worktrees don't collide (`make db` echoes the pg port;
+  override with PG_PORT/HTTP_PORT/PROXY_PORT)
 - `make check` — vet + stale-templ-generate check + all tests (the gate
   before any commit)
 - `make test-integration` — store tests against compose Postgres
@@ -55,7 +58,8 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 
 ## Gotchas
 
-- Killing `go run` can orphan the server on :8080 — `pkill -f duckserver`.
+- Killing `go run` can orphan the server on its HTTP_PORT — `pkill -f
+  duckserver`.
 - Grading containers: killing the docker CLI doesn't kill the container;
   dockergrader force-removes by name (don't regress this).
 - Re-publishing a course variant diffs lessons/challenges by slug: rows
@@ -94,3 +98,6 @@ logic (`domain`/`ingest`/`store`/`grader`) never imports HTTP or templ.
 - `infra/` — OpenTofu (use `tofu`, not terraform); `make infra-validate`
 - `courses/` — canonical course markdown, one file per course×language;
   `make publish` loops it through the agent API
+- `paths/` — canonical learning-path markdown (ordered course tracks shown
+  at /paths), published the same way; course slugs must exist first, so
+  seed/publish loops order paths after courses

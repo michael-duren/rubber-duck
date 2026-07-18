@@ -22,6 +22,7 @@ type fakeStore struct {
 	sources  map[string]string
 	variants map[string]domain.Variant
 	editedBy map[string]*int64 // "slug/lang" -> last UpsertVariant's editedBy
+	paths    map[string]domain.LearningPath
 
 	users map[string]domain.User // token -> user, for UserByToken
 
@@ -33,6 +34,7 @@ func newFakeStore() *fakeStore {
 		versions: map[string]int{}, courses: map[string]domain.Course{},
 		sources: map[string]string{}, variants: map[string]domain.Variant{},
 		editedBy: map[string]*int64{}, users: map[string]domain.User{},
+		paths: map[string]domain.LearningPath{},
 	}
 }
 

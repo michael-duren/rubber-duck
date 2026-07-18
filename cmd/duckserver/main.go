@@ -208,9 +208,22 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := ingest.Parse(src)
-	if err != nil {
-		return fmt.Errorf("%s: %w", fs.Arg(0), err)
+	// A "path:" frontmatter key marks a learning-path document (paths/*.md);
+	// everything else is a course variant. Both publish through their
+	// respective /api/v1 endpoints below.
+	var endpoint string
+	if ingest.IsPathDocument(src) {
+		res, err := ingest.ParsePath(src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
+		}
+		endpoint = fmt.Sprintf("/api/v1/paths/%s", res.Path.Path)
+	} else {
+		res, err := ingest.Parse(src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", fs.Arg(0), err)
+		}
+		endpoint = fmt.Sprintf("/api/v1/courses/%s/variants/%s", res.Course.Course, res.Course.Language)
 	}
 
 	key := os.Getenv("GC_API_KEY")
@@ -232,7 +245,7 @@ func seedCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("%s/api/v1/courses/%s/variants/%s", *baseURL, res.Course.Course, res.Course.Language)
+	url := *baseURL + endpoint
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return err

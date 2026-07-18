@@ -21,7 +21,9 @@ Requirements: Go 1.26+, Docker (with the compose plugin), `templ`.
 ```sh
 make tools            # fetch tailwind standalone binary, install templ
 make runner-images    # build gc-runner-go, gc-runner-python, gc-runner-c
-make dev              # postgres via compose + live-reloading server on :8080
+make dev              # postgres via compose + live-reloading server (ports are
+                      # per-checkout: 5432/8080/7331 + a hash of the dir name,
+                      # so sibling git worktrees don't collide)
 make seed             # publish seed/intro-to-go.md + courses/*.md through the agent API
 ```
 
@@ -33,8 +35,8 @@ docker compose up --build
 go run ./cmd/duckserver seed seed/intro-to-go.md
 ```
 
-Sign up at http://localhost:8080 (any username, no email), open the course,
-submit a solution.
+Sign up in the browser tab `make dev` opens (any username, no email), open
+the course, submit a solution.
 
 Other commands:
 
@@ -101,6 +103,10 @@ authorized it.
 | `DELETE /api/v1/courses/{slug}/variants/{language}` | Remove one variant. `204`. |
 | `GET /api/v1/tags` | All known tags. |
 | `GET /api/v1/courses/{slug}/variants/{language}/challenges` | **Public, no auth**: starter and test code for each challenge, used by `duck test` local runs. |
+| `PUT /api/v1/paths/{slug}` | Idempotent upsert of a learning path from its markdown document (see "Learning paths" below). Body `{"markdown": "..."}`. `201` on first publish, `200` after. Referencing a course slug that doesn't exist is a `422` (`unknown_course_slugs`). |
+| `GET /api/v1/paths` | List learning paths with course counts. |
+| `GET /api/v1/paths/{slug}` | The stored path markdown plus the resolved course order. |
+| `DELETE /api/v1/paths/{slug}` | Remove a learning path. Member courses are untouched. `204`. |
 
 Rules:
 
@@ -190,6 +196,43 @@ Conventions:
   `--- FAIL: name` line per test case (the `go test -v` format) so the
   grader can score partial credit; run every test rather than aborting on
   the first failure.
+
+## Learning paths
+
+A learning path is a curated, ordered track of courses ("start here, then
+this"), shown at `/paths` — think boot.dev tracks. Paths are published as
+markdown like courses, with a much smaller contract: frontmatter naming the
+path and its ordered course slugs, and a free markdown body rendered as the
+path page's overview.
+
+```markdown
+---
+path: go-developer                  # required, stable path slug
+title: Go Developer                 # required
+description: One-paragraph pitch.   # required
+courses:                            # required: ordered course slugs
+  - go-basics
+  - intro-to-concurrency
+---
+
+## Why this order
+
+Any markdown — rendered on the path page under the description.
+```
+
+Rules and behavior:
+
+- Every slug in `courses:` must already exist in the catalog; unknown slugs
+  reject the publish with `422 unknown_course_slugs` — publish the course
+  first (`make seed`/`make publish` order `paths/` after `courses/` for this
+  reason).
+- Paths carry no learner data and no version counter: re-publishing replaces
+  the course list wholesale, and last write wins. Progress shown on a path
+  page is derived live from the member courses' submissions.
+- Deleting a course simply drops it from any paths that referenced it;
+  deleting a path never touches its courses.
+- Canonical path documents live in `paths/*.md` (one file per path) and are
+  published by `make publish`, exactly like `courses/*.md`.
 
 ## Course content workflow
 

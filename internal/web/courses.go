@@ -34,6 +34,12 @@ type CourseReader interface {
 	// submissions (removed challenges are archived, not deleted), so saving
 	// is never destructive to learner data.
 	UpsertVariant(ctx context.Context, course domain.Course, variant domain.Variant, editedBy *int64, expectedVersion *int) (int, error)
+
+	// Learning paths: curated, ordered tracks of courses (see
+	// domain.LearningPath). Read-only here — paths are published through
+	// the agent API, not the browser.
+	ListPaths(ctx context.Context) ([]domain.PathSummary, error)
+	PathBySlug(ctx context.Context, slug string) (domain.LearningPath, []domain.CourseSummary, error)
 }
 
 func (h *handlers) catalog(w http.ResponseWriter, r *http.Request) {

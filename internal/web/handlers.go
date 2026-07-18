@@ -53,6 +53,8 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages := http.NewServeMux()
 	pages.HandleFunc("GET /{$}", h.homePage)
 	pages.HandleFunc("GET /courses", h.catalog)
+	pages.HandleFunc("GET /paths", h.pathsPage)
+	pages.HandleFunc("GET /paths/{slug}", h.pathPage)
 	pages.HandleFunc("GET /about", h.aboutPage)
 	pages.HandleFunc("GET /cli", h.cliPage)
 	pages.HandleFunc("GET /tokens", h.tokensPage)
