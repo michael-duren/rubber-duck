@@ -98,8 +98,12 @@ templ CatalogResults(courses []domain.CourseSummary, query string, activeTags []
 		<p class="font-mono text-xs text-emerald-700/70 dark:text-emerald-500/70">{ resultLine(len(courses), query, activeTags, activeLang) }</p>
 		if len(courses) == 0 {
 			<div class="mt-4 border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
-				<p class="font-mono text-sm text-amber-600 dark:text-amber-400">no matches</p>
-				<p class="mt-2 text-xs text-slate-500 dark:text-slate-500">Clear the search, reset the flags, or publish a course through the agent API.</p>
+				// Nothing to show, so the duck naps until the filters change.
+				<div class="flex justify-center">
+					@duckSprite("duck-sleeping", 96, "duck-doze")
+				</div>
+				<p class="mt-2 font-mono text-sm text-amber-600 dark:text-amber-400">no matches — the duck's taking a nap</p>
+				<p class="mt-2 text-xs text-slate-500 dark:text-slate-500">Clear the search, reset the flags, or propose a new course.</p>
 			</div>
 		} else {
 			<div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -231,6 +235,8 @@ templ resumeBanner(p *domain.VariantProgress) {
 		class="group flex flex-wrap items-center justify-between gap-3 border border-emerald-300 bg-emerald-50 px-4 py-3 transition hover:border-emerald-500 dark:border-emerald-800 dark:bg-emerald-950/40 dark:hover:border-emerald-600"
 	>
 		<span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			// Bobbing as if afloat, facing the "resume →" arrow.
+			@duckSprite("duck-three-quarter", 36, "duck-bob shrink-0")
 			<span class="font-mono text-sm text-emerald-700 dark:text-emerald-400">$ duck resume</span>
 			<span class="text-sm text-slate-700 dark:text-slate-300">
 				Pick up where you left off: <span class="font-semibold">{ p.CourseTitle }</span>

@@ -66,7 +66,11 @@ templ Proposals(user *domain.User, proposals []domain.Proposal, status string, m
 			</div>
 		</div>
 		if len(proposals) == 0 {
-			<p class="mt-10 font-mono text-sm text-slate-500 dark:text-slate-400">Nothing here. Propose a change from any course page's editor.</p>
+			<div class="mt-10 flex items-center gap-4">
+				// Nothing to review — the duck is all ears anyway.
+				@duckSprite("duck-teacher-listening", 64, "duck-bob shrink-0")
+				<p class="font-mono text-sm text-slate-500 dark:text-slate-400">Nothing here. Propose a change from any course page's editor.</p>
+			</div>
 		} else {
 			<ul class="mt-8 flex flex-col divide-y divide-slate-200 border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
 				for _, p := range proposals {

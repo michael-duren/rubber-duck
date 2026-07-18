@@ -78,8 +78,14 @@ templ Lesson(user *domain.User, course domain.Course, v domain.Variant, l domain
 // lessonSidebar heads the desktop lesson nav with where-am-I context:
 // position in the course, then the full lesson list.
 templ lessonSidebar(course domain.Course, v domain.Variant, current domain.Lesson, lessonNum int, completed map[int64]bool) {
-	<p class="font-mono text-xs text-slate-500 dark:text-slate-400">{ fmt.Sprintf("lesson %d of %d", lessonNum, len(v.Lessons)) }</p>
-	<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="mt-1 block font-semibold hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Title }</a>
+	<div class="flex items-start justify-between gap-3">
+		<div class="min-w-0">
+			<p class="font-mono text-xs text-slate-500 dark:text-slate-400">{ fmt.Sprintf("lesson %d of %d", lessonNum, len(v.Lessons)) }</p>
+			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="mt-1 block font-semibold hover:text-emerald-600 dark:hover:text-emerald-400">{ course.Title }</a>
+		</div>
+		// The duck reads along in the sidebar for the whole lesson.
+		@duckSprite("duck-teacher-reading", 52, "duck-bob shrink-0")
+	</div>
 	<div class="mt-4">
 		@lessonNav(course, v, current, completed)
 	</div>
@@ -138,7 +144,12 @@ templ Final(user *domain.User, course domain.Course, v domain.Variant, latestCod
 			<a href={ templ.SafeURL("/courses/" + course.Slug + "/" + v.Language) } class="hover:text-emerald-600 dark:hover:text-emerald-400">{ v.Language }</a> / final
 		</nav>
 		<article class="mx-auto mt-6 max-w-5xl">
-			<p class="font-mono text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">★ Final Challenge</p>
+			<div class="flex items-center gap-3">
+				// Lightbulb duck for the course's big finish.
+				@duckSprite("duck-teacher-idea", 56, "duck-enter-bob shrink-0")
+				<p class="font-mono text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">★ Final Challenge</p>
+				@duckSays("The big one. You're ready — talk it through with me.")
+			</div>
 			@ChallengeCard(user, v.Final, latestCode, submissions, v.Version, v.Language)
 			if user != nil {
 				@editorScript()

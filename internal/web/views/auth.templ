@@ -2,19 +2,22 @@ package views
 
 templ Signup(errMsg string) {
 	@Layout("Sign up", nil) {
-		@authForm("Sign up", "/signup", "Create your account", errMsg)
+		// The teacher duck greets new students; returning ones get the
+		// plain duckling on the login page.
+		@authForm("Sign up", "/signup", "Create your account", "duck-teacher-front", errMsg)
 	}
 }
 
 templ Login(errMsg string) {
 	@Layout("Log in", nil) {
-		@authForm("Log in", "/login", "Welcome back", errMsg)
+		@authForm("Log in", "/login", "Welcome back", "duck-front", errMsg)
 	}
 }
 
-templ authForm(action, path, heading, errMsg string) {
+templ authForm(action, path, heading, pose, errMsg string) {
 	<div class="mx-auto mt-12 max-w-sm">
-		<h1 class="text-2xl font-bold">{ heading }</h1>
+		@duckSprite(pose, 64, "duck-enter-bob")
+		<h1 class="mt-2 text-2xl font-bold">{ heading }</h1>
 		if errMsg != "" {
 			<p class="mt-4 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">{ errMsg }</p>
 		}

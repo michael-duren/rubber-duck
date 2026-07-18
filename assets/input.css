@@ -241,6 +241,121 @@
 	}
 }
 
+/* ---- the resident duck ----------------------------------------------
+
+   Animations for the duckSprite poses (see views/duck.templ). One idle
+   verb per pose: bob (floating), doze (slow breathing), fly (wingbeat
+   drift), cheer (a double hop, plays once), and the waddle entrance for
+   ducks that walk in on page load. Everything here is decorative, so
+   reduced-motion turns the whole troupe off at the bottom. */
+@keyframes duck-bob {
+	0%,
+	100% {
+		transform: translateY(0) rotate(-1deg);
+	}
+	50% {
+		transform: translateY(-5px) rotate(2deg);
+	}
+}
+.duck-bob {
+	animation: duck-bob 3.4s ease-in-out infinite;
+}
+@keyframes duck-waddle-in {
+	0% {
+		opacity: 0;
+		transform: translateX(-2.25rem) rotate(-10deg);
+	}
+	40% {
+		opacity: 1;
+		transform: translateX(-1rem) rotate(7deg);
+	}
+	70% {
+		transform: translateX(0.25rem) rotate(-4deg);
+	}
+	100% {
+		opacity: 1;
+		transform: none;
+	}
+}
+/* Entrance only, and entrance chaining into the idle bob. */
+.duck-enter {
+	animation: duck-waddle-in 0.8s ease-out both;
+}
+.duck-enter-bob {
+	animation:
+		duck-waddle-in 0.8s ease-out both,
+		duck-bob 3.4s ease-in-out 0.8s infinite;
+}
+@keyframes duck-doze {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.03, 0.97);
+	}
+}
+.duck-doze {
+	transform-origin: bottom;
+	animation: duck-doze 2.8s ease-in-out infinite;
+}
+@keyframes duck-fly {
+	0%,
+	100% {
+		transform: translateY(0) rotate(-4deg);
+	}
+	50% {
+		transform: translateY(-9px) rotate(4deg);
+	}
+}
+.duck-fly {
+	animation: duck-fly 1.5s ease-in-out infinite;
+}
+@keyframes duck-cheer {
+	0%,
+	50%,
+	100% {
+		transform: translateY(0) rotate(0);
+	}
+	25% {
+		transform: translateY(-10px) rotate(-6deg);
+	}
+	75% {
+		transform: translateY(-6px) rotate(4deg);
+	}
+}
+.duck-cheer {
+	animation: duck-cheer 0.9s ease-in-out 0.2s 2;
+	transform-origin: bottom;
+}
+/* The brand duck in the nav wiggles when the wordmark is hovered. */
+@keyframes duck-wiggle {
+	0%,
+	100% {
+		transform: rotate(0);
+	}
+	25% {
+		transform: rotate(-9deg);
+	}
+	75% {
+		transform: rotate(9deg);
+	}
+}
+a:hover > .nav-duck {
+	animation: duck-wiggle 0.45s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.duck-bob,
+	.duck-enter,
+	.duck-enter-bob,
+	.duck-doze,
+	.duck-fly,
+	.duck-cheer,
+	a:hover > .nav-duck {
+		animation: none;
+	}
+}
+
 /* TUI-style bracket corners (┌ … ┘) drawn over an element's own border. */
 .tui-frame {
 	position: relative;
