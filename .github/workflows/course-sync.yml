@@ -2,9 +2,8 @@
 # The database is the source of truth (content changes go through the
 # in-app proposal/review workflow); this workflow pulls the public
 # /api/v1/export on a schedule and opens a PR when the mirror has drifted.
-# The PR auto-merges once CI passes — content was already human-reviewed in
-# the app, and CI's ingest tests (internal/ingest TestCanonicalCoursesParse)
-# re-verify every document parses.
+# CI's ingest tests (internal/ingest TestCanonicalCoursesParse) verify
+# every document parses; review and merge the PR when ready.
 #
 # A fixed branch name + force-push keeps at most one sync PR open; each new
 # drift updates the same PR rather than stacking new ones.
@@ -12,7 +11,8 @@ name: Course sync
 
 on:
   schedule:
-    - cron: "17 */6 * * *" # every 6 hours
+    # once a day at 1 am
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 permissions:
@@ -48,29 +48,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.COURSE_SYNC_TOKEN || github.token }}
         run: |
-          # Stage first, then diff the index: `git diff` alone ignores
-          # untracked files, so a drift consisting only of a brand-new
-          # course file would read as "up to date" and never sync.
-          git add -A courses
-          if git diff --cached --quiet -- courses; then
-            echo "mirror is up to date"
-            exit 0
-          fi
-          git config user.name "course-sync"
-          git config user.email "course-sync@users.noreply.github.com"
-          git checkout -B course-sync
-          git commit -m "chore: sync courses/ mirror from production"
-          git push -f origin course-sync
-          # Create the PR only if no OPEN one exists for this branch (an
-          # open one was just updated by the force-push). The state filter
-          # matters: bare `gh pr view` falls back to resolving MERGED and
-          # CLOSED PRs for non-default branches, which after the first
-          # merged sync would skip the create and then fail the merge —
-          # bricking every later sync.
-          if [ "$(gh pr list --head course-sync --state open --json number --jq length)" = "0" ]; then
-            gh pr create \
-              --head course-sync \
-              --title "chore: sync courses/ mirror from production" \
-              --body "Automated mirror refresh from /api/v1/export. Content was reviewed in-app; CI re-verifies every document parses. Auto-merges on green."
-          fi
-          gh pr merge course-sync --auto --squash
+          ./scripts/course-sync.sh
