@@ -1,0 +1,35 @@
+# The k8s grader (GC_GRADER=k8s) creates one pod + configmap per submission
+# and reads the pod's exit code and logs. This is the entire API surface it
+# is allowed.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: duckserver
+  namespace: duck
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: duckserver-grader
+  namespace: duck
+rules:
+  - apiGroups: [""]
+    resources: [pods, configmaps]
+    verbs: [create, get, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: duckserver-grader
+  namespace: duck
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: duckserver-grader
+subjects:
+  - kind: ServiceAccount
+    name: duckserver
+    namespace: duck

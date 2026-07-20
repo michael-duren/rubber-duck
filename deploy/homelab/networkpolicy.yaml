@@ -1,0 +1,13 @@
+# Grading pods run untrusted code: no ingress, no egress — the k8s
+# equivalent of the docker grader's --network=none. k3s ships a
+# NetworkPolicy controller, so this is enforced, not decorative.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gc-grade-no-network
+  namespace: duck
+spec:
+  podSelector:
+    matchLabels:
+      app: gc-grade
+  policyTypes: [Ingress, Egress]
