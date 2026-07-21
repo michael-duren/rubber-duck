@@ -37,17 +37,17 @@ func (f *fakeAPI) handler(t *testing.T) http.Handler {
 		switch {
 		case r.Method == http.MethodPost:
 			if strings.HasPrefix(rest, "pods") {
-				json.NewDecoder(r.Body).Decode(&f.podBody)
+				_ = json.NewDecoder(r.Body).Decode(&f.podBody)
 			}
 			f.created = append(f.created, rest)
-			fmt.Fprint(w, `{}`)
+			_, _ = fmt.Fprint(w, `{}`)
 		case r.Method == http.MethodDelete:
 			f.deleted = append(f.deleted, strings.SplitN(rest, "?", 2)[0])
-			fmt.Fprint(w, `{}`)
+			_, _ = fmt.Fprint(w, `{}`)
 		case strings.HasSuffix(rest, "/log"):
-			fmt.Fprint(w, f.logOutput)
+			_, _ = fmt.Fprint(w, f.logOutput)
 		default: // GET pod
-			fmt.Fprint(w, f.podJSON)
+			_, _ = fmt.Fprint(w, f.podJSON)
 		}
 	})
 }

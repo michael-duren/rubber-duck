@@ -342,7 +342,7 @@ func (g *Grader) raw(ctx context.Context, method, path string, body io.Reader) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxLogBytes+4096))
 	if err != nil {
 		return nil, err
