@@ -41,6 +41,16 @@ kubectl apply -f deploy/homelab/namespace.yaml
 kubectl -n duck create secret generic duckserver-db \
   --from-literal=DATABASE_URL="postgres://duckserver:${DUCK_DB_PASSWORD}@${DB_HOST}:5432/duckserver?sslmode=disable" \
   --dry-run=client -o yaml | kubectl apply -f -
+# cloudflared tunnel token: only needed on first deploy / rebuild. Grab it
+# from Zero Trust -> Networks -> Tunnels -> duck-homelab -> install command.
+if [ -n "${TUNNEL_TOKEN:-}" ]; then
+  kubectl -n duck create secret generic cloudflared-token \
+    --from-literal=TUNNEL_TOKEN="${TUNNEL_TOKEN}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+elif ! kubectl -n duck get secret cloudflared-token >/dev/null 2>&1; then
+  echo "error: cloudflared-token secret missing and TUNNEL_TOKEN not set" >&2
+  exit 1
+fi
 kubectl apply -f deploy/homelab/
 
 echo "==> waiting for rollout"
