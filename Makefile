@@ -172,6 +172,11 @@ push-images: runner-images
 deploy: push-images
 	cd infra && tofu apply -var project_id=$(PROJECT) -var region=$(REGION) -var image_tag=$(TAG)
 
+# Homelab POC: k3s + the pgdb Proxmox VM, see deploy/homelab/README.md.
+# Needs DUCK_DB_PASSWORD in the environment.
+deploy-homelab:
+	./scripts/deploy-homelab.sh
+
 infra-validate:
 	cd infra && tofu fmt -check && tofu validate
 

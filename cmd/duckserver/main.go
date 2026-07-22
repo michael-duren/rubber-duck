@@ -17,6 +17,7 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/grader"
 	"github.com/michael-duren/rubber-duck/internal/grader/cloudrungrader"
 	"github.com/michael-duren/rubber-duck/internal/grader/dockergrader"
+	"github.com/michael-duren/rubber-duck/internal/grader/k8sgrader"
 	"github.com/michael-duren/rubber-duck/internal/httpapi"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
 	"github.com/michael-duren/rubber-duck/internal/store"
@@ -150,8 +151,16 @@ func newGrader(ctx context.Context, logger *slog.Logger) (grader.Grader, time.Du
 			return nil, 0, err
 		}
 		return g, 180 * time.Second, nil
+	case "k8s":
+		cfg, err := k8sgrader.InCluster()
+		if err != nil {
+			return nil, 0, fmt.Errorf("GC_GRADER=k8s: %w", err)
+		}
+		// Between docker (60s) and cloudrun (180s): pod scheduling and
+		// container start precede the runner's own 90s deadline.
+		return k8sgrader.New(cfg, logger), 120 * time.Second, nil
 	default:
-		return nil, 0, fmt.Errorf("unknown GC_GRADER %q (want docker or cloudrun)", backend)
+		return nil, 0, fmt.Errorf("unknown GC_GRADER %q (want docker, cloudrun, or k8s)", backend)
 	}
 }
 

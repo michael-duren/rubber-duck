@@ -1,0 +1,20 @@
+# Served by k3s' bundled traefik. duck.homelab needs a DNS or /etc/hosts
+# entry pointing at any cluster node, e.g.:
+#   192.168.20.3  duck.homelab
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: duckserver
+  namespace: duck
+spec:
+  rules:
+    - host: duck.homelab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: duckserver
+                port:
+                  number: 80
