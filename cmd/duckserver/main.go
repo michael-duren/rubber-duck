@@ -20,8 +20,10 @@ import (
 	"github.com/michael-duren/rubber-duck/internal/grader/k8sgrader"
 	"github.com/michael-duren/rubber-duck/internal/httpapi"
 	"github.com/michael-duren/rubber-duck/internal/ingest"
+	"github.com/michael-duren/rubber-duck/internal/otel"
 	"github.com/michael-duren/rubber-duck/internal/store"
 	"github.com/michael-duren/rubber-duck/internal/web"
+	otelapi "go.opentelemetry.io/otel"
 )
 
 func main() {
@@ -83,6 +85,28 @@ func serve(args []string) error {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
+	otelOpts, err := otelOptions()
+	if err != nil {
+		return err
+	}
+	// No endpoint, no pipeline: the global MeterProvider stays a no-op, so
+	// local runs don't dump metrics to stderr every export interval.
+	if otelOpts.Endpoint != "" {
+		shutdownOtel, err := otel.Setup(ctx, otelOpts)
+		if err != nil {
+			return fmt.Errorf("otel: %w", err)
+		}
+		defer func() {
+			// ctx is already cancelled on shutdown; the final flush needs
+			// its own budget.
+			flush, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shutdownOtel(flush); err != nil {
+				logger.Error("otel shutdown", "err", err)
+			}
+		}()
+	}
+
 	if err := store.Migrate(*dbURL, false); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
@@ -91,6 +115,11 @@ func serve(args []string) error {
 		return err
 	}
 	defer st.Close()
+	dbMetrics, err := st.RegisterMetrics(otelapi.GetMeterProvider())
+	if err != nil {
+		return fmt.Errorf("db metrics: %w", err)
+	}
+	defer func() { _ = dbMetrics.Unregister() }()
 
 	g, gradeTimeout, err := newGrader(ctx, logger)
 	if err != nil {
@@ -110,9 +139,16 @@ func serve(args []string) error {
 	web.Register(mux, logger, st, st, st, st, pool, threshold)
 	httpapi.Register(mux, logger, st, st, st)
 
+	httpMetrics, err := otel.ServerMetrics(otelapi.GetMeterProvider())
+	if err != nil {
+		return fmt.Errorf("http metrics: %w", err)
+	}
+
 	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           web.CanonicalHost(mux),
+		Addr: *addr,
+		// ServerMetrics outermost so redirects from CanonicalHost are
+		// counted too; they carry no http.route.
+		Handler:           httpMetrics(web.CanonicalHost(otel.Route(mux))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errc := make(chan error, 1)
@@ -282,6 +318,27 @@ func seedCmd(args []string) error {
 	}
 	fmt.Printf("seeded %s/%s version %d\n", course.Slug, variant.Language, version)
 	return nil
+}
+
+// otelOptions reads the standard OTel SDK variables. The signal-specific
+// endpoint wins, as in the SDK; an empty endpoint disables export.
+func otelOptions() (otel.Options, error) {
+	opts := otel.Options{
+		Endpoint:       os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
+		ServiceName:    envOr("OTEL_SERVICE_NAME", "duckserver"),
+		ExportInterval: 10 * time.Second,
+	}
+	if opts.Endpoint == "" {
+		opts.Endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	if v := os.Getenv("OTEL_METRIC_EXPORT_INTERVAL"); v != "" {
+		ms, err := strconv.Atoi(v)
+		if err != nil || ms < 1 {
+			return opts, fmt.Errorf("OTEL_METRIC_EXPORT_INTERVAL must be a positive number of milliseconds, got %q", v)
+		}
+		opts.ExportInterval = time.Duration(ms) * time.Millisecond
+	}
+	return opts, nil
 }
 
 func envOr(key, fallback string) string {

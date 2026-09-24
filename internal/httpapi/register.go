@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/michael-duren/rubber-duck/internal/domain"
+	"github.com/michael-duren/rubber-duck/internal/otel"
 )
 
 // CourseStore is the slice of the store the read API needs.
@@ -56,8 +57,11 @@ func Register(mux *http.ServeMux, logger *slog.Logger, users UserStore, store Co
 	api.HandleFunc("GET /api/v1/proposals/{id}", h.getProposal)
 	api.HandleFunc("PUT /api/v1/proposals/{id}", h.updateProposal)
 	api.HandleFunc("POST /api/v1/proposals/{id}/withdraw", h.withdrawProposal)
-	mux.Handle("/api/v1/proposals", requireUser(logger, users, api))
-	mux.Handle("/api/v1/proposals/", requireUser(logger, users, api))
+	// requireUser clones the request; otel.Route carries api's matched
+	// pattern back out to the metrics middleware.
+	routed := otel.Route(api)
+	mux.Handle("/api/v1/proposals", requireUser(logger, users, routed))
+	mux.Handle("/api/v1/proposals/", requireUser(logger, users, routed))
 }
 
 func (h *handlers) serverError(w http.ResponseWriter, r *http.Request, err error) {

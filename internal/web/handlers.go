@@ -8,6 +8,7 @@ import (
 
 	"github.com/a-h/templ"
 
+	"github.com/michael-duren/rubber-duck/internal/otel"
 	"github.com/michael-duren/rubber-duck/internal/web/views"
 )
 
@@ -92,7 +93,9 @@ func Register(mux *http.ServeMux, logger *slog.Logger, store AuthStore, courses 
 	pages.HandleFunc("GET /login", h.loginPage)
 	pages.HandleFunc("POST /login", h.login)
 	pages.HandleFunc("POST /logout", h.logout)
-	mux.Handle("/", h.withCSRF(h.withUser(pages)))
+	// withCSRF/withUser clone the request, so pages' matched pattern never
+	// reaches the metrics middleware without otel.Route.
+	mux.Handle("/", h.withCSRF(h.withUser(otel.Route(pages))))
 }
 
 // homePage renders the landing page. It pulls the course list so the
