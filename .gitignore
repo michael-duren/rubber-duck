@@ -13,3 +13,4 @@ dist/
 # so it does not also ignore the cmd/duck source directory (an unanchored
 # `duck` matches any path component named "duck").
 /duck
+__pycache__/

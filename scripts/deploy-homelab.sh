@@ -14,10 +14,21 @@
 #     pgdb, see home-infra/infra/ansible/.env)
 set -euo pipefail
 
+# Fail before credentials, image imports or cluster access. Main now contains
+# unreleased GitOps templates; only reviewed release snapshots may deploy.
+echo "Homelab deployment is release-driven via home-infra GitOps; see docs/releases.md. Direct deploy/import is disabled." >&2
+exit 1
+
 cd "$(dirname "$0")/.."
 
 KUBECONFIG="${KUBECONFIG:-$HOME/Code/home-infra/infra/ansible/kubeconfig-homelab}"
 export KUBECONFIG
+
+# Manifests live in home-infra (k8s/apps/rubber-duck); this repo owns the
+# build, the image imports and the secrets.
+HOME_INFRA="${HOME_INFRA:-$HOME/Code/home-infra}"
+MANIFESTS="${DUCK_MANIFESTS:-$HOME_INFRA/k8s/apps/rubber-duck}"
+[[ -f "$MANIFESTS/deployment.yaml" ]] || { echo "Manifests not found in $MANIFESTS; set HOME_INFRA or DUCK_MANIFESTS" >&2; exit 1; }
 
 DB_HOST="${DUCK_DB_HOST:-192.168.20.103}"
 NODES=(192.168.20.3 192.168.20.101 192.168.20.102)
@@ -37,7 +48,7 @@ for ip in "${NODES[@]}"; do
 done
 
 echo "==> applying manifests"
-kubectl apply -f deploy/homelab/namespace.yaml
+kubectl apply -f "$MANIFESTS/namespace.yaml"
 kubectl -n duck create secret generic duckserver-db \
   --from-literal=DATABASE_URL="postgres://duckserver:${DUCK_DB_PASSWORD}@${DB_HOST}:5432/duckserver?sslmode=disable" \
   --dry-run=client -o yaml | kubectl apply -f -
@@ -51,7 +62,7 @@ elif ! kubectl -n duck get secret cloudflared-token >/dev/null 2>&1; then
   echo "error: cloudflared-token secret missing and TUNNEL_TOKEN not set" >&2
   exit 1
 fi
-kubectl apply -f deploy/homelab/
+kubectl apply -k "$MANIFESTS"
 
 echo "==> waiting for rollout"
 kubectl -n duck rollout restart deployment/duckserver >/dev/null 2>&1 || true

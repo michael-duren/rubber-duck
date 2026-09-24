@@ -225,3 +225,74 @@ func TestPodSpecSandbox(t *testing.T) {
 		t.Errorf("pod command %q does not stage the warm build cache into tmpfs", cmd)
 	}
 }
+
+// Exercise the API payload for every supported registry runner. Pull credentials
+// belong to the kubelet, while learner code keeps the existing sandbox.
+func TestRegistryRunners(t *testing.T) {
+	for _, language := range []string{"go", "python", "c"} {
+		for _, secret := range []string{"", "ghcr-pull"} {
+			t.Run(language+"/"+secret, func(t *testing.T) {
+				f := &fakeAPI{podJSON: terminated(0)}
+				g, srv := testGrader(t, f)
+				defer srv.Close()
+				image := "ghcr.io/michael-duren/rubber-duck-runner-" + language + "@sha256:" + strings.Repeat("a", 64)
+				g.cfg.GoImage = "ghcr.io/michael-duren/rubber-duck-runner-go@sha256:" + strings.Repeat("a", 64)
+				g.cfg.PythonImage = "ghcr.io/michael-duren/rubber-duck-runner-python@sha256:" + strings.Repeat("a", 64)
+				g.cfg.CImage = "ghcr.io/michael-duren/rubber-duck-runner-c@sha256:" + strings.Repeat("a", 64)
+				g.cfg.PullSecret = secret
+				if _, err := g.Grade(context.Background(), grader.Job{Language: language}); err != nil {
+					t.Fatal(err)
+				}
+				spec := f.podBody["spec"].(map[string]any)
+				c := spec["containers"].([]any)[0].(map[string]any)
+				if c["image"] != image || c["imagePullPolicy"] != "IfNotPresent" {
+					t.Fatalf("wrong image/policy: %v", c)
+				}
+				pulls, present := spec["imagePullSecrets"]
+				if secret == "" && present {
+					t.Fatal("unexpected pull credentials")
+				}
+				if secret != "" && (!present || pulls.([]any)[0].(map[string]any)["name"] != secret) {
+					t.Fatal("missing pull secret")
+				}
+				if spec["automountServiceAccountToken"] != false {
+					t.Fatal("runner has token")
+				}
+				if spec["activeDeadlineSeconds"] != float64(90) || spec["restartPolicy"] != "Never" {
+					t.Fatal("runner lifetime changed")
+				}
+				labels := f.podBody["metadata"].(map[string]any)["labels"].(map[string]any)
+				for key, value := range podLabels {
+					if labels[key] != value {
+						t.Fatal("network policy selector lost")
+					}
+				}
+				security := c["securityContext"].(map[string]any)
+				if security["allowPrivilegeEscalation"] != false || security["capabilities"].(map[string]any)["drop"].([]any)[0] != "ALL" {
+					t.Fatal("capability isolation lost")
+				}
+				limits := c["resources"].(map[string]any)["limits"].(map[string]any)
+				if limits["memory"] != "512Mi" || limits["cpu"] != "1" {
+					t.Fatal("resource caps changed")
+				}
+				volumes := spec["volumes"].([]any)
+				if len(volumes) != 2 {
+					t.Fatal("unexpected credential volume")
+				}
+				tmp := volumes[1].(map[string]any)["emptyDir"].(map[string]any)
+				if tmp["medium"] != "Memory" || tmp["sizeLimit"] != "256Mi" {
+					t.Fatal("tmpfs isolation lost")
+				}
+				env := c["env"].([]any)
+				if len(env) != 1 || env[0].(map[string]any)["name"] != "GOCACHE" {
+					t.Fatal("unexpected runner environment")
+				}
+				files := grader.LanguageFiles[language]
+				command := c["command"].([]any)[2].(string)
+				if !strings.Contains(command, files.Code+" "+files.Tests+" | /run.sh") {
+					t.Fatal("wrong language protocol")
+				}
+			})
+		}
+	}
+}

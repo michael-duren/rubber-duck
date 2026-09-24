@@ -1,0 +1,140 @@
+name: Release homelab
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: rubber-duck-homelab-publisher
+  cancel-in-progress: false
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+  publish:
+    needs: test
+    if: github.event_name == 'push' || (!github.event.release.prerelease && !github.event.release.draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify stable tag, exact event commit and main ancestry
+        id: source
+        run: python3 scripts/release.py gate
+      - name: Test release contract
+        run: python3 -m unittest discover -s tests -p 'test_release.py' -v
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Reuse verified app image
+        id: existing_app
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: python3 scripts/release.py lookup "$SOURCE_SHA" rubber-duck
+      - name: Publish canonical app image
+        if: steps.existing_app.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/michael-duren/rubber-duck:sha-${{ steps.source.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/michael-duren/rubber-duck
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+      - name: Reuse verified go image
+        id: existing_go
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: python3 scripts/release.py lookup "$SOURCE_SHA" rubber-duck-runner-go
+      - name: Publish canonical go image
+        if: steps.existing_go.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: internal/grader/runners/go
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/michael-duren/rubber-duck-runner-go:sha-${{ steps.source.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/michael-duren/rubber-duck
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+      - name: Reuse verified python image
+        id: existing_python
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: python3 scripts/release.py lookup "$SOURCE_SHA" rubber-duck-runner-python
+      - name: Publish canonical python image
+        if: steps.existing_python.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: internal/grader/runners/python
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/michael-duren/rubber-duck-runner-python:sha-${{ steps.source.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/michael-duren/rubber-duck
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+      - name: Reuse verified c image
+        id: existing_c
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: python3 scripts/release.py lookup "$SOURCE_SHA" rubber-duck-runner-c
+      - name: Publish canonical c image
+        if: steps.existing_c.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: internal/grader/runners/c
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/michael-duren/rubber-duck-runner-c:sha-${{ steps.source.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/michael-duren/rubber-duck
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+      - name: Verify all four digests and dispatch one atomic promotion
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOME_INFRA_DISPATCH_TOKEN }}
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          PREVIOUS_APP: ${{ steps.existing_app.outputs.digest }}
+          PREVIOUS_GO: ${{ steps.existing_go.outputs.digest }}
+          PREVIOUS_PYTHON: ${{ steps.existing_python.outputs.digest }}
+          PREVIOUS_C: ${{ steps.existing_c.outputs.digest }}
+        run: |
+          test -n "$GH_TOKEN"
+          python3 - <<'PYTHON'
+          import importlib.util, json, os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('release', 'scripts/release.py')
+          release = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(release)
+          digests = {}
+          for key in ['app', 'go', 'python', 'c']:
+              name = 'rubber-duck' + ('' if key == 'app' else '-runner-' + key)
+              digest = release.canonical(os.environ['SOURCE_SHA'], name)
+              previous = os.environ['PREVIOUS_' + key.upper()]
+              if not digest or (previous and previous != digest):
+                  raise ValueError('Missing or changed canonical digest; refusing promotion')
+              digests[name] = digest
+          payload = release.payload(os.environ['SOURCE_TAG'], os.environ['SOURCE_SHA'], digests)
+          (Path(os.environ['RUNNER_TEMP']) / 'promotion.json').write_text(json.dumps(payload))
+          PYTHON
+          gh api --method POST repos/michael-duren/home-infra/actions/workflows/gitops-promote.yml/dispatches --input "$RUNNER_TEMP/promotion.json"
+          echo 'Dispatch accepted. Check home-infra promotion run and gitops ledger for completion.' >> "$GITHUB_STEP_SUMMARY"

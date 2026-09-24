@@ -50,7 +50,7 @@ difference is **where isolation lives**:
    reading `GC_GRADER_URL`. graderd itself keeps using
    `k8sgrader.InCluster()`.
 
-5. **Manifests** (crib shapes from deploy/homelab/):
+5. **Manifests** (crib shapes from home-infra k8s/apps/rubber-duck/):
    - `graderd-deployment.yaml`: simplest is to reuse the duckserver image
      with `command: ["graderd"]` (add the second binary to the Dockerfile
      build). `serviceAccountName: duckserver` MOVES here from the duckserver

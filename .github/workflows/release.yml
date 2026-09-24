@@ -1,7 +1,8 @@
 name: cli-release
 
 # Publishes the duck CLI on a version tag. Deliberately decoupled from cd.yml:
-# deploys happen on every push to main, but cutting a release is a manual act —
+# GCP deploys are manual; homelab-release.yml publishes the app and runners.
+# Cutting a CLI release is a manual act —
 # push a semver tag by hand to trigger this:
 #   git tag v0.1.0 && git push origin v0.1.0
 #

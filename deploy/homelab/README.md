@@ -1,4 +1,8 @@
-# Homelab POC deployment
+# Homelab deployment
+
+Releases now publish GHCR images and promote through home-infra GitOps. See
+[release instructions](../../docs/releases.md). The legacy deploy script is disabled.
+The POC notes below describe the previous import-based setup, not the deployment procedure.
 
 Runs duckserver on the home k3s cluster against the `pgdb` Proxmox VM, with
 grading as per-submission Kubernetes pods (`GC_GRADER=k8s`). Nothing here
@@ -21,8 +25,8 @@ workstation                 homelab (192.168.20.0/24)
   the solution + tests ride a ConfigMap mounted at `/job`, and the pod
   command tars them into `/run.sh`'s stdin — the exact local-docker runner
   contract, so runner images are unchanged. Exit code = result, pod log =
-  output. `rbac.yaml` scopes the app's service account to exactly
-  pods/configmaps create-get-delete, and `networkpolicy.yaml` gives grading
+  output. `k8s/apps/rubber-duck/rbac.yaml` in home-infra scopes the app's service account to exactly
+  pods/configmaps create-get-delete, and its `networkpolicy.yaml` gives grading
   pods no network at all (k3s enforces NetworkPolicy).
 - **Database.** The playbook home-infra/infra/ansible/postgres.yml provisions
   the `duckserver` role/db on the pgdb VM and opens pg_hba to the server
@@ -35,10 +39,7 @@ workstation                 homelab (192.168.20.0/24)
 
 ## Deploy
 
-```sh
-export DUCK_DB_PASSWORD=...   # from home-infra/infra/ansible/.env
-make deploy-homelab
-```
+Use the [release workflow](../../docs/releases.md); direct imports/apply are disabled.
 
 ## Seed courses
 

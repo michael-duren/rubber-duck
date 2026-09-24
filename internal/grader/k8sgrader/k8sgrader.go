@@ -10,7 +10,7 @@
 // exit code is the container exit code and combined output is the pod log.
 //
 // Grading pods get no service account token and, when the cluster enforces
-// NetworkPolicy (k3s does), no network — see deploy/homelab/rbac.yaml and
+// NetworkPolicy (k3s does), no network — see home-infra k8s/apps/rubber-duck/rbac.yaml and
 // networkpolicy.yaml. The kube API is spoken with net/http directly: the
 // three verbs needed (create, get, delete) don't justify a client-go
 // dependency in a stdlib-first repo.
@@ -63,6 +63,10 @@ type Config struct {
 	Token func() (string, error)
 	// Client is the HTTP client to use; it must trust the cluster CA.
 	Client *http.Client
+	// Explicit registry images use IfNotPresent; empty values retain local imports.
+	GoImage, PythonImage, CImage string
+	// PullSecret names a Secret in Namespace; it is never mounted into the runner.
+	PullSecret string
 }
 
 // InCluster builds a Config from the standard in-cluster environment
@@ -86,8 +90,12 @@ func InCluster() (Config, error) {
 		return Config{}, fmt.Errorf("cluster CA %s/ca.crt contains no certificates", saDir)
 	}
 	return Config{
-		APIServer: "https://" + host + ":" + port,
-		Namespace: strings.TrimSpace(string(ns)),
+		APIServer:   "https://" + host + ":" + port,
+		Namespace:   strings.TrimSpace(string(ns)),
+		GoImage:     os.Getenv("GC_RUNNER_GO_IMAGE"),
+		PythonImage: os.Getenv("GC_RUNNER_PYTHON_IMAGE"),
+		CImage:      os.Getenv("GC_RUNNER_C_IMAGE"),
+		PullSecret:  os.Getenv("GC_RUNNER_PULL_SECRET"),
 		Token: func() (string, error) {
 			b, err := os.ReadFile(saDir + "/token")
 			if err != nil {
@@ -120,6 +128,12 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 		}, nil
 	}
 
+	pullPolicy := "Never"
+	configured := map[string]string{"go": g.cfg.GoImage, "python": g.cfg.PythonImage, "c": g.cfg.CImage}
+	if override := configured[job.Language]; override != "" {
+		image = override
+		pullPolicy = "IfNotPresent"
+	}
 	name := podName()
 
 	if err := g.createConfigMap(ctx, name, map[string]string{
@@ -130,7 +144,7 @@ func (g *Grader) Grade(ctx context.Context, job grader.Job) (grader.Result, erro
 	}
 	defer g.delete("configmaps", name)
 
-	if err := g.createPod(ctx, name, image, files.Code, files.Tests); err != nil {
+	if err := g.createPod(ctx, name, image, pullPolicy, files.Code, files.Tests); err != nil {
 		return grader.Result{}, fmt.Errorf("create grading pod: %w", err)
 	}
 	defer g.delete("pods", name)
@@ -226,7 +240,7 @@ func (g *Grader) createConfigMap(ctx context.Context, name string, data map[stri
 // grading pods without catching anything else in the namespace.
 var podLabels = map[string]string{"app": "gc-grade"}
 
-func (g *Grader) createPod(ctx context.Context, name, image, codeFile, testFile string) error {
+func (g *Grader) createPod(ctx context.Context, name, image, pullPolicy, codeFile, testFile string) error {
 	// -h dereferences the configmap volume's symlink farm so the tar the
 	// runner unpacks holds regular files, exactly like the docker path.
 	//
@@ -249,7 +263,7 @@ func (g *Grader) createPod(ctx context.Context, name, image, codeFile, testFile 
 			"containers": []map[string]any{{
 				"name":            "grade",
 				"image":           image,
-				"imagePullPolicy": "Never",
+				"imagePullPolicy": pullPolicy,
 				"command":         []string{"/bin/sh", "-c", cmd},
 				"env":             []map[string]any{{"name": "GOCACHE", "value": "/tmp/gocache"}},
 				"volumeMounts": []map[string]any{
@@ -273,6 +287,9 @@ func (g *Grader) createPod(ctx context.Context, name, image, codeFile, testFile 
 				{"name": "tmp", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "256Mi"}},
 			},
 		},
+	}
+	if g.cfg.PullSecret != "" {
+		pod["spec"].(map[string]any)["imagePullSecrets"] = []map[string]string{{"name": g.cfg.PullSecret}}
 	}
 	return g.api(ctx, http.MethodPost, "pods", pod, nil)
 }

@@ -172,7 +172,7 @@ push-images: runner-images
 deploy: push-images
 	cd infra && tofu apply -var project_id=$(PROJECT) -var region=$(REGION) -var image_tag=$(TAG)
 
-# Homelab POC: k3s + the pgdb Proxmox VM, see deploy/homelab/README.md.
+# Homelab POC: k3s + the pgdb Proxmox VM, see deploy/homelab/README.md; manifests live in home-infra k8s/apps/rubber-duck.
 # Needs DUCK_DB_PASSWORD in the environment.
 deploy-homelab:
 	./scripts/deploy-homelab.sh

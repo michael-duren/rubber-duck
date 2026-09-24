@@ -1,8 +1,7 @@
 name: CD
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Default for jobs without their own block (the reusable test job); the
 # deploy job widens this itself with id-token: write.
