@@ -23,7 +23,11 @@ func TestRegisterMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reg.Unregister()
+	t.Cleanup(func() {
+		if err := reg.Unregister(); err != nil {
+			t.Error(err)
+		}
+	})
 
 	var rm metricdata.ResourceMetrics
 	if err = reader.Collect(context.Background(), &rm); err != nil {
