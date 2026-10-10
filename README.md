@@ -75,7 +75,7 @@ touching business logic.
 **Grading (M1).** Submissions run via `docker run` against prebuilt images
 with no network, capped memory/CPU/pids, and a 60s limit; code is piped in as
 a tar stream on stdin (no bind mounts, so it works from inside a container
-too). The app needs access to the docker socket. This is *not* a hardened
+too). The app needs access to the docker socket. This is _not_ a hardened
 sandbox — milestone 2 swaps in a stronger isolate (e.g. gVisor) behind the
 `grader.Grader` interface.
 
@@ -96,19 +96,19 @@ routes (and the `gc_` agent API keys that authenticated them) were removed
 when course changes moved to the proposal workflow. Publishing happens when
 a proposal is approved on the site.
 
-| Method & path | Auth | Behavior |
-|---|---|---|
-| `GET /api/v1/courses` | public | List courses with tags, languages, `updated_at`. |
-| `GET /api/v1/courses/{slug}` | public | Course metadata + per-variant summaries. |
-| `GET /api/v1/courses/{slug}/variants/{language}` | public | The stored markdown + its `version`: `{"markdown": "...", "version": 3}`. |
-| `GET /api/v1/courses/{slug}/variants/{language}/challenges` | public | Starter and test code for each challenge, used by `duck test` local runs. |
-| `GET /api/v1/tags` | public | All known tags. |
-| `GET /api/v1/export` | public | Every live variant's source: `{"variants": [{"course", "language", "version", "markdown"}]}` — what the courses/ mirror sync reads. |
-| `POST /api/v1/proposals` | token | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?}` — course/language come from the frontmatter; sending them too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "base_version", "revision", "status", "url", ...}`. One open proposal per user per variant: `409 duplicate_proposal` otherwise. |
-| `PUT /api/v1/proposals/{id}` | token | Replace your open proposal's content. Bumps `revision` (resetting approvals) and re-captures `base_version` from the live variant (how you rebase). `404` if not yours, `409 proposal_closed` if closed. |
-| `GET /api/v1/proposals?mine=1` | token | Your proposals, newest first. |
-| `GET /api/v1/proposals/{id}` | token | One proposal including its markdown. |
-| `POST /api/v1/proposals/{id}/withdraw` | token | Close your own open proposal. `204`. |
+| Method & path                                               | Auth   | Behavior                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/courses`                                       | public | List courses with tags, languages, `updated_at`.                                                                                                                                                                                                                                                                                                                    |
+| `GET /api/v1/courses/{slug}`                                | public | Course metadata + per-variant summaries.                                                                                                                                                                                                                                                                                                                            |
+| `GET /api/v1/courses/{slug}/variants/{language}`            | public | The stored markdown + its `version`: `{"markdown": "...", "version": 3}`.                                                                                                                                                                                                                                                                                           |
+| `GET /api/v1/courses/{slug}/variants/{language}/challenges` | public | Starter and test code for each challenge, used by `duck test` local runs.                                                                                                                                                                                                                                                                                           |
+| `GET /api/v1/tags`                                          | public | All known tags.                                                                                                                                                                                                                                                                                                                                                     |
+| `GET /api/v1/export`                                        | public | Every live variant's source: `{"variants": [{"course", "language", "version", "markdown"}]}` — what the courses/ mirror sync reads.                                                                                                                                                                                                                                 |
+| `POST /api/v1/proposals`                                    | token  | Open a proposal. Body `{"markdown": "...", "title"?, "summary"?, "course"?, "language"?}` — course/language come from the frontmatter; sending them too just cross-checks (`409 slug_mismatch` on disagreement). `201` with `{"id", "base_version", "revision", "status", "url", ...}`. One open proposal per user per variant: `409 duplicate_proposal` otherwise. |
+| `PUT /api/v1/proposals/{id}`                                | token  | Replace your open proposal's content. Bumps `revision` (resetting approvals) and re-captures `base_version` from the live variant (how you rebase). `404` if not yours, `409 proposal_closed` if closed.                                                                                                                                                            |
+| `GET /api/v1/proposals?mine=1`                              | token  | Your proposals, newest first.                                                                                                                                                                                                                                                                                                                                       |
+| `GET /api/v1/proposals/{id}`                                | token  | One proposal including its markdown.                                                                                                                                                                                                                                                                                                                                |
+| `POST /api/v1/proposals/{id}/withdraw`                      | token  | Close your own open proposal. `204`.                                                                                                                                                                                                                                                                                                                                |
 
 Rules:
 
@@ -116,8 +116,18 @@ Rules:
   `422` with line-numbered problems:
 
   ```json
-  {"error": {"code": "invalid_course_markdown", "message": "2 problems found",
-    "details": [{"line": 41, "message": "challenge \"fan-in\": missing '### Tests' block"}]}}
+  {
+    "error": {
+      "code": "invalid_course_markdown",
+      "message": "2 problems found",
+      "details": [
+        {
+          "line": 41,
+          "message": "challenge \"fan-in\": missing '### Tests' block"
+        }
+      ]
+    }
+  }
   ```
 
 - Publishing an approved proposal updates the variant's lessons and
@@ -141,15 +151,15 @@ Agents translating a course to another language submit a second document with
 the same `course:` slug and a different `language:`. See
 [`seed/intro-to-go.md`](seed/intro-to-go.md) for a complete example.
 
-```markdown
+````markdown
 ---
-course: intro-to-concurrency        # required, stable course slug
-title: Introduction to Concurrency  # required
-language: go                        # required: go | python | c
-description: One-paragraph pitch.   # required
-duration_hours: 6                   # optional
-tags: [backend, concurrency]        # optional
-extended_reading:                   # optional
+course: intro-to-concurrency # required, stable course slug
+title: Introduction to Concurrency # required
+language: go # required: go | python | c
+description: One-paragraph pitch. # required
+duration_hours: 6 # optional
+tags: [backend, concurrency] # optional
+extended_reading: # optional
   - title: The Go Memory Model
     url: https://go.dev/ref/mem
 ---
@@ -179,7 +189,7 @@ package challenge
 # Final Challenge: Build a Pipeline {#final points=50}
 
 Exactly one per document, same Starter/Tests structure.
-```
+````
 
 Conventions:
 
@@ -195,7 +205,7 @@ Conventions:
   way (`03a-merge`, `final-task-scheduler`), and the CLI strips exactly
   those shapes to map a directory back to its slug — a slug shaped like a
   prefix would strip wrongly. Single leading digits (`3-way-partition`) are
-  fine, and the *final* challenge may be named `final-…` (its directory
+  fine, and the _final_ challenge may be named `final-…` (its directory
   gets a second `final-` prepended, which still strips back correctly).
 - Tests must be self-contained and stdlib-only. Go tests run with
   `go test ./...` in package `challenge`; Python tests run with `pytest` and
@@ -478,5 +488,5 @@ community is small.
 make deploy PROJECT=<project-id>    # builds, pushes (tag = git SHA), tofu apply
 ```
 
-Cloud Run only rolls a new revision when the image *string* changes, so
+Cloud Run only rolls a new revision when the image _string_ changes, so
 deploys use a unique tag per commit rather than `latest`.
