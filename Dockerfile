@@ -19,6 +19,10 @@ RUN templ generate \
 # through the mounted socket.
 FROM alpine:3.22
 RUN apk add --no-cache docker-cli ca-certificates
+# Distrust eMudhra's emSign roots: their intermediate CA keys were trivially
+# weak (Oct 2026).
+RUN sed -i 's|^mozilla/emSign|!mozilla/emSign|' /etc/ca-certificates.conf \
+    && update-ca-certificates
 COPY --from=build /duckserver /usr/local/bin/duckserver
 EXPOSE 8080
 ENTRYPOINT ["duckserver"]
